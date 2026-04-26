@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{font-size:16px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;scroll-behavior:smooth}
+body{font-family:var(--font-primary);font-size:var(--text-base);color:var(--text-primary);background:var(--bg-primary);min-height:100vh;overflow-x:hidden;line-height:1.5}
+
+h1,h2,h3,h4,h5,h6{font-weight:var(--font-semibold);line-height:1.25;color:var(--text-primary)}
+h1{font-size:var(--text-3xl)} h2{font-size:var(--text-2xl)} h3{font-size:var(--text-xl)} h4{font-size:var(--text-lg)}
+p{color:var(--text-secondary);line-height:1.75}
+a{color:var(--accent-blue);text-decoration:none;transition:color var(--transition-fast)}
+a:hover{color:var(--accent-blue-hover)}
+img{max-width:100%;height:auto;display:block}
+button{font-family:var(--font-primary);cursor:pointer;border:none;outline:none;background:none;font-size:var(--text-base)}
+input,select,textarea{font-family:var(--font-primary);font-size:var(--text-base);outline:none;border:none}
+ul,ol{list-style:none}
+table{border-collapse:collapse;width:100%}
+
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg-primary)}
+::-webkit-scrollbar-thumb{background:var(--border-secondary);border-radius:9999px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-tertiary)}
+::selection{background:var(--accent-blue);color:#fff}
+:focus-visible{outline:2px solid var(--accent-blue);outline-offset:2px;border-radius:var(--radius-sm)}
+
+.text-profit{color:var(--profit)!important} .text-loss{color:var(--loss)!important}
+.text-warning{color:var(--warning)!important} .text-muted{color:var(--text-tertiary)!important}
+.font-mono{font-family:var(--font-mono)!important}
+.font-bold{font-weight:700!important} .font-semibold{font-weight:600!important}
+.text-xs{font-size:var(--text-xs)!important} .text-sm{font-size:var(--text-sm)!important}
+.text-md{font-size:var(--text-md)!important} .text-lg{font-size:var(--text-lg)!important}
+.text-center{text-align:center} .text-right{text-align:right}
+.flex{display:flex} .flex-col{flex-direction:column}
+.items-center{align-items:center} .justify-between{justify-content:space-between}
+.gap-2{gap:var(--space-2)} .gap-3{gap:var(--space-3)} .gap-4{gap:var(--space-4)} .gap-6{gap:var(--space-6)}
+.w-full{width:100%} .hidden{display:none!important}
+.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeInDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideInLeft{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes scaleIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes glow{0%,100%{box-shadow:0 0 5px rgba(59,130,246,.2)}50%{box-shadow:0 0 20px rgba(59,130,246,.4)}}
+@keyframes countUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+.animate-fade-in{animation:fadeIn .4s ease-out}
+.animate-fade-in-up{animation:fadeInUp .5s ease-out}
+.animate-scale-in{animation:scaleIn .3s ease-out}
+.animate-pulse{animation:pulse 2s ease-in-out infinite}
+.animate-spin{animation:spin 1s linear infinite}
+
+.stagger-children>*:nth-child(1){animation-delay:0ms}
+.stagger-children>*:nth-child(2){animation-delay:60ms}
+.stagger-children>*:nth-child(3){animation-delay:120ms}
+.stagger-children>*:nth-child(4){animation-delay:180ms}
+.stagger-children>*:nth-child(5){animation-delay:240ms}
+.stagger-children>*:nth-child(6){animation-delay:300ms}
+.stagger-children>*:nth-child(7){animation-delay:360ms}
+.stagger-children>*:nth-child(8){animation-delay:420ms}

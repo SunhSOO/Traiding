@@ -1,0 +1,142 @@
+/* ── Analytics Page ── */
+.analytics-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.kpi-card {
+  text-align: center;
+  padding: var(--space-4);
+}
+
+.kpi-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-1);
+}
+
+.kpi-label {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.kpi-sub {
+  font-size: var(--text-xs);
+  margin-top: var(--space-1);
+}
+
+.analytics-charts {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.chart-card {
+  min-height: 300px;
+}
+
+.chart-card .card-body {
+  height: 250px;
+  position: relative;
+}
+
+/* ── Calendar Heatmap ── */
+.calendar-heatmap {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.calendar-day {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.calendar-day:hover {
+  transform: scale(1.2);
+  z-index: 2;
+}
+
+.calendar-day.empty { background: transparent; }
+.calendar-day.neutral { background: var(--bg-surface-hover); color: var(--text-muted); }
+.calendar-day.profit-1 { background: rgba(16, 185, 129, 0.15); color: var(--profit); }
+.calendar-day.profit-2 { background: rgba(16, 185, 129, 0.3); color: var(--profit); }
+.calendar-day.profit-3 { background: rgba(16, 185, 129, 0.5); color: #fff; }
+.calendar-day.loss-1 { background: rgba(239, 68, 68, 0.15); color: var(--loss); }
+.calendar-day.loss-2 { background: rgba(239, 68, 68, 0.3); color: var(--loss); }
+.calendar-day.loss-3 { background: rgba(239, 68, 68, 0.5); color: #fff; }
+
+.calendar-header {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  margin-bottom: var(--space-2);
+}
+
+.calendar-header-day {
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: var(--font-medium);
+}
+
+/* ── Performance Heatmap ── */
+.perf-heatmap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: var(--space-2);
+}
+
+.perf-cell {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.perf-cell:hover { transform: scale(1.02); }
+
+.perf-cell-symbol {
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-1);
+}
+
+.perf-cell-value {
+  font-family: var(--font-mono);
+  font-weight: var(--font-bold);
+  font-size: var(--text-md);
+}
+
+.analytics-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+}
+
+@media (max-width: 1400px) {
+  .analytics-kpi-row { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 1200px) {
+  .analytics-charts { grid-template-columns: 1fr; }
+  .analytics-bottom { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .analytics-kpi-row { grid-template-columns: repeat(2, 1fr); }
+}

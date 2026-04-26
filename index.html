@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SUPERRICH - Professional MT5 System Trading Dashboard for real-time monitoring, automated trading strategies, and portfolio management.">
+  <title>SUPERRICH — MT5 Trading Dashboard</title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages/dashboard.css">
+  <link rel="stylesheet" href="css/pages/trading.css">
+  <link rel="stylesheet" href="css/pages/portfolio.css">
+  <link rel="stylesheet" href="css/pages/strategy.css">
+  <link rel="stylesheet" href="css/pages/history.css">
+  <link rel="stylesheet" href="css/pages/analytics.css">
+  <link rel="stylesheet" href="css/pages/settings.css">
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
+</head>
+<body>
+  <div class="app-shell">
+    <!-- ══════════ SIDEBAR ══════════ -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">S</div>
+        <div class="sidebar-brand">
+          <span class="sidebar-brand-name">SUPERRICH</span>
+          <span class="sidebar-brand-sub">MT5 Trading</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <!-- Main -->
+        <div class="nav-section">
+          <div class="nav-section-label">Main</div>
+          <a class="nav-item active" data-route="/dashboard" href="#/dashboard" id="nav-dashboard">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v4H14zM14 10h7v11H14zM3 13h7v8H3z"/></svg>
+            </span>
+            Dashboard
+          </a>
+          <a class="nav-item" data-route="/trading" href="#/trading" id="nav-trading">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M9 5v4M9 13v4M15 5v4M15 13v4"/><rect x="7" y="9" width="4" height="4" rx="1"/><rect x="13" y="9" width="4" height="4" rx="1"/></svg>
+            </span>
+            Live Trading
+          </a>
+          <a class="nav-item" data-route="/portfolio" href="#/portfolio" id="nav-portfolio">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+            </span>
+            Portfolio
+          </a>
+        </div>
+
+        <!-- Automation -->
+        <div class="nav-section">
+          <div class="nav-section-label">Automation</div>
+          <a class="nav-item" data-route="/strategy" href="#/strategy" id="nav-strategy">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg>
+            </span>
+            Strategy
+            <span class="nav-item-badge">3</span>
+          </a>
+        </div>
+
+        <!-- Analysis -->
+        <div class="nav-section">
+          <div class="nav-section-label">Analysis</div>
+          <a class="nav-item" data-route="/history" href="#/history" id="nav-history">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+            </span>
+            History
+          </a>
+          <a class="nav-item" data-route="/analytics" href="#/analytics" id="nav-analytics">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
+            </span>
+            Analytics
+          </a>
+        </div>
+
+        <!-- System -->
+        <div class="nav-section">
+          <div class="nav-section-label">System</div>
+          <a class="nav-item" data-route="/settings" href="#/settings" id="nav-settings">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>
+            </span>
+            Settings
+          </a>
+        </div>
+      </nav>
+
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        <div class="connection-status">
+          <div class="status-dot connected"></div>
+          <div class="status-text">
+            <strong>MT5 Connected</strong><br>
+            <span class="text-xs">MetaQuotes-Demo · 12ms</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ══════════ MAIN CONTENT ══════════ -->
+    <main class="main-content">
+      <!-- Top Header -->
+      <header class="top-header">
+        <div class="header-left">
+          <h1 class="page-title" id="page-title">Dashboard</h1>
+        </div>
+        <div class="header-right">
+          <span class="header-time font-mono" id="header-time">--:--:--</span>
+          <button class="header-btn tooltip" data-tooltip="Refresh Data" id="btn-refresh">
+            <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+          </button>
+          <button class="header-btn tooltip" data-tooltip="Notifications" id="btn-notifications">
+            <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            <div class="header-notification-dot"></div>
+          </button>
+          <button class="header-btn tooltip" data-tooltip="Search" id="btn-search">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Page Content -->
+      <div class="page-content" id="page-content">
+        <!-- Dynamic content rendered here -->
+        <div class="empty-state">
+          <div style="font-size:48px;margin-bottom:var(--space-4)">⏳</div>
+          <h3 class="empty-state-title">Loading...</h3>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="js/utils.js"></script>
+  <script src="js/mock-data.js"></script>
+  <script src="js/router.js"></script>
+  <script src="js/pages/dashboard.js"></script>
+  <script src="js/pages/trading.js"></script>
+  <script src="js/pages/portfolio.js"></script>
+  <script src="js/pages/strategy.js"></script>
+  <script src="js/pages/history.js"></script>
+  <script src="js/pages/analytics.js"></script>
+  <script src="js/pages/settings.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

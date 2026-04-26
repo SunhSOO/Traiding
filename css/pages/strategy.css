@@ -1,0 +1,153 @@
+/* ── Strategy Page ── */
+.strategy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.strategy-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.strategy-card-status {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+}
+
+.strategy-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.strategy-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xl);
+}
+
+.strategy-card-name {
+  font-weight: var(--font-semibold);
+  font-size: var(--text-md);
+}
+
+.strategy-card-type {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.strategy-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+}
+
+.strategy-metric {
+  text-align: center;
+}
+
+.strategy-metric-value {
+  font-family: var(--font-mono);
+  font-weight: var(--font-bold);
+  font-size: var(--text-md);
+  color: var(--text-primary);
+}
+
+.strategy-metric-label {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.strategy-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.strategy-card-symbols {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.strategy-card-controls {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ── Strategy Log ── */
+.strategy-log-panel {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.log-entry {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  border-bottom: 1px solid rgba(30, 41, 59, 0.3);
+}
+
+.log-time {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.log-level {
+  font-weight: var(--font-semibold);
+  white-space: nowrap;
+}
+
+.log-level.info { color: var(--accent-blue); }
+.log-level.warn { color: var(--warning); }
+.log-level.error { color: var(--loss); }
+.log-level.success { color: var(--profit); }
+
+.log-message { color: var(--text-secondary); word-break: break-all; }
+
+/* ── Backtest Results ── */
+.backtest-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.backtest-stat {
+  text-align: center;
+  padding: var(--space-3);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+}
+
+.backtest-stat-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+
+.backtest-stat-label {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin-top: var(--space-1);
+}
+
+@media (max-width: 768px) {
+  .strategy-grid { grid-template-columns: 1fr; }
+  .backtest-summary { grid-template-columns: repeat(2, 1fr); }
+}

@@ -1,0 +1,325 @@
+/* ── Dashboard Page ── */
+.dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.stat-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card .stat-glow {
+  position: absolute;
+  top: -30px;
+  right: -30px;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+.stat-card .stat-glow.blue { background: var(--accent-blue); }
+.stat-card .stat-glow.purple { background: var(--accent-purple); }
+.stat-card .stat-glow.green { background: var(--profit); }
+.stat-card .stat-glow.cyan { background: var(--accent-cyan); }
+
+.stat-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.stat-card-label {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  font-weight: var(--font-medium);
+}
+
+.stat-card-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.stat-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ── PnL Gauge ── */
+.pnl-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-6) var(--space-4);
+}
+
+.gauge-wrapper {
+  position: relative;
+  width: 180px;
+  height: 100px;
+  margin-bottom: var(--space-4);
+}
+
+.gauge-value {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+}
+
+.gauge-label {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+/* ── Market Overview ── */
+.market-ticker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.4);
+  transition: background var(--transition-fast);
+  cursor: pointer;
+}
+
+.market-ticker:last-child {
+  border-bottom: none;
+}
+
+.market-ticker:hover {
+  background: var(--bg-surface-hover);
+  margin: 0 calc(-1 * var(--space-5));
+  padding-left: var(--space-5);
+  padding-right: var(--space-5);
+  border-radius: var(--radius-sm);
+}
+
+.ticker-symbol {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ticker-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  color: var(--accent-blue);
+}
+
+.ticker-name {
+  font-weight: var(--font-semibold);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+.ticker-fullname {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.ticker-price {
+  text-align: right;
+}
+
+.ticker-price-value {
+  font-family: var(--font-mono);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+.ticker-change {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+/* ── Active Positions Summary ── */
+.position-mini {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.3);
+}
+
+.position-mini:last-child { border-bottom: none; }
+
+.position-dir {
+  width: 6px;
+  height: 28px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.position-dir.buy { background: var(--profit); }
+.position-dir.sell { background: var(--loss); }
+
+.position-mini-info { flex: 1; }
+.position-mini-symbol {
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+}
+
+.position-mini-detail {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.position-mini-pnl {
+  font-family: var(--font-mono);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+}
+
+/* ── Recent Trades Timeline ── */
+.trade-timeline-item {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  position: relative;
+}
+
+.trade-timeline-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.trade-timeline-dot.buy { background: var(--profit); }
+.trade-timeline-dot.sell { background: var(--loss); }
+
+.trade-timeline-content {
+  flex: 1;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.3);
+  padding-bottom: var(--space-3);
+}
+
+.trade-timeline-item:last-child .trade-timeline-content {
+  border-bottom: none;
+}
+
+.trade-timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-1);
+}
+
+.trade-timeline-symbol {
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+}
+
+.trade-timeline-time {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.trade-timeline-detail {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+/* ── Strategy Status ── */
+.strategy-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.3);
+}
+
+.strategy-indicator:last-child { border-bottom: none; }
+
+.strategy-light {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.strategy-light.running {
+  background: var(--profit);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+  animation: pulse 2s infinite;
+}
+
+.strategy-light.stopped {
+  background: var(--text-muted);
+}
+
+.strategy-light.error {
+  background: var(--loss);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  animation: blink 1s infinite;
+}
+
+.strategy-info { flex: 1; }
+
+.strategy-name {
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
+}
+
+.strategy-desc {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.strategy-pnl {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+
+/* ── System Status ── */
+.system-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+}
+
+.system-item-label {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.system-item-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+/* Responsive */
+@media (max-width: 1400px) {
+  .dashboard-stats { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+  .dashboard-stats { grid-template-columns: 1fr; }
+}
