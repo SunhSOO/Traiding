@@ -14,6 +14,7 @@ class OrderRequest(BaseModel):
     sl: Optional[float] = 0
     tp: Optional[float] = 0
     comment: Optional[str] = ""
+    magic: Optional[int] = 234000
 
 
 class CloseRequest(BaseModel):
@@ -27,7 +28,8 @@ async def place_order(order: OrderRequest, request: Request):
         return mt5.place_order(
             symbol=order.symbol, order_type=order.type,
             volume=order.volume, price=order.price,
-            sl=order.sl, tp=order.tp, comment=order.comment
+            sl=order.sl, tp=order.tp, comment=order.comment,
+            magic=order.magic or 234000
         )
     return {"success": False, "error": "MT5 not connected (demo mode)"}
 

@@ -5,8 +5,9 @@ Main application entry point
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,7 @@ from fastapi.responses import FileResponse
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
+ROOT_DIR = Path(__file__).resolve().parents[1]
 
 # Import routes
 from routes.account import router as account_router
@@ -23,6 +25,7 @@ from routes.trading import router as trading_router
 from routes.history import router as history_router
 from routes.strategy import router as strategy_router
 from websocket_manager import ConnectionManager
+from strategies.manager import StrategyManager
 
 
 @asynccontextmanager
@@ -42,10 +45,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ MT5 initialization failed: {e} - running in demo mode")
         app.state.mt5 = None
-    
+    app.state.strategy_manager = StrategyManager(app.state.mt5)
+
     yield
-    
+
     # Cleanup on shutdown
+    if hasattr(app.state, 'strategy_manager') and app.state.strategy_manager:
+        await app.state.strategy_manager.stop()
     if hasattr(app.state, 'mt5') and app.state.mt5:
         app.state.mt5.disconnect()
         logger.info("MT5 disconnected")
@@ -105,12 +111,16 @@ async def websocket_endpoint(websocket: WebSocket):
 
 def get_realtime_data():
     """Get real-time data snapshot from MT5 or demo data"""
+    strategy_status = None
+    if hasattr(app.state, "strategy_manager") and app.state.strategy_manager:
+        strategy_status = app.state.strategy_manager.get_status()
     return {
         "type": "tick",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "data": {
-            "server_time": datetime.utcnow().isoformat(),
-            "connection": "connected"
+            "server_time": datetime.now(UTC).isoformat(),
+            "connection": "connected",
+            "strategy": strategy_status
         }
     }
 
@@ -127,7 +137,7 @@ async def handle_ws_command(websocket: WebSocket, message: str):
             await websocket.send_json({"type": "subscribed", "symbols": symbols})
         
         elif action == "ping":
-            await websocket.send_json({"type": "pong", "timestamp": datetime.utcnow().isoformat()})
+            await websocket.send_json({"type": "pong", "timestamp": datetime.now(UTC).isoformat()})
     
     except json.JSONDecodeError:
         await websocket.send_json({"type": "error", "message": "Invalid JSON"})
@@ -135,15 +145,16 @@ async def handle_ws_command(websocket: WebSocket, message: str):
 
 # ── Serve static files ──
 # Mount static files last so API routes take priority
-app.mount("/css", StaticFiles(directory="../css"), name="css")
-app.mount("/js", StaticFiles(directory="../js"), name="js")
-app.mount("/assets", StaticFiles(directory="../assets"), name="assets")
+app.mount("/css", StaticFiles(directory=ROOT_DIR / "css"), name="css")
+app.mount("/js", StaticFiles(directory=ROOT_DIR / "js"), name="js")
+if (ROOT_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=ROOT_DIR / "assets"), name="assets")
 
 
 @app.get("/")
 async def serve_index():
     """Serve the main HTML file"""
-    return FileResponse("../index.html")
+    return FileResponse(ROOT_DIR / "index.html")
 
 
 # ── Health check ──
@@ -151,12 +162,13 @@ async def serve_index():
 async def health_check():
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "mt5_connected": hasattr(app.state, 'mt5') and app.state.mt5 is not None,
+        "strategy_manager": hasattr(app.state, 'strategy_manager') and app.state.strategy_manager is not None,
         "version": "1.0.0"
     }
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

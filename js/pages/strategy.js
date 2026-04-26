@@ -2,139 +2,179 @@
  * SUPERRICH - Strategy Page
  */
 function renderStrategy(container) {
-  const { strategies, logs } = MockData;
-
   container.innerHTML = `
-    <!-- Header -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-5)">
-      <div>
-        <h2 style="margin-bottom:var(--space-1)">Strategy Manager</h2>
-        <p class="text-sm text-muted">${strategies.filter(s => s.status === 'running').length} of ${strategies.length} strategies active</p>
-      </div>
-      <div style="display:flex;gap:var(--space-3)">
-        <button class="btn btn-secondary">${Utils.icon('refresh-cw')} Sync All</button>
-        <button class="btn btn-primary">${Utils.icon('zap')} New Strategy</button>
-      </div>
-    </div>
-
-    <!-- Strategy Cards -->
-    <div class="strategy-grid stagger-children">
-      ${strategies.map(s => `
-        <div class="card strategy-card animate-fade-in-up">
-          <div class="strategy-card-status">
-            <span class="badge ${s.status === 'running' ? 'badge-profit' : s.status === 'error' ? 'badge-loss' : 'badge-neutral'}">
-              ${s.status === 'running' ? '● Running' : s.status === 'error' ? '● Error' : '○ Stopped'}
-            </span>
-          </div>
-          <div class="strategy-card-header">
-            <div class="strategy-card-icon" style="background:var(--bg-surface-hover);font-size:var(--text-xl)">${s.icon}</div>
-            <div>
-              <div class="strategy-card-name">${s.name}</div>
-              <div class="strategy-card-type">${s.type}</div>
-            </div>
-          </div>
-          <div class="strategy-card-metrics">
-            <div class="strategy-metric">
-              <div class="strategy-metric-value ${s.pnl >= 0 ? 'text-profit' : 'text-loss'}">${Utils.formatMoney(s.pnl)}</div>
-              <div class="strategy-metric-label">P&L</div>
-            </div>
-            <div class="strategy-metric">
-              <div class="strategy-metric-value">${s.winRate}%</div>
-              <div class="strategy-metric-label">Win Rate</div>
-            </div>
-            <div class="strategy-metric">
-              <div class="strategy-metric-value">${s.trades}</div>
-              <div class="strategy-metric-label">Trades</div>
-            </div>
-          </div>
-          <div style="margin-bottom:var(--space-3)">
-            <div style="display:flex;justify-content:space-between;margin-bottom:var(--space-1)">
-              <span class="text-xs text-muted">Max Drawdown</span>
-              <span class="text-xs font-mono text-loss">${s.maxDD}%</span>
-            </div>
-            <div class="progress-bar">
-              <div class="progress-fill red" style="width:${Math.abs(s.maxDD) * 10}%"></div>
-            </div>
-          </div>
-          <div class="strategy-card-footer">
-            <div class="strategy-card-symbols">
-              <span class="pill pill-active">${s.symbol}</span>
-              <span class="pill">${s.timeframe}</span>
-            </div>
-            <div class="strategy-card-controls">
-              ${s.status === 'running' 
-                ? `<button class="btn btn-ghost btn-icon" title="Pause">${Utils.icon('pause')}</button>
-                   <button class="btn btn-danger btn-sm">${Utils.icon('stop-circle')} Stop</button>`
-                : `<button class="btn btn-success btn-sm">${Utils.icon('play')} Start</button>`}
-              <button class="btn btn-ghost btn-icon" title="Settings">${Utils.icon('settings')}</button>
-            </div>
-          </div>
+    <div class="strategy-page">
+      <div class="strategy-header">
+        <div>
+          <h2>Red-Green 자동매매</h2>
+          <p class="text-sm text-muted">BB-ICHI + Supertrend + SL/TP1/Trailing 상태 머신</p>
         </div>
-      `).join('')}
-    </div>
-
-    <!-- Bottom Section -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-5);margin-top:var(--space-5)">
-      <!-- Backtest Summary -->
-      <div class="card animate-fade-in-up">
-        <div class="card-header">
-          <div class="card-title">Backtest Results — Trend Follower</div>
-          <div class="tabs">
-            <div class="tab active">Summary</div>
-            <div class="tab">Equity Curve</div>
-          </div>
-        </div>
-        <div class="backtest-summary">
-          <div class="backtest-stat">
-            <div class="backtest-stat-value text-profit">+28.4%</div>
-            <div class="backtest-stat-label">Total Return</div>
-          </div>
-          <div class="backtest-stat">
-            <div class="backtest-stat-value">1.85</div>
-            <div class="backtest-stat-label">Profit Factor</div>
-          </div>
-          <div class="backtest-stat">
-            <div class="backtest-stat-value">62%</div>
-            <div class="backtest-stat-label">Win Rate</div>
-          </div>
-          <div class="backtest-stat">
-            <div class="backtest-stat-value text-loss">-8.2%</div>
-            <div class="backtest-stat-label">Max Drawdown</div>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)">
-          <div class="system-item"><span class="system-item-label">Sharpe Ratio</span><span class="system-item-value">1.42</span></div>
-          <div class="system-item"><span class="system-item-label">Avg Trade</span><span class="system-item-value text-profit">+$26.40</span></div>
-          <div class="system-item"><span class="system-item-label">Avg Win</span><span class="system-item-value text-profit">+$68.50</span></div>
-          <div class="system-item"><span class="system-item-label">Avg Loss</span><span class="system-item-value text-loss">-$42.30</span></div>
-          <div class="system-item"><span class="system-item-label">Total Trades</span><span class="system-item-value">248</span></div>
-          <div class="system-item"><span class="system-item-label">Recovery Factor</span><span class="system-item-value">3.46</span></div>
+        <div class="strategy-actions">
+          <button class="btn btn-secondary" id="strategy-refresh">${Utils.icon('refresh-cw')} 새로고침</button>
+          <button class="btn btn-secondary" id="strategy-run-once">${Utils.icon('zap')} 1회 실행</button>
+          <button class="btn btn-success" id="strategy-start">${Utils.icon('play')} 시작</button>
+          <button class="btn btn-danger" id="strategy-stop">${Utils.icon('stop-circle')} 중지</button>
         </div>
       </div>
 
-      <!-- Execution Log -->
-      <div class="card animate-fade-in-up">
-        <div class="card-header">
-          <div class="card-title">Execution Log</div>
-          <div style="display:flex;gap:var(--space-2)">
-            <button class="btn btn-ghost btn-sm pill-active">All</button>
-            <button class="btn btn-ghost btn-sm">Info</button>
-            <button class="btn btn-ghost btn-sm">Warn</button>
-            <button class="btn btn-ghost btn-sm">Error</button>
-          </div>
-        </div>
-        <div class="strategy-log-panel">
-          ${logs.map(l => `
-            <div class="log-entry">
-              <span class="log-time">${Utils.formatTime(l.time)}</span>
-              <span class="log-level ${l.level}">[${l.level.toUpperCase()}]</span>
-              <span class="log-message"><strong>${l.strategy}</strong> — ${l.message}</span>
-            </div>
-          `).join('')}
+      <div id="strategy-content" class="strategy-content">
+        <div class="card">
+          <div class="card-body text-muted">전략 상태를 불러오는 중...</div>
         </div>
       </div>
     </div>
   `;
+
+  const content = container.querySelector('#strategy-content');
+  const refreshBtn = container.querySelector('#strategy-refresh');
+  const runOnceBtn = container.querySelector('#strategy-run-once');
+  const startBtn = container.querySelector('#strategy-start');
+  const stopBtn = container.querySelector('#strategy-stop');
+
+  async function api(path, options = {}) {
+    const res = await fetch(path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+    return res.json();
+  }
+
+  function price(value) {
+    if (value === null || value === undefined) return '-';
+    return Number(value).toFixed(3);
+  }
+
+  function modeBadge(mode) {
+    const cls = mode === 'live' ? 'badge-loss' : mode === 'demo' ? 'badge-neutral' : 'badge-profit';
+    return `<span class="badge ${cls}">${mode}</span>`;
+  }
+
+  function stateLabel(state) {
+    if (state === 1) return '<span class="text-profit">롱 보유</span>';
+    if (state === -1) return '<span class="text-loss">숏 보유</span>';
+    return '<span class="text-muted">대기</span>';
+  }
+
+  function renderStatus(payload) {
+    if (!payload.success) {
+      content.innerHTML = `<div class="card"><div class="card-body text-loss">${payload.error || '전략 상태를 불러오지 못했습니다.'}</div></div>`;
+      return;
+    }
+
+    const status = payload.status;
+    const cfg = status.config;
+    const state = status.state;
+    const events = status.events || [];
+
+    content.innerHTML = `
+      <div class="strategy-main-grid">
+        <div class="card strategy-live-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">${status.name}</div>
+              <div class="text-xs text-muted">${cfg.symbol} · ${cfg.timeframe} · magic ${cfg.magic}</div>
+            </div>
+            <div class="strategy-badges">
+              <span class="badge ${status.status === 'running' ? 'badge-profit' : 'badge-neutral'}">${status.status === 'running' ? 'running' : 'stopped'}</span>
+              ${modeBadge(status.mode)}
+            </div>
+          </div>
+
+          <div class="strategy-condition-grid">
+            <div class="strategy-condition">
+              <span>포지션</span>
+              <strong>${stateLabel(state.pos_state)}</strong>
+            </div>
+            <div class="strategy-condition">
+              <span>진입가</span>
+              <strong>${price(state.pos_entry)}</strong>
+            </div>
+            <div class="strategy-condition danger">
+              <span>SL</span>
+              <strong>${price(state.pos_sl)}</strong>
+            </div>
+            <div class="strategy-condition info">
+              <span>TP1</span>
+              <strong>${price(state.pos_tp1)}</strong>
+            </div>
+            <div class="strategy-condition warn">
+              <span>Trail</span>
+              <strong>${state.trail_active ? '활성' : state.show_trail ? '대기' : '비활성'}</strong>
+            </div>
+            <div class="strategy-condition">
+              <span>TP1 도달</span>
+              <strong>${state.tp1_hit ? '예' : '아니오'}</strong>
+            </div>
+          </div>
+
+          <div class="strategy-param-grid">
+            <div><span>BB</span><strong>${cfg.short_period}/${cfg.mid_period}/${cfg.long_period} · ${cfg.mult}σ</strong></div>
+            <div><span>Supertrend</span><strong>ATR ${cfg.atr_periods} · x${cfg.atr_multiplier}</strong></div>
+            <div><span>TP1 R:R</span><strong>${cfg.tp1_mult}</strong></div>
+            <div><span>Lot</span><strong>${cfg.volume}</strong></div>
+            <div><span>Dry Run</span><strong>${cfg.dry_run ? 'ON' : 'OFF'}</strong></div>
+            <div><span>Live</span><strong>${cfg.live_enabled ? 'ON' : 'OFF'}</strong></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">안전 상태</div>
+            <span class="badge ${cfg.live_enabled ? 'badge-loss' : 'badge-profit'}">${cfg.live_enabled ? '실거래 주의' : '주문 차단 기본값'}</span>
+          </div>
+          <div class="safety-list">
+            <div>${Utils.icon('shield')} <span>기본 모드는 dry_run이며, 주문 의도만 기록합니다.</span></div>
+            <div>${Utils.icon('target')} <span>반대 신호는 기존 포지션 청산 후 신규 진입을 검토합니다.</span></div>
+            <div>${Utils.icon('activity')} <span>마지막 처리 봉: ${status.last_processed_time || '-'}</span></div>
+            <div>${Utils.icon('wifi')} <span>오류: ${status.last_error || '없음'}</span></div>
+          </div>
+          <div class="live-warning">
+            live 모드는 API 설정에서 <code>dry_run=false</code>, <code>live_enabled=true</code>일 때만 주문을 보냅니다.
+          </div>
+        </div>
+      </div>
+
+      <div class="card strategy-log-card">
+        <div class="card-header">
+          <div class="card-title">전략 이벤트 로그</div>
+          <span class="text-xs text-muted">최근 ${events.length}개</span>
+        </div>
+        <div class="strategy-log-panel">
+          ${events.length ? events.map(event => `
+            <div class="log-entry">
+              <span class="log-time">${Utils.formatTime(event.time)}</span>
+              <span class="log-level ${event.level}">[${event.level.toUpperCase()}]</span>
+              <span class="log-message"><strong>${event.event}</strong> · ${event.message}</span>
+            </div>
+          `).join('') : '<div class="empty-log text-muted">아직 기록된 전략 이벤트가 없습니다.</div>'}
+        </div>
+      </div>
+    `;
+  }
+
+  async function loadStatus() {
+    try {
+      renderStatus(await api('/api/strategy/red-green/status'));
+    } catch (error) {
+      content.innerHTML = `<div class="card"><div class="card-body text-loss">API 연결 실패: ${error.message}</div></div>`;
+    }
+  }
+
+  refreshBtn.addEventListener('click', loadStatus);
+  runOnceBtn.addEventListener('click', async () => {
+    await api('/api/strategy/red-green/run-once', { method: 'POST' });
+    await loadStatus();
+  });
+  startBtn.addEventListener('click', async () => {
+    await api('/api/strategy/red-green/start', { method: 'POST' });
+    await loadStatus();
+  });
+  stopBtn.addEventListener('click', async () => {
+    await api('/api/strategy/red-green/stop', { method: 'POST' });
+    await loadStatus();
+  });
+
+  loadStatus();
 }
 
 window.renderStrategy = renderStrategy;
