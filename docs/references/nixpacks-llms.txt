@@ -1,0 +1,5 @@
+LLM과 에이전트 조회를 위한 Nixpacks 레퍼런스입니다.
+
+현재 SUPERRICH 자동매매 시스템은 로컬 FastAPI 서버와 MT5 터미널 연결을 전제로 합니다.
+
+Nixpacks 기반 배포를 도입할 경우 MT5 터미널 의존성, Windows 실행 환경, 비밀값 주입, live 주문 차단 기본값을 먼저 검토해야 합니다.

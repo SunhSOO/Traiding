@@ -132,7 +132,7 @@ class MT5Bridge:
     
     def place_order(self, symbol: str, order_type: str, volume: float,
                     price: float = 0, sl: float = 0, tp: float = 0,
-                    comment: str = "") -> dict:
+                    comment: str = "", magic: int = 234000) -> dict:
         """Place a new order"""
         if not self.connected:
             return {"success": False, "error": "Not connected to MT5"}
@@ -163,7 +163,7 @@ class MT5Bridge:
                 "sl": sl,
                 "tp": tp,
                 "deviation": 20,
-                "magic": 234000,
+                "magic": magic,
                 "comment": comment or "SUPERRICH",
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": mt5.ORDER_FILLING_IOC,
@@ -184,6 +184,37 @@ class MT5Bridge:
             
         except Exception as e:
             logger.error(f"Error placing order: {e}")
+            return {"success": False, "error": str(e)}
+
+    def modify_position_sl(self, ticket: int, sl: float, tp: float = 0) -> dict:
+        """Modify stop loss for an open position."""
+        if not self.connected:
+            return {"success": False, "error": "Not connected to MT5"}
+
+        try:
+            position = mt5.positions_get(ticket=ticket)
+            if not position:
+                return {"success": False, "error": f"Position {ticket} not found"}
+
+            pos = position[0]
+            request = {
+                "action": mt5.TRADE_ACTION_SLTP,
+                "position": ticket,
+                "symbol": pos.symbol,
+                "sl": sl,
+                "tp": tp or pos.tp,
+                "magic": pos.magic,
+                "comment": "SUPERRICH SL update",
+            }
+
+            result = mt5.order_send(request)
+            if result.retcode != mt5.TRADE_RETCODE_DONE:
+                return {"success": False, "error": f"SL modify failed: {result.comment}", "retcode": result.retcode}
+
+            return {"success": True, "ticket": ticket, "sl": sl, "tp": tp or pos.tp}
+
+        except Exception as e:
+            logger.error(f"Error modifying SL: {e}")
             return {"success": False, "error": str(e)}
     
     def close_position(self, ticket: int) -> dict:
@@ -271,6 +302,31 @@ class MT5Bridge:
         except Exception as e:
             logger.error(f"Error getting tick: {e}")
             return None
+
+    def get_rates(self, symbol: str, timeframe: str = "M15", count: int = 220) -> list:
+        """Get recent OHLCV rates for a symbol and timeframe."""
+        if not self.connected:
+            return []
+        try:
+            timeframe_map = {
+                "M1": mt5.TIMEFRAME_M1,
+                "M5": mt5.TIMEFRAME_M5,
+                "M15": mt5.TIMEFRAME_M15,
+                "M30": mt5.TIMEFRAME_M30,
+                "H1": mt5.TIMEFRAME_H1,
+                "H4": mt5.TIMEFRAME_H4,
+                "D1": mt5.TIMEFRAME_D1,
+            }
+            tf = timeframe_map.get(timeframe.upper())
+            if tf is None:
+                return []
+            rates = mt5.copy_rates_from_pos(symbol, tf, 0, count)
+            if rates is None:
+                return []
+            return [dict(r) for r in rates]
+        except Exception as e:
+            logger.error(f"Error getting rates: {e}")
+            return []
     
     def get_symbols(self) -> list:
         """Get available trading symbols"""
