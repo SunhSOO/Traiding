@@ -1,3 +1,43 @@
+# Python
 __pycache__/
 *.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# uv / virtual envs
+.venv/
 .tmp/
+
+# Secrets and local environment
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# Local data, model artifacts, logs
+var/
+backend/var/
+*.parquet
+*.duckdb
+*.sqlite
+*.sqlite3
+*.log
+
+# Alembic — keep versions/ committed; ignore working files only
+backend/alembic/.cache/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Node (frontend dev)
+node_modules/
+dist/

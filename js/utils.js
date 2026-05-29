@@ -64,6 +64,17 @@ const Utils = {
     return el;
   },
 
+  /** HTML-escape a value for safe interpolation into innerHTML.
+   *  All page files have local ``escape()`` clones — those still work
+   *  (they hoist to ``window.escape``) but new code should call
+   *  ``Utils.escape`` so we eventually retire the shadowing pattern.
+   */
+  escape(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  },
+
   /** Debounce */
   debounce(fn, delay = 300) {
     let timer;

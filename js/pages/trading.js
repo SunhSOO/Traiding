@@ -1,11 +1,19 @@
 /**
- * SUPERRICH - Live Trading Page
+ * Legacy MT5 live trading page (FX/gold only).
+ *
+ * The KR/US equity decision engine runs headless via the scheduler;
+ * this page is the manual-trading panel for the MT5 bridge used by
+ * the Red-Green FX/gold strategy. Mock data here.
  */
 function renderTrading(container) {
   const { marketData, positions } = MockData;
   const selectedSymbol = marketData[0];
 
   container.innerHTML = `
+    <div class="legacy-banner">
+      ⚠ <strong>Legacy MT5 트레이딩</strong> — FX/금 종목용 수동 매매 패널입니다.
+      KR/US 자동매매 시그널은 <a href="#/scan">시그널 스캔</a>에서 확인하세요.
+    </div>
     <div class="trading-layout">
       <!-- Chart Area -->
       <div class="trading-chart-area">

@@ -8,7 +8,15 @@ class Router {
     this.currentRoute = null;
     this.beforeHooks = [];
     this.afterHooks = [];
+    this.publicRoutes = new Set(['/login']);
     window.addEventListener('hashchange', () => this.handleRoute());
+    // Token expiry / 401 → log out + reroute to login
+    window.addEventListener('auth:expired', () => {
+      if (this.getCurrentPath() !== '/login') {
+        sessionStorage.setItem('woonam.intended_route', this.getCurrentPath());
+        this.navigate('/login');
+      }
+    });
   }
 
   register(path, handler) {
@@ -31,11 +39,43 @@ class Router {
   }
 
   getCurrentPath() {
-    return window.location.hash.slice(1) || '/dashboard';
+    // Strip leading '#', drop query string for route matching
+    const raw = window.location.hash.slice(1) || '/dashboard';
+    return raw.split('?')[0];
+  }
+
+  /** Parse `?market=KR&ticker=005930` from the hash. */
+  getQuery() {
+    const raw = window.location.hash.slice(1);
+    const q = raw.split('?')[1];
+    if (!q) return {};
+    const out = {};
+    for (const part of q.split('&')) {
+      const [k, v] = part.split('=');
+      if (k) out[decodeURIComponent(k)] = v !== undefined ? decodeURIComponent(v) : '';
+    }
+    return out;
+  }
+
+  /** Build a hash URL with query params. Convenience for callers. */
+  pathWithQuery(path, params = {}) {
+    const filtered = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '');
+    if (!filtered.length) return path;
+    const qs = filtered.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+    return `${path}?${qs}`;
   }
 
   async handleRoute() {
     const path = this.getCurrentPath();
+
+    // Auth guard: anything other than /login requires an auth token.
+    // Pages opt out by listing in `publicRoutes`.
+    if (!this.publicRoutes.has(path) && window.AppState && !AppState.isAuthenticated()) {
+      sessionStorage.setItem('woonam.intended_route', path);
+      this.navigate('/login');
+      return;
+    }
+
     const handler = this.routes[path];
     if (!handler) {
       this.navigate('/dashboard');
@@ -66,9 +106,21 @@ class Router {
         '/strategy': 'Strategy',
         '/history': 'History',
         '/analytics': 'Analytics',
-        '/settings': 'Settings'
+        '/settings': 'Settings',
+        '/login': 'Login',
+        '/universe': 'Universe',
+        '/decisions': 'Decision Audit',
+        '/freshness': 'Data Freshness',
+        '/analysis': '종목 분석',
+        '/training': '학습 결과',
+        '/backtest': '백테스트 (Replay)',
+        '/news': '뉴스 탐색',
+        '/macro': '매크로 지표',
+        '/scan': '시그널 스캔',
+        '/llm': 'LLM 상태',
+        '/config': '시스템 설정',
       };
-      pageTitle.textContent = titles[path] || 'Dashboard';
+      pageTitle.textContent = titles[path] || 'woonam';
     }
 
     // Render page

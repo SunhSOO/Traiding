@@ -1,8 +1,16 @@
 /**
- * SUPERRICH - Settings Page
+ * Legacy MT5 settings page (FX/gold only).
+ *
+ * The woonam KR/US equity system is configured via env vars + the
+ * read-only /config inspector; this page only governs the MT5 bridge
+ * that runs the legacy Red-Green strategy on FX/gold pairs.
  */
 function renderSettings(container) {
   container.innerHTML = `
+    <div class="legacy-banner">
+      ⚠ <strong>Legacy MT5 설정</strong> — 이 페이지는 FX/금 트레이딩용 MT5 브릿지만 설정합니다.
+      woonam KR/US 자동매매 시스템 설정은 <a href="#/config">시스템 설정 (read-only)</a> 페이지에서 확인하세요.
+    </div>
     <div class="settings-layout">
       <!-- Settings Nav -->
       <nav class="settings-nav">

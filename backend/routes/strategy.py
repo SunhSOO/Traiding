@@ -31,7 +31,7 @@ class StrategyConfigRequest(BaseModel):
 
 
 def get_manager(request: Request):
-    return getattr(request.app.state, "strategy_manager", None)
+    return getattr(request.app.state, "red_green_runtime", None)
 
 
 @router.get("/list")

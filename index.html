@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="SUPERRICH - Professional MT5 System Trading Dashboard for real-time monitoring, automated trading strategies, and portfolio management.">
-  <title>SUPERRICH — MT5 Trading Dashboard</title>
+  <meta name="description" content="woonam-auto-trading — KR (KOSPI200+KOSDAQ150) + US (S&P500+NASDAQ-100) equity auto-trading driven by composite Fundamental + Technical + Information analysis.">
+  <title>woonam — KR/US 자동매매</title>
 
   <!-- CSS -->
   <link rel="stylesheet" href="css/variables.css">
@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="css/pages/history.css">
   <link rel="stylesheet" href="css/pages/analytics.css">
   <link rel="stylesheet" href="css/pages/settings.css">
+  <link rel="stylesheet" href="css/pages/woonam.css">
 
   <!-- Favicon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
@@ -27,85 +28,153 @@
     <!-- ══════════ SIDEBAR ══════════ -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <div class="sidebar-logo">S</div>
+        <div class="sidebar-logo">W</div>
         <div class="sidebar-brand">
-          <span class="sidebar-brand-name">SUPERRICH</span>
-          <span class="sidebar-brand-sub">MT5 Trading</span>
+          <span class="sidebar-brand-name">woonam</span>
+          <span class="sidebar-brand-sub">KR/US 자동매매</span>
         </div>
       </div>
 
       <nav class="sidebar-nav">
-        <!-- Main -->
+        <!-- 메인 -->
         <div class="nav-section">
-          <div class="nav-section-label">Main</div>
+          <div class="nav-section-label">메인</div>
           <a class="nav-item active" data-route="/dashboard" href="#/dashboard" id="nav-dashboard">
             <span class="nav-item-icon">
               <svg viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v4H14zM14 10h7v11H14zM3 13h7v8H3z"/></svg>
             </span>
-            Dashboard
-          </a>
-          <a class="nav-item" data-route="/trading" href="#/trading" id="nav-trading">
-            <span class="nav-item-icon">
-              <svg viewBox="0 0 24 24"><path d="M9 5v4M9 13v4M15 5v4M15 13v4"/><rect x="7" y="9" width="4" height="4" rx="1"/><rect x="13" y="9" width="4" height="4" rx="1"/></svg>
-            </span>
-            Live Trading
+            대시보드
           </a>
           <a class="nav-item" data-route="/portfolio" href="#/portfolio" id="nav-portfolio">
             <span class="nav-item-icon">
               <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
             </span>
-            Portfolio
+            포트폴리오
           </a>
-        </div>
-
-        <!-- Automation -->
-        <div class="nav-section">
-          <div class="nav-section-label">Automation</div>
-          <a class="nav-item" data-route="/strategy" href="#/strategy" id="nav-strategy">
-            <span class="nav-item-icon">
-              <svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg>
-            </span>
-            Strategy
-            <span class="nav-item-badge">3</span>
-          </a>
-        </div>
-
-        <!-- Analysis -->
-        <div class="nav-section">
-          <div class="nav-section-label">Analysis</div>
           <a class="nav-item" data-route="/history" href="#/history" id="nav-history">
             <span class="nav-item-icon">
               <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
             </span>
-            History
+            거래 내역
           </a>
           <a class="nav-item" data-route="/analytics" href="#/analytics" id="nav-analytics">
             <span class="nav-item-icon">
               <svg viewBox="0 0 24 24"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
             </span>
-            Analytics
+            성과 분석
           </a>
         </div>
 
-        <!-- System -->
+        <!-- 분석 -->
         <div class="nav-section">
-          <div class="nav-section-label">System</div>
+          <div class="nav-section-label">분석</div>
+          <a class="nav-item" data-route="/decisions" href="#/decisions" id="nav-decisions">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M3 12h4M17 12h4M12 3v4M12 17v4"/></svg>
+            </span>
+            결정 감사
+          </a>
+          <a class="nav-item" data-route="/analysis" href="#/analysis" id="nav-analysis">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-7"/></svg>
+            </span>
+            종목 분석
+          </a>
+          <a class="nav-item" data-route="/scan" href="#/scan" id="nav-scan">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+            </span>
+            시그널 스캔
+          </a>
+          <a class="nav-item" data-route="/training" href="#/training" id="nav-training">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>
+            </span>
+            학습 결과
+          </a>
+          <a class="nav-item" data-route="/backtest" href="#/backtest" id="nav-backtest">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 4-6"/></svg>
+            </span>
+            백테스트
+          </a>
+        </div>
+
+        <!-- 데이터 -->
+        <div class="nav-section">
+          <div class="nav-section-label">데이터</div>
+          <a class="nav-item" data-route="/universe" href="#/universe" id="nav-universe">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+            </span>
+            종목 마스터
+          </a>
+          <a class="nav-item" data-route="/news" href="#/news" id="nav-news">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+            </span>
+            뉴스 탐색
+          </a>
+          <a class="nav-item" data-route="/macro" href="#/macro" id="nav-macro">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+            </span>
+            매크로 지표
+          </a>
+        </div>
+
+        <!-- 운영 -->
+        <div class="nav-section">
+          <div class="nav-section-label">운영</div>
+          <a class="nav-item" data-route="/freshness" href="#/freshness" id="nav-freshness">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            </span>
+            운영 대시보드
+          </a>
+          <a class="nav-item" data-route="/llm" href="#/llm" id="nav-llm">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>
+            </span>
+            LLM 상태
+          </a>
+          <a class="nav-item" data-route="/config" href="#/config" id="nav-config">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 1 1-14 0 7 7 0 0 1 14 0z"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>
+            </span>
+            시스템 설정
+          </a>
+        </div>
+
+        <!-- Legacy MT5 (deprecated, FX/gold only) -->
+        <div class="nav-section">
+          <div class="nav-section-label">MT5 (FX/금 전용)</div>
+          <a class="nav-item" data-route="/trading" href="#/trading" id="nav-trading">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M9 5v4M9 13v4M15 5v4M15 13v4"/><rect x="7" y="9" width="4" height="4" rx="1"/><rect x="13" y="9" width="4" height="4" rx="1"/></svg>
+            </span>
+            MT5 트레이딩
+          </a>
+          <a class="nav-item" data-route="/strategy" href="#/strategy" id="nav-strategy">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg>
+            </span>
+            Red-Green 전략
+          </a>
           <a class="nav-item" data-route="/settings" href="#/settings" id="nav-settings">
             <span class="nav-item-icon">
-              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             </span>
-            Settings
+            MT5 설정
           </a>
         </div>
       </nav>
 
       <!-- Sidebar Footer -->
       <div class="sidebar-footer">
-        <div class="connection-status">
-          <div class="status-dot connected"></div>
+        <div class="connection-status" id="sidebar-user">
           <div class="status-text">
-            <strong>MT5 Connected</strong><br>
-            <span class="text-xs">MetaQuotes-Demo · 12ms</span>
+            <strong>로그인 필요</strong>
           </div>
         </div>
       </div>
@@ -149,8 +218,13 @@
 
   <!-- Scripts -->
   <script src="js/utils.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/api.js"></script>
   <script src="js/mock-data.js"></script>
+  <script src="js/components/market_tab.js"></script>
   <script src="js/router.js"></script>
+  <script src="js/components/toast.js"></script>
+  <script src="js/pages/login.js"></script>
   <script src="js/pages/dashboard.js"></script>
   <script src="js/pages/trading.js"></script>
   <script src="js/pages/portfolio.js"></script>
@@ -158,6 +232,17 @@
   <script src="js/pages/history.js"></script>
   <script src="js/pages/analytics.js"></script>
   <script src="js/pages/settings.js"></script>
+  <script src="js/pages/universe.js"></script>
+  <script src="js/pages/decision_audit.js"></script>
+  <script src="js/pages/freshness.js"></script>
+  <script src="js/pages/analysis.js"></script>
+  <script src="js/pages/training.js"></script>
+  <script src="js/pages/backtest.js"></script>
+  <script src="js/pages/news.js"></script>
+  <script src="js/pages/macro.js"></script>
+  <script src="js/pages/scan.js"></script>
+  <script src="js/pages/llm.js"></script>
+  <script src="js/pages/config.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

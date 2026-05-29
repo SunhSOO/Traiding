@@ -1,8 +1,18 @@
 /**
- * SUPERRICH - Strategy Page
+ * Legacy Red-Green strategy page (MT5 FX/gold only).
+ *
+ * Red-Green is now a single Technical signal inside the woonam
+ * composite engine (technical/signals/red_green_signal.py); this
+ * page is the standalone runtime monitor for the original
+ * XAUUSD-only state machine. Independent from the KR/US equity
+ * decision pipeline.
  */
 function renderStrategy(container) {
   container.innerHTML = `
+    <div class="legacy-banner">
+      ⚠ <strong>Legacy Red-Green 전략</strong> — XAUUSD 전용 BB-ICHI+Supertrend 상태머신. woonam KR/US
+      자동매매와 독립. KR/US 자동매매의 결정은 <a href="#/decisions">결정 감사</a> 페이지에서 확인하세요.
+    </div>
     <div class="strategy-page">
       <div class="strategy-header">
         <div>
