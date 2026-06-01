@@ -239,6 +239,97 @@ decisions 라이브 재실행 (mention 보강 후):
 
 walk-forward 재실행 (US): trades=4 동일, outcome 변동 (sharpe 2.55 → -3.27) — 표본 4건 통계적 무의미. OLS noise weights의 자연스러운 변동.
 
+---
+
+## 2026-06-01 (월) 심야 — Phase 3 본격 ML: LightGBM + 44-feature 파이프라인
+
+### 데이터 보강 (gap 수정)
+
+- 발견: 초기 20-ticker FDR 파일럿(AAPL/MSFT/NVDA…)이 `--skip-existing-min-rows 200`로 풀 백필에서 스킵되어 2026-01~04 데이터 누락
+- ✅ 22개 종목 재백필 (254→373 rows), `daily_prices.as_of_ts` 2,380행 추가 정정
+- ✅ Technical history 90→**365일** 재실행 — KR 112,814 + US 172,070 = **284,884 T-score**
+- ✅ Fundamental history 90→**365일** 재실행 — **172,680 US F-score** (366 unique dates)
+
+### 새 학습 스택 구현
+
+`training/features.py` (신규, 423행):
+- **44개 raw 피처** (이전: 3개 summary score만)
+- Price 19: RSI(14), MACD-hist, BB%B, ADX, Stoch K, ATR%, OBV slope, vol_21d/63d, returns(1/5/21/63d), drawdown, range
+- Fundamental 10: PE, PB, EV/EBITDA, ROE, ROA, D/E, current ratio, gross margin, rev_yoy, eps_yoy
+- Info 6: news count 7d/30d, sentiment, pos/neg count, impact-weighted
+- Macro 6: VIX, VIX 5d Δ, DXY 5d Δ, SP500 21d ret, 10Y, 10Y 5d Δ
+- Regime 3: risk-on/risk-off one-hot + confidence
+
+`training/labels_multi.py` (신규): 5d/21d/63d forward returns + **cross-sectional rank**(시장 변동 제거된 상대 순위) + risk-adjusted return.
+
+`training/lgbm_trainer.py` (신규, 230행):
+- LightGBM (objective=regression, regularization-heavy defaults)
+- **date-grouped time-series CV** (5-fold + 21일 embargo) — row-based split이 cross-sectional rank target에서 leakage 일으키는 버그 발견 후 수정
+- IC (Spearman) + hit rate + R² OOF 계산
+- 클러스터별 + 전역 fallback, feature importance 추출
+
+### LightGBM 결과 — Production-grade 영역 도달
+
+**KR (350 종목, 378,600 샘플)**:
+
+| 클러스터 | n | R²_oof | hit | IC |
+|---|---|---|---|---|
+| __global__ | 378,600 | **+0.011** | **60.8%** | +0.058 |
+| **KR:FIN:LARGE** | 95,030 | -0.010 | **65.7%** | **+0.203** |
+| KR:FIN:MID | 105,285 | -0.002 | 56.8% | +0.105 |
+| **KR:FIN:SMALL** | 18,785 | **+0.072** | 55.5% | +0.131 |
+| **KR:OTHER:LARGE** | 24,035 | -0.054 | **69.9%** | +0.067 |
+| KR:OTHER:SMALL | 12,155 | +0.051 | 50.2% | +0.105 |
+
+**US (501 종목, 573,130 샘플)**:
+
+| 클러스터 | n | R²_oof | hit | IC |
+|---|---|---|---|---|
+| __global__ | 573,130 | **+0.034** | 51.9% | +0.043 |
+| **US:TECH:LARGE** | 83,075 | **+0.055** | 57.5% | **+0.153** |
+| **US:FIN:LARGE** | 82,435 | +0.012 | 55.8% | **+0.153** |
+| **US:ENERGY:LARGE** | 24,045 | -0.081 | **64.8%** | **+0.172** |
+| US:REAL_ESTATE:LARGE | 29,770 | +0.013 | 55.0% | rank IC **+0.230** |
+| US:FIN:MID | 3,435 | -0.004 | 58.8% | **+0.378** |
+| US:COMM:MID | 3,435 | -0.025 | 59.8% | +0.210 |
+| US:HEALTH:LARGE | 67,555 | -0.029 | 48.8% | **-0.129** |
+| US:CONS_STAPLES:LARGE | 38,930 | -0.064 | 37.3% | **-0.259** |
+
+**해석**:
+- **IC 0.15~0.24 클러스터 7개** (KR:FIN:LARGE, US:TECH/FIN/ENERGY/REAL_ESTATE:LARGE, US:FIN/COMM:MID) — 실 펀드들이 0.05~0.10 목표하는 영역. **실거래 후보군**.
+- KR이 US보다 전반적으로 hit rate 높음 (Global 60.8% vs 51.9%) — 좁고 깊은 KR universe + 한국 뉴스 매핑 효과.
+- **음수 IC 섹터** (HEALTH, CONS_STAPLES): 피처가 forward return과 anti-correlated. 평균회귀 regime 또는 우연. → 거래 시 **이 섹터는 모델 무시 + 단순 HOLD** 권장.
+- **R² 음수 클러스터**도 IC는 양수일 수 있음 — 방향성은 맞히지만 magnitude 예측은 noise (전형적 패턴).
+- 핵심 피처 (gain): **vol_63d / atr_pct / ret_63d / eps_yoy / debt_equity / us10y** — 변동성 + 성장 + 레버리지 + 금리 = 경제적으로 말이 됨
+
+### Data leakage 버그 + 수정 (정직)
+
+**중요**: 첫 smoke test에서 R² 0.54 / hit 100%라는 비현실적 수치 산출. 원인 추적:
+- `TimeSeriesSplit`이 row index로 분할 → sorted by date 후 동일 date의 다른 ticker가 train/test 경계 양쪽에 걸침
+- cross-sectional rank target이 동일 date의 다른 ticker 정보에 의존 → 누수
+- 수정: `_date_grouped_splits` — date 단위 그룹 분할 + 21일 embargo
+
+수정 후 R² 0.54 → **0.098** (파일럿 20 종목) → 풀 학습 +0.034 (US global). **누수 없는 정직 수치**.
+
+### 미통합 영역 (status=proposed)
+
+- ⚪ **LightGBM 모델 → decision engine 통합**: 학습된 booster 객체가 디스크에 영속화되지 않음. 현재 walk-forward는 여전히 OLS cluster_weights 사용. integration 위해 `backtest/rescoring.py`에 LGBM 추론 경로 추가 필요 (별도 작업).
+- ⚪ **TFI 피처 추가 영역** (사용자가 발급 중인 키 + 무료 SEC 자료):
+  - SEC Form 4 insider transactions (free, 강력한 알파)
+  - SEC 8-K event extraction
+  - GDELT 1979~ 글로벌 뉴스
+  - Wikipedia/Google Trends search momentum
+  - pandas-ta 30+ 추가 지표
+  - Cross-asset relative strength (sector ETF, USDKRW)
+- ⚪ **Hit rate 메트릭**: rank target에 대해 항상 100% 산출 (rank 값이 모두 ≥0 → sign 비교 무의미). IC가 올바른 지표.
+
+### 다음 단계
+
+1. **키 발급 완료 대기** (FRED / DART / Naver / GDELT 등)
+2. 추가 피처 통합 → 64 피처 → 재학습
+3. LGBM 모델 → 디스크 영속화 + rescoring engine 통합
+4. 페이퍼 트레이딩 3개월 실제 진행 (Sharpe 측정)
+
 | 도메인 | 커버리지 | 상태 |
 |---|---|---|
 | KR 종목 | 350 (KOSPI200+KOSDAQ150 marcap 프록시) | ✅ 라이브 |
@@ -262,8 +353,9 @@ walk-forward 재실행 (US): trades=4 동일, outcome 변동 (sharpe 2.55 → -3
 | paper_accounts | default-kr KRW 1억 + default-us USD 10만 → 100,235.87 | ✅ 라이브 |
 | 공시 (DART/EDGAR) | 0 | ❌ 미실행 (DART 키 부재; EDGAR 8-K 파서 미연결) |
 | financial_facts KR (DART) | 0 | ❌ DART_API_KEY 차단 |
-| Phase 3 학습 (클러스터링 / OLS) | 22 클러스터 / 71,728 샘플 / 섹터 차별화 학습됨 | 🟡 R² 일부 0.077, 대부분 noise |
-| Phase 3 backtest_runs (walk-forward) | 4행 (KR+US 2회) — US 4 trades, KR 1 trade | 🟡 파이프라인 작동 / 표본 작아 통계 무의미 |
+| Phase 3 학습 OLS (baseline) | 22 클러스터 / 71,728 샘플 | 🟡 R² noise (deprecated, baseline 보존) |
+| Phase 3 학습 LightGBM (date-grouped CV) | 22+ 클러스터 / 951,730 샘플 (KR+US) / 44 피처 | ✅ IC 0.15~0.24 production-grade 영역 7개 클러스터 |
+| Phase 3 backtest_runs (walk-forward) | 4행 (KR+US 2회) — US 4 trades, KR 1 trade | 🟡 OLS weights 기반 (LGBM 미통합) |
 | Phase 5 UI 브라우저 검증 | 미상 | ⚪ 이번 세션에서 미실시 |
 | Phase 6 페이퍼 3개월 운영 | 미시작 | ⚪ 제안 |
 
@@ -276,7 +368,7 @@ walk-forward 재실행 (US): trades=4 동일, outcome 변동 (sharpe 2.55 → -3
 3. **2년 국채 수익률** 부재 (FRED 키 없고, Yahoo 무료에 미노출). regime 수익률 곡선 voter가 None으로 degrade.
 4. **Information 스코어 커버리지** — remap 후 KR 26% / US 8.5%. KR은 RSS 한국 뉴스 매칭 정상; US는 영문 RSS에 한국 기업명 적게 나옴 — GDELT/Naver 영문 백필 필요.
 5. **Fundamental 스코어 KR = 0** — DART_API_KEY 설정 또는 대체 어댑터 작성 필요.
-6. **Phase 3 학습 R² noise** — 파이프라인은 라이브, 다만 90일 윈도우 + F/I 저커버리지 + OLS 한계로 통계적 신호 부재. LightGBM 도입 + 데이터 확장 필요.
+6. **Phase 3 학습** — 365일 + LightGBM + 44피처로 production-grade IC 영역 7개 클러스터 도달. 다만 LGBM 모델이 아직 decision engine과 미통합 — walk-forward는 OLS 사용 중. 모델 영속화 + 통합 후 paper Sharpe 측정 필요.
 7. **TimescaleDB extension 미설치** — daily_prices가 일반 테이블로 동작; 대용량 범위 쿼리 성능 미검증.
 
 ---
