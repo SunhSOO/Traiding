@@ -20,6 +20,42 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
+def run_fundamental() -> None:
+    from core.db import session_scope
+    from core.types import Market
+    from fundamental.runner import score_market as fund_score_market
+    now = datetime.now(timezone.utc)
+    for market in (Market.KR, Market.US):
+        with session_scope() as s:
+            report = fund_score_market(s, market=market, as_of=now)
+        print(f"  fundamental[{market.value}] "
+              f"processed={report.tickers_processed} "
+              f"skipped={report.tickers_skipped_no_data}")
+
+
+def run_info_classify(max_articles: int = 200) -> None:
+    from core.db import session_scope
+    from information.runner import classify_pending
+    with session_scope() as s:
+        report = classify_pending(s, max_articles=max_articles, lookback_days=30)
+    print(f"  info.classify seen={report.articles_seen} "
+          f"classified={report.articles_classified} "
+          f"failed={report.articles_failed} model={report.model_version}")
+
+
+def run_info_score() -> None:
+    from core.db import session_scope
+    from core.types import Market
+    from information.runner import score_market as info_score_market
+    now = datetime.now(timezone.utc)
+    for market in (Market.KR, Market.US):
+        with session_scope() as s:
+            report = info_score_market(s, market=market, as_of=now)
+        print(f"  info.score[{market.value}] "
+              f"processed={report.tickers_processed} "
+              f"skipped={report.tickers_skipped_no_mentions}")
+
+
 def run_technical() -> None:
     from core.db import session_scope
     from core.types import Market
@@ -92,18 +128,30 @@ def run_decisions() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("job", choices=["technical", "regime", "decisions", "all"])
+    ap.add_argument("job", choices=["technical", "regime", "decisions",
+                                     "info-classify", "info-score",
+                                     "fundamental", "all"])
+    ap.add_argument("--max-articles", type=int, default=200)
     args = ap.parse_args()
 
     print(f"[run_jobs] {args.job} @ {datetime.now(timezone.utc).isoformat()}")
+    if args.job in ("fundamental", "all"):
+        print("[fundamental.score.weekly]")
+        run_fundamental()
+    if args.job in ("info-classify", "all"):
+        print("[info.classify]")
+        run_info_classify(max_articles=args.max_articles)
+    if args.job in ("info-score", "all"):
+        print("[info.score]")
+        run_info_score()
     if args.job in ("technical", "all"):
-        print("[1] technical.score.daily")
+        print("[technical.score.daily]")
         run_technical()
     if args.job in ("regime", "all"):
-        print("[2] regime.daily")
+        print("[regime.daily]")
         run_regime()
     if args.job in ("decisions", "all"):
-        print("[3] decisions.daily")
+        print("[decisions.daily]")
         run_decisions()
     print("done.")
 

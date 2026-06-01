@@ -132,8 +132,13 @@ def _flatten_concept_response(
     rows: list[FinancialFactRow] = []
     units = data.get("units", {})
     for currency, facts in units.items():
-        # Currency may be e.g. "USD" or "USD/shares" for per-share metrics
+        # SEC unit codes include "USD", "EUR" (currency), and non-currency
+        # values like "shares", "pure", "Year". The `currency` column is
+        # VARCHAR(3); skip anything that isn't a 3-letter currency code.
         ccy = currency.split("/")[0]
+        if len(ccy) != 3 or not ccy.isalpha():
+            continue
+        ccy = ccy.upper()
         for fact in facts:
             end_str = fact.get("end")
             try:

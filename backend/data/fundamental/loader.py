@@ -102,6 +102,17 @@ def _upsert(session: Session, rows: Iterable[FinancialFactRow]) -> int:
     rows = list(rows)
     if not rows:
         return 0
+    # Dedupe within the batch on the PK (market, ticker, concept, period_end,
+    # period_kind). SEC sometimes returns multiple values for the same
+    # period across amendments; keep the latest as_of_ts (filed date).
+    deduped: dict[tuple, FinancialFactRow] = {}
+    for r in rows:
+        key = (r.market.value, r.ticker, r.concept, r.period_end, r.period_kind)
+        prev = deduped.get(key)
+        if prev is None or (r.as_of_ts or datetime.min) >= (prev.as_of_ts or datetime.min):
+            deduped[key] = r
+    rows = list(deduped.values())
+
     payload = [
         {
             "market": r.market.value,
@@ -118,13 +129,18 @@ def _upsert(session: Session, rows: Iterable[FinancialFactRow]) -> int:
         }
         for r in rows
     ]
-    stmt = pg_insert(FinancialFact).values(payload)
-    update_cols = {
-        c.name: c for c in stmt.excluded
-        if c.name not in {"market", "ticker", "concept", "period_end", "period_kind", "created_at"}
-    }
-    stmt = stmt.on_conflict_do_update(constraint="pk_financial_facts", set_=update_cols)
-    session.execute(stmt)
+    # Postgres caps params per query at 65535. 11 cols per row -> ~5950
+    # rows max. Chunk to stay well under the limit.
+    CHUNK = 2000
+    for k in range(0, len(payload), CHUNK):
+        chunk = payload[k:k + CHUNK]
+        stmt = pg_insert(FinancialFact).values(chunk)
+        update_cols = {
+            c.name: c for c in stmt.excluded
+            if c.name not in {"market", "ticker", "concept", "period_end", "period_kind", "created_at"}
+        }
+        stmt = stmt.on_conflict_do_update(constraint="pk_financial_facts", set_=update_cols)
+        session.execute(stmt)
     session.flush()
     return len(payload)
 
