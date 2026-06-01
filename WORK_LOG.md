@@ -214,7 +214,30 @@
 - ✅ `_job_walk_forward_weekly` 동등 호출 헬퍼 `run_jobs.py:run_walk_forward` 추가
 - ✅ backtest_runs 2행 INSERT (KR + US) — 파이프라인 완전 동작
 - 🟡 trades=0 — **rescoring 엔진(`backtest/rescoring.py:121-123`)이 F/T/I 3모듈 모두 freshness window 내 존재를 요구** ("all three modules required" 명문화). I-score historical 부재로 모든 historical 시점 스킵.
-- 진단 결과 무엇이 막는지 명확 → 의사결정 분기점 (옵션 A/B/C — 본 문서 외 대화)
+
+### A. rescoring freshness gate가 0-weight 모듈 스킵하도록 수정
+
+- ✅ `backend/backtest/rescoring.py` 수정 — freshness gate가 `decision_config.weights_for(cluster_id)`를 조회해 weight=0인 모듈은 freshness 요구 안 함
+- 의도: 학습된 cluster_weights가 (F=1, T=0, I=0)인 섹터는 F만 fresh면 거래 가능; T=0 / I=0 모듈의 데이터 부재가 전체 신호를 막지 않음
+- 결과: walk-forward에서 **trades 실제 발생** — KR 1건, US 4건
+
+### B. News mention 재매핑 — 41→655 (16배)
+
+- 발견: 첫 RSS 222건은 KR universe 적재 **전에** ingest됨 → map_article 호출 시 KR NameIndex 비어있었음 → KR 매칭 0건
+- ✅ `scripts/remap_news_mentions.py` 신규 — 전체 NewsArticle 1,479건을 현재 NameIndex(KR 350 + US 503)로 재매핑
+- ✅ news_ticker_mentions: **41 → 655**
+- ✅ info.score 재실행: KR **13 → 91** (350 중 26%), US **24 → 43** (503 중 8.5%)
+- US 증가 미미는 자연스러움 — RSS가 미국 영문 뉴스라 KR 기업명 매칭 위주
+
+### KR 종목 진짜 F/T/I 합산 첫 관측
+
+decisions 라이브 재실행 (mention 보강 후):
+- 삼성전자(005930): T +33.75 / I **+98.60** → composite **+66.18** (강한 매수, 다만 REJECTED — 게이트 차단)
+- SK하이닉스(000660): T +23.75 / I +80.95 → composite **+52.35** (HOLD)
+- SK(034730): T +16.25 / I +78.98 → composite **+47.61** (HOLD)
+- KR Fundamental은 여전히 null (DART 키 부재) — F+T+I 3축 완성은 DART 받으면 가능
+
+walk-forward 재실행 (US): trades=4 동일, outcome 변동 (sharpe 2.55 → -3.27) — 표본 4건 통계적 무의미. OLS noise weights의 자연스러운 변동.
 
 | 도메인 | 커버리지 | 상태 |
 |---|---|---|
@@ -226,21 +249,21 @@
 | US financial_facts | 501 종목 (574,071행) | ✅ 라이브 (100% SP500, BF.B/BRK.B 제외) |
 | 뉴스 기사 (RSS) | 582 | ✅ 라이브 |
 | 기사 분류 | 582 (Ollama qwen2.5:14b) | ✅ 라이브 |
-| 종목 mention | 41 | 🟡 낮음 (NER 패스가 high-confidence mention 적게 생성) |
+| 종목 mention | 655 | ✅ 16배 보강 (remap_news_mentions.py 재처리 후) |
 | macro_series | 5 시리즈 × ~500행 | ✅ 라이브 (5/6 — 2Y 없음) |
 | market_regime | 양 시장 NEUTRAL/0.0 | ✅ 라이브 (시그널 약함 — 정직) |
 | module_scores Technical | 849 라이브 + 76,302 historical (90일) | ✅ 라이브 + 시계열 |
 | ticker_clusters | 853 (KR 350 + US 503) | ✅ 라이브 |
 | cluster_weights | 22 클러스터 학습됨 | 🟡 R² noise — 신호 부재 (데이터 부족) |
 | module_scores Fundamental | US 501 라이브 + 45,090 historical (90일), KR 0 | ✅ US 100% / KR DART 차단 |
-| module_scores Information | 37 (KR 13 + US 24) | 🟡 뉴스 depth가 천장 |
+| module_scores Information | 134 (KR 91 + US 43) | 🟡 KR 26% / US 8.5% — RSS depth가 US 천장 |
 | decision_audit | 1,006+ 행 | ✅ 라이브 |
 | paper_positions | 20건 보유 (default-us) | ✅ 라이브 |
 | paper_accounts | default-kr KRW 1억 + default-us USD 10만 → 100,235.87 | ✅ 라이브 |
 | 공시 (DART/EDGAR) | 0 | ❌ 미실행 (DART 키 부재; EDGAR 8-K 파서 미연결) |
 | financial_facts KR (DART) | 0 | ❌ DART_API_KEY 차단 |
 | Phase 3 학습 (클러스터링 / OLS) | 22 클러스터 / 71,728 샘플 / 섹터 차별화 학습됨 | 🟡 R² 일부 0.077, 대부분 noise |
-| Phase 3 backtest_runs (walk-forward) | 2행 (KR+US, 둘 다 trades=0) | 🟡 파이프라인 검증 / I-score history 부재로 trades 없음 |
+| Phase 3 backtest_runs (walk-forward) | 4행 (KR+US 2회) — US 4 trades, KR 1 trade | 🟡 파이프라인 작동 / 표본 작아 통계 무의미 |
 | Phase 5 UI 브라우저 검증 | 미상 | ⚪ 이번 세션에서 미실시 |
 | Phase 6 페이퍼 3개월 운영 | 미시작 | ⚪ 제안 |
 
@@ -251,7 +274,7 @@
 1. **KR 유니버스는 시가총액 프록시** — 실제 KOSPI200/KOSDAQ150 명단 아님. source = `fdr_marcap_proxy`. survivorship-bias-free 히스토리는 KRX CSV 업그레이드 필요.
 2. **BF.B / BRK.B** US에서 누락 (FDR 클래스 주식 포맷). 수동 ticker 정규화 필요.
 3. **2년 국채 수익률** 부재 (FRED 키 없고, Yahoo 무료에 미노출). regime 수익률 곡선 voter가 None으로 degrade.
-4. **Information 스코어 커버리지 4%** — RSS 582 / 853 종목 비율이 자연 한도. BIGKINDS / NAVER / GDELT 백필로만 상승.
+4. **Information 스코어 커버리지** — remap 후 KR 26% / US 8.5%. KR은 RSS 한국 뉴스 매칭 정상; US는 영문 RSS에 한국 기업명 적게 나옴 — GDELT/Naver 영문 백필 필요.
 5. **Fundamental 스코어 KR = 0** — DART_API_KEY 설정 또는 대체 어댑터 작성 필요.
 6. **Phase 3 학습 R² noise** — 파이프라인은 라이브, 다만 90일 윈도우 + F/I 저커버리지 + OLS 한계로 통계적 신호 부재. LightGBM 도입 + 데이터 확장 필요.
 7. **TimescaleDB extension 미설치** — daily_prices가 일반 테이블로 동작; 대용량 범위 쿼리 성능 미검증.

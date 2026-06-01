@@ -117,10 +117,15 @@ def rescore_to_decisions(
         t_pt = latest.get((pt.market, pt.ticker, "T"))
         i_pt = latest.get((pt.market, pt.ticker, "I"))
 
-        # Freshness gate — all three modules must be within the window
-        if not _fresh_enough(f_pt, pt.ts, staleness): continue
-        if not _fresh_enough(t_pt, pt.ts, staleness): continue
-        if not _fresh_enough(i_pt, pt.ts, staleness): continue
+        # Freshness gate — required only for modules with non-zero weight.
+        # When the learned/overridden weight for a module is 0 the engine
+        # ignores its score anyway, so demanding its freshness would
+        # over-constrain (e.g. T-only learned clusters need not wait for
+        # F/I news to land).
+        active_weights = decision_config.weights_for(cluster_id)
+        if active_weights.get("F", 0.0) > 0 and not _fresh_enough(f_pt, pt.ts, staleness): continue
+        if active_weights.get("T", 0.0) > 0 and not _fresh_enough(t_pt, pt.ts, staleness): continue
+        if active_weights.get("I", 0.0) > 0 and not _fresh_enough(i_pt, pt.ts, staleness): continue
 
         composite = score_composite(
             fundamental=_to_verdict(f_pt),
