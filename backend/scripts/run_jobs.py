@@ -20,6 +20,74 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
+def run_walk_forward(t_only: bool = False, min_conf: float = 0.40) -> None:
+    import asyncio
+    from datetime import timedelta
+    from core.db import async_session_scope
+    from core.types import Market
+    from backtest.rescoring_runner import run_rescoring_backtest
+    from core.models.backtest import BacktestRunRow
+
+    now = datetime.now(timezone.utc)
+    start = now - timedelta(days=90)
+    suffix = "-T-only" if t_only else ""
+    label_root = f"walk-forward-{now.date().isoformat()}{suffix}"
+    override = {"F": 0.0, "T": 1.0, "I": 0.0} if t_only else None
+
+    async def _one(market: Market) -> None:
+        initial = 100_000_000.0 if market is Market.KR else 100_000.0
+        async with async_session_scope() as db:
+            result = await run_rescoring_backtest(
+                db, start=start, end=now,
+                market=market.value, initial_balance=initial,
+                position_fraction=0.05,
+                use_learned_weights=(not t_only),
+                weight_override=override,
+                min_overall_confidence=min_conf,
+            )
+            final_equity = result.curve[-1].equity if result.curve else initial
+            row = BacktestRunRow(
+                label=f"{label_root}-{market.value}", mode="rescoring",
+                market=market.value,
+                window_start=start, window_end=now,
+                initial_balance=initial, final_equity=float(final_equity),
+                total_trades=result.summary.total_trades,
+                win_rate=float(result.summary.win_rate),
+                total_realized_pnl=float(result.summary.total_realized_pnl),
+                avg_trade_pnl=float(result.summary.avg_trade_pnl),
+                best_trade_pnl=float(result.summary.best_trade_pnl),
+                worst_trade_pnl=float(result.summary.worst_trade_pnl),
+                max_drawdown=float(result.summary.max_drawdown),
+                sharpe_like=float(result.summary.sharpe_like),
+                return_pct=float(result.summary.return_pct),
+                skipped_signals=result.result.skipped_signals,
+                config_snapshot={
+                    "mode": "rescoring", "market": market.value,
+                    "initial_balance": initial, "position_fraction": 0.05,
+                    "use_learned_weights": True,
+                },
+                equity_points=[
+                    {"date": pt.date.isoformat(), "equity": float(pt.equity),
+                     "drawdown": float(pt.drawdown)}
+                    for pt in result.curve
+                ],
+                triggered_by="manual:run_jobs",
+            )
+            db.add(row)
+            await db.flush()
+        print(f"  walk_forward[{market.value}] trades={result.summary.total_trades} "
+              f"return_pct={result.summary.return_pct:.2f}% "
+              f"win_rate={result.summary.win_rate:.2%} "
+              f"sharpe={result.summary.sharpe_like:.3f} "
+              f"mdd={result.summary.max_drawdown:.2%} "
+              f"final_eq={float(final_equity):,.2f}")
+
+    async def _all() -> None:
+        for m in (Market.KR, Market.US):
+            await _one(m)
+    asyncio.run(_all())
+
+
 def run_training() -> None:
     from core.db import session_scope
     from training.runner import run_training as _rt
@@ -146,8 +214,13 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("job", choices=["technical", "regime", "decisions",
                                      "info-classify", "info-score",
-                                     "fundamental", "training", "all"])
+                                     "fundamental", "training",
+                                     "walk-forward", "all"])
     ap.add_argument("--max-articles", type=int, default=200)
+    ap.add_argument("--t-only", action="store_true",
+                    help="walk-forward only: force T=1.0 weight override")
+    ap.add_argument("--min-conf", type=float, default=0.40,
+                    help="walk-forward only: composite-confidence floor")
     args = ap.parse_args()
 
     print(f"[run_jobs] {args.job} @ {datetime.now(timezone.utc).isoformat()}")
@@ -157,6 +230,9 @@ def main() -> None:
     if args.job in ("training", "all"):
         print("[training.weekly]")
         run_training()
+    if args.job in ("walk-forward", "all"):
+        print("[backtest.walk_forward.weekly]")
+        run_walk_forward(t_only=args.t_only, min_conf=args.min_conf)
     if args.job in ("info-classify", "all"):
         print("[info.classify]")
         run_info_classify(max_articles=args.max_articles)

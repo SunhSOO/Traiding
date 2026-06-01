@@ -195,6 +195,27 @@
 - 윈도우 확장 (1년+)
 - LightGBM 도입 + 피처 확장
 
+### EDGAR 풀 백필 완료 → F historical → 학습 재가동
+
+- ✅ EDGAR 396 종목 추가 백필 → US 501/501 종목 / **574,071 행** financial_facts
+- ✅ Fundamental score US 105 → **501 종목** (skip 2 = BF.B/BRK.B)
+- ✅ `scripts/backfill_fundamental_history.py` 신규 — historical Fundamental 백필
+- ✅ US 90 거래일 × 501 종목 = **45,090 F-score** 행 적재
+- ✅ training 재실행 (71,728 샘플):
+  - **섹터별 weights가 진짜 차별화됨** (이전 equal-weight 패턴에서 탈피):
+    - F-dominant (안정 cash flow): US:REAL_ESTATE:LARGE/MID, UTILITIES:LARGE, CONS_DISC:LARGE, COMM:LARGE → F 100%
+    - T-dominant (모멘텀): US:TECH:LARGE, ENERGY:LARGE, KR:OTHER:LARGE, FIN:MID → T 100%
+    - 혼합: US:HEALTH:LARGE (F 0.10, T 0.90), US:INDUSTRIALS:LARGE (F 0.30, T 0.70)
+  - R² 개선: US:REAL_ESTATE:MID 0.012 → **0.077**, US:INDUSTRIALS:MID 0.024 → **0.035**
+  - KR 클러스터는 모두 (0.333, 0.333, 0.333) — DART 없어 KR F-score 0이라 equal-weight fallback
+
+### Walk-forward 백테스트 1회 가동 — 진단
+
+- ✅ `_job_walk_forward_weekly` 동등 호출 헬퍼 `run_jobs.py:run_walk_forward` 추가
+- ✅ backtest_runs 2행 INSERT (KR + US) — 파이프라인 완전 동작
+- 🟡 trades=0 — **rescoring 엔진(`backtest/rescoring.py:121-123`)이 F/T/I 3모듈 모두 freshness window 내 존재를 요구** ("all three modules required" 명문화). I-score historical 부재로 모든 historical 시점 스킵.
+- 진단 결과 무엇이 막는지 명확 → 의사결정 분기점 (옵션 A/B/C — 본 문서 외 대화)
+
 | 도메인 | 커버리지 | 상태 |
 |---|---|---|
 | KR 종목 | 350 (KOSPI200+KOSDAQ150 marcap 프록시) | ✅ 라이브 |
@@ -202,7 +223,7 @@
 | US 종목 | 503 (SP500) | ✅ 라이브 |
 | US 일봉 | 183,717행 | ✅ 라이브 |
 | US CIK 보강 | 501/503 | ✅ 라이브 |
-| US financial_facts | 100 종목 (114,408행) | ✅ 라이브 (100/501 SP500 = 20%) |
+| US financial_facts | 501 종목 (574,071행) | ✅ 라이브 (100% SP500, BF.B/BRK.B 제외) |
 | 뉴스 기사 (RSS) | 582 | ✅ 라이브 |
 | 기사 분류 | 582 (Ollama qwen2.5:14b) | ✅ 라이브 |
 | 종목 mention | 41 | 🟡 낮음 (NER 패스가 high-confidence mention 적게 생성) |
@@ -211,15 +232,15 @@
 | module_scores Technical | 849 라이브 + 76,302 historical (90일) | ✅ 라이브 + 시계열 |
 | ticker_clusters | 853 (KR 350 + US 503) | ✅ 라이브 |
 | cluster_weights | 22 클러스터 학습됨 | 🟡 R² noise — 신호 부재 (데이터 부족) |
-| module_scores Fundamental | US 105, KR 0 | 🟡 US 21% 커버; KR은 DART 차단 |
+| module_scores Fundamental | US 501 라이브 + 45,090 historical (90일), KR 0 | ✅ US 100% / KR DART 차단 |
 | module_scores Information | 37 (KR 13 + US 24) | 🟡 뉴스 depth가 천장 |
 | decision_audit | 1,006+ 행 | ✅ 라이브 |
 | paper_positions | 20건 보유 (default-us) | ✅ 라이브 |
 | paper_accounts | default-kr KRW 1억 + default-us USD 10만 → 100,235.87 | ✅ 라이브 |
 | 공시 (DART/EDGAR) | 0 | ❌ 미실행 (DART 키 부재; EDGAR 8-K 파서 미연결) |
 | financial_facts KR (DART) | 0 | ❌ DART_API_KEY 차단 |
-| Phase 3 학습 (클러스터링 / OLS) | 22 클러스터 × 71,728 샘플 | 🟡 파이프라인 가동 / R² 의미 없음 |
-| Phase 3 backtest_runs (walk-forward) | 0 | ⚪ 제안 |
+| Phase 3 학습 (클러스터링 / OLS) | 22 클러스터 / 71,728 샘플 / 섹터 차별화 학습됨 | 🟡 R² 일부 0.077, 대부분 noise |
+| Phase 3 backtest_runs (walk-forward) | 2행 (KR+US, 둘 다 trades=0) | 🟡 파이프라인 검증 / I-score history 부재로 trades 없음 |
 | Phase 5 UI 브라우저 검증 | 미상 | ⚪ 이번 세션에서 미실시 |
 | Phase 6 페이퍼 3개월 운영 | 미시작 | ⚪ 제안 |
 
