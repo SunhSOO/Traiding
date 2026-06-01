@@ -145,10 +145,55 @@
 ### git
 
 - ✅ `e79c3e1` 푸시 — 6 파일, +563 / -12 (KR 어댑터 + EDGAR + 매크로 + loader 수정)
+- ✅ `0c065b5` 푸시 — `WORK_LOG.md` 도입
 
 ---
 
-## 현재 상태 스냅샷 (2026-06-01 기준)
+## 2026-06-01 (월) 후반 — Phase 3 학습 파이프라인 첫 가동
+
+### 데이터 정합성 수정
+
+- ✅ `daily_prices.as_of_ts` 일괄 정정 — 모든 FDR/yfinance/pykrx 행을 `trade_date + 16h UTC`로
+- **307,145행 UPDATE** — Technical 러너의 look-ahead 가드(`as_of_ts <= as_of`)가 historical scoring을 막던 문제 해소
+
+### Technical 점수 historical backfill
+
+- `scripts/backfill_technical_history.py` — `score_market`을 90 거래일치 반복 실행
+- ✅ KR 90일 × ~347 종목 = **31,212 score 행** (abstain 288)
+- ✅ US 90일 × ~501 종목 = **45,090 score 행** (abstain 180)
+- 합계 **76,302 score 행** 적재 — module_scores 시계열 완성
+
+### 학습 파이프라인 (training.weekly) 첫 가동
+
+- `training.runner.run_training` — clusterer → labels → OLS per cluster → cluster_weights 영속화
+- ✅ ticker_clusters 853행 (KR 350 + US 503), 22 클러스터 산출
+- ✅ **71,728 학습 샘플 수집**, **22/22 클러스터 학습 완료** (skip 0)
+- 🟡 R² 0.00006 ~ 0.038 — **사실상 noise**:
+  - 패턴 1: F/I 데이터 부족 → OLS가 T-only에 100% 가중치 (US:INDUSTRIALS:LARGE, US:TECH:LARGE 등)
+  - 패턴 2: F/T/I 모두 있는 클러스터는 (0.333, 0.333, 0.333) equal-weight fallback (계수 0 근접 → 디폴트 복귀)
+  - 최고 R² 0.038 (US:COMM:MID, 3종목/261샘플) — 통계적 무의미
+- **파이프라인은 완전 작동** — clusterer / labeler / trainer / registry / walk-forward 모두 정상
+
+### 학습된 weights로 decisions 재실행
+
+- ✅ decisions.daily 재실행 — cluster_weights 적용:
+  - 503 considered → 415 HOLD + 88 REJECTED + 0 traded
+  - 이전(equal weight): 387 HOLD + 116 REJECTED → **REJECTED 28건 감소** (학습된 weight가 일부 종목의 컴포지트를 임계값 안쪽으로 끌어옴)
+- 0 trades는 동일 — 기존 20포지션 동방향 차단 (정상)
+
+### 정직한 진단
+
+학습 R²가 noise 수준인 진짜 원인:
+1. **윈도우 짧음** — 90 거래일은 5d forward return을 학습하기엔 부족
+2. **F/I 커버리지 낮음** — F 21% / I 4% → 대다수 샘플이 T-only로 degenerate
+3. **OLS 기준 모델 한계** — 가격 수익률은 본질적으로 R²가 낮음. LightGBM + 더 많은 피처가 다음 단계
+4. **walk-forward split 누락** — 윈도우가 작아 split이 비어있음 (`r2_walk_forward` 모두 None)
+
+향후 R² 개선 전제:
+- F 풀 커버리지 (EDGAR 501/501) → 진행 중
+- KR Fundamental (DART 키 필요)
+- 윈도우 확장 (1년+)
+- LightGBM 도입 + 피처 확장
 
 | 도메인 | 커버리지 | 상태 |
 |---|---|---|
@@ -163,7 +208,9 @@
 | 종목 mention | 41 | 🟡 낮음 (NER 패스가 high-confidence mention 적게 생성) |
 | macro_series | 5 시리즈 × ~500행 | ✅ 라이브 (5/6 — 2Y 없음) |
 | market_regime | 양 시장 NEUTRAL/0.0 | ✅ 라이브 (시그널 약함 — 정직) |
-| module_scores Technical | 849 (KR 348 + US 501) | ✅ 라이브 |
+| module_scores Technical | 849 라이브 + 76,302 historical (90일) | ✅ 라이브 + 시계열 |
+| ticker_clusters | 853 (KR 350 + US 503) | ✅ 라이브 |
+| cluster_weights | 22 클러스터 학습됨 | 🟡 R² noise — 신호 부재 (데이터 부족) |
 | module_scores Fundamental | US 105, KR 0 | 🟡 US 21% 커버; KR은 DART 차단 |
 | module_scores Information | 37 (KR 13 + US 24) | 🟡 뉴스 depth가 천장 |
 | decision_audit | 1,006+ 행 | ✅ 라이브 |
@@ -171,7 +218,8 @@
 | paper_accounts | default-kr KRW 1억 + default-us USD 10만 → 100,235.87 | ✅ 라이브 |
 | 공시 (DART/EDGAR) | 0 | ❌ 미실행 (DART 키 부재; EDGAR 8-K 파서 미연결) |
 | financial_facts KR (DART) | 0 | ❌ DART_API_KEY 차단 |
-| Phase 3 학습 (클러스터링 / 튜닝) | 0 | ⚪ 제안 (cluster_weights, ticker_clusters, backtest_runs 비어있음) |
+| Phase 3 학습 (클러스터링 / OLS) | 22 클러스터 × 71,728 샘플 | 🟡 파이프라인 가동 / R² 의미 없음 |
+| Phase 3 backtest_runs (walk-forward) | 0 | ⚪ 제안 |
 | Phase 5 UI 브라우저 검증 | 미상 | ⚪ 이번 세션에서 미실시 |
 | Phase 6 페이퍼 3개월 운영 | 미시작 | ⚪ 제안 |
 
@@ -184,7 +232,7 @@
 3. **2년 국채 수익률** 부재 (FRED 키 없고, Yahoo 무료에 미노출). regime 수익률 곡선 voter가 None으로 degrade.
 4. **Information 스코어 커버리지 4%** — RSS 582 / 853 종목 비율이 자연 한도. BIGKINDS / NAVER / GDELT 백필로만 상승.
 5. **Fundamental 스코어 KR = 0** — DART_API_KEY 설정 또는 대체 어댑터 작성 필요.
-6. **Phase 3 학습 산출물 0** — 클러스터링 / walk-forward 백테스트 파이프라인은 골격만 있고 한 번도 실행 안 됨.
+6. **Phase 3 학습 R² noise** — 파이프라인은 라이브, 다만 90일 윈도우 + F/I 저커버리지 + OLS 한계로 통계적 신호 부재. LightGBM 도입 + 데이터 확장 필요.
 7. **TimescaleDB extension 미설치** — daily_prices가 일반 테이블로 동작; 대용량 범위 쿼리 성능 미검증.
 
 ---

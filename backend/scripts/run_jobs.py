@@ -20,6 +20,22 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
+def run_training() -> None:
+    from core.db import session_scope
+    from training.runner import run_training as _rt
+    now = datetime.now(timezone.utc)
+    with session_scope() as s:
+        report = _rt(s, as_of=now)
+    print(f"  training markets={report.markets} "
+          f"samples={report.samples_collected} "
+          f"attempted={report.clusters_attempted} "
+          f"trained={report.clusters_trained} "
+          f"skipped={report.clusters_skipped_low_data}")
+    for d in report.cluster_details[:10]:
+        print(f"    cluster={d.get('cluster_id')} skipped={d.get('skipped')} "
+              f"n={d.get('n_samples')} r2={d.get('r2')}")
+
+
 def run_fundamental() -> None:
     from core.db import session_scope
     from core.types import Market
@@ -130,7 +146,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("job", choices=["technical", "regime", "decisions",
                                      "info-classify", "info-score",
-                                     "fundamental", "all"])
+                                     "fundamental", "training", "all"])
     ap.add_argument("--max-articles", type=int, default=200)
     args = ap.parse_args()
 
@@ -138,6 +154,9 @@ def main() -> None:
     if args.job in ("fundamental", "all"):
         print("[fundamental.score.weekly]")
         run_fundamental()
+    if args.job in ("training", "all"):
+        print("[training.weekly]")
+        run_training()
     if args.job in ("info-classify", "all"):
         print("[info.classify]")
         run_info_classify(max_articles=args.max_articles)
