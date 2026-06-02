@@ -1,4 +1,4 @@
-# GAPS — 미실현/미구현 전수 목록
+# GAPS — 전체 상태 / 미실현·구현·측정 전수 목록
 
 > **이 문서의 목적**: "전부 시도" 원칙을 지키기 위한 영구 산출물.
 > 작업하면서 발견되는 누락은 *즉시* 이 문서에 append.
@@ -10,6 +10,233 @@
 > - ✅ DONE — 구현 + 측정 완료
 > - ⏭️ EXCLUDED — 측정 결과 효용 없음 (이유 기록)
 > - ⛔ BLOCKED — 외부 의존성 부재 (이유 기록)
+
+---
+
+## 0. 구현·측정 완료 종합 (Phase 별)
+
+이 섹션은 *지금까지 구축한 모든 것*. 카테고리별 상세는 A-W 섹션 참조.
+
+### 0.1 Phase 0 — 기반 인프라 (Sprint 2026-05-26~05-29)
+- ✅ PostgreSQL 16 + 27 테이블 + alembic 0001~0011 마이그레이션
+- ✅ FastAPI lifespan 부트스트랩 (woonam 운영자 + default-kr/-us paper account)
+- ✅ Auth: JWT HS256 + bcrypt<4.0 + python-multipart
+- ✅ Risk Engine + RiskLimits (max_lot/daily_loss/consecutive_loss/max_positions/allowlist)
+- ✅ decision_audit + risk_snapshots 테이블
+- ✅ paper_accounts/paper_positions/paper_trades 영속화
+- ✅ as_of guard (look-ahead bias 차단 데코레이터)
+- ✅ structlog JSON 로깅
+- ✅ APScheduler 17 잡 + mlops.retrain.weekly + mlops.drift_check.daily (총 19)
+
+### 0.2 Phase 1 — 데이터 인제스트
+**Universe**:
+- ✅ securities 870 (KR 350 marcap 프록시 + US 503 SP500 + 17 cross-asset ETF)
+- ✅ universe_membership (KR fdr_marcap_proxy, US wikipedia-derived)
+- ✅ corp_code 343/350 KR (DART)
+- ✅ CIK 501/503 US (SEC EDGAR)
+
+**Daily prices (315,781 rows)**:
+- ✅ KR 350 종목 × 540일 (FDR)
+- ✅ US 503 종목 × 540일 (FDR, 22개 gap fill 후)
+- ✅ 17 cross-asset ETF × 540일 (XLK/XLF/XLV/XLE/XLY/XLP/XLI/XLB/XLU/XLRE/XLC + SPY/QQQ/IWM + GLD/USO/TLT)
+- ✅ as_of_ts 정정 (307k 행, trade_date+16h UTC)
+
+**Financial facts (588,294 rows)**:
+- ✅ US 574,071 (EDGAR companyconcept 501 종목 17 concepts)
+- ✅ KR 14,223 (DART finstate 317 종목 3년 ANNUAL × 17 concepts)
+- ✅ Historical Fundamental 45,090 rows (US 365일 × 501 종목)
+
+**Disclosures (379,673 rows)**:
+- ✅ EDGAR INSIDER (Form 4) 302,073 metadata
+- ✅ EDGAR MATERIAL_EVENT (8-K) 58,581 metadata
+- ✅ EDGAR QUARTERLY (10-Q) 13,473 metadata
+- ✅ EDGAR ANNUAL (10-K) 4,703 metadata
+- ✅ Form 4 본문 5,000건 XML 파싱 (buy/sell direction + value + CEO/Director 역할 → JSON)
+
+**News (1,441,239 articles, 275,618 mentions)**:
+- ✅ GDELT GKG 1,418,585 articles + 230k US mentions (180일, SP500, 275GB 스캔)
+- ✅ Naver 검색 API 22,654 articles + 45k KR mentions (350 종목, 100건/쿼리)
+- ✅ RSS 1,500+ articles (MK/한국경제/CNBC/연합인포맥스)
+- ✅ Ollama qwen2.5:14b 분류 1,446건
+
+**Macro (5,749 rows, 13 시리즈)**:
+- ✅ FDR: VIX, IDX_SP500_FRED, IDX_KOSPI_ECOS, FX_DXY, RATE_US_10Y (^TNX)
+- ✅ FRED 정식: DGS10, DGS2, DGS3MO, FEDFUNDS, CPIAUCSL, M2SL, UNRATE, INDPRO, PAYEMS, RSAFS
+- ✅ BOK ECOS: 기준금리, CPI_KR
+
+**Module scores (570,773 rows historical)**:
+- ✅ Technical 365일 백필: KR 31,212 + US 45,090 + 라이브 849 = ~285k
+- ✅ Fundamental 365일 백필: 172,680 US (단일 라이브 105)
+- ✅ Information 라이브: 134건 (KR 91 + US 43)
+- ✅ as_of_ts 정정 + 1차/2차 재실행으로 누락 보강
+
+**Cluster + Regime**:
+- ✅ ticker_clusters 4,265 rows (853 종목 × 다중 할당 시점)
+- ✅ market_regime 6 rows (KR/US 분류)
+
+### 0.3 Phase 2 — Feature engineering
+
+**총 131 features 구현 + LightGBM trainer 사용 중**:
+- ✅ Price/Technical 50 (RSI 5/14, MACD-hist/cross, BB-pctB/squeeze, ADX, Stoch-K, Williams-R, MFI, CMF, ATR%, OBV slope, Ulcer, Donchian-pos 20/55, Aroon up/dn/osc, ROC 10/21, multi-horizon returns 1/2/3/5/10/21/42/63/126/252d, vol 5/21/63/252d, skew/kurt 21d, sharpe 21/63d, drawdown 63/252d, range %, volume z 21/63, gap %, SMA 20/50/200 비교, candle body/wick %, doji)
+- ✅ Fundamental 10 (PE-TTM, PB, EV/EBITDA, ROE-Q, ROA-Q, debt/equity, current ratio, gross margin, rev YoY, EPS YoY)
+- ✅ Information 6 (news count 7d/30d, sentiment 7d, pos/neg count 7d, impact 7d)
+- ✅ Disclosure 6 (insider count 7d/30d, 8K count 7d/30d, days since 10K/10Q)
+- ✅ Insider (Form 4 body) 7 (net_value 7d/30d, buys/sells 30d, CEO/Director buys, buy_sell_ratio)
+- ✅ Macro 18 (VIX/VIX 5d-21d chg, DXY 5d-21d chg, SP500 21d-63d ret, US10Y level + 5d-chg, US2Y level, yield curve 2-10, FEDFUNDS, CPI YoY, M2 YoY, UNRATE level + 3d-chg, KR base rate, CPI KR YoY)
+- ✅ Regime 3 (risk-on/-off one-hot + confidence)
+- ✅ Calendar 9 (dow/dom/doq/doy/month/quarter/days-to-q-end/is-jan/is-dec)
+- ✅ Cross-asset 18 (각 17 ETF 21d 상대 momentum + corr_spy_63d)
+
+**기타**:
+- ✅ daily_prices.as_of_ts 정정 (trade_date 기반)
+- ✅ Disclosure 캐시 (1회 bulk load, ticker별 lookup)
+- ✅ Cross-asset 캐시 (panel 1회 로드)
+
+### 0.4 Phase 3 — ML 학습 + Optuna 튜닝
+
+**Trainer 인프라**:
+- ✅ training/lgbm_trainer.py (date-grouped CV + 21d embargo, LGBM 단독)
+- ✅ training/multi_trainer.py (LGBM/XGB/CatBoost/Ridge 통합)
+- ✅ training/lstm_trainer.py (PyTorch seq_len=30 hidden=128 2-layer dropout)
+- ✅ training/optuna_tuner.py (TPE + 8-dim 검색공간 per model)
+- ✅ training/model_registry.py (var/models/runs/<run_id>/ + registry.json + find_best)
+- ✅ training/ensemble.py (IC-weighted top-K)
+- ✅ training/ensemble_spec.py (per-(cluster,target) 영속 spec)
+- ✅ training/ensemble_optimizer.py (forward selection + 3-window holdout + 통계 유의 검증)
+- ✅ training/drift_detector.py (KS-test + rolling IC drop ratio)
+- ✅ decision/ensemble_decision.py (inference bridge, booster cache, mtime invalidation)
+
+**Trained models (현재 registry 22 모델, 계속 증가 중)**:
+- ✅ KR:FIN:LARGE — LGBM/XGB/CatBoost × (default + 30-trial + 100-trial) = 9 모델, + LSTM 1
+- ✅ US:ENERGY:LARGE — 동일 패턴 9 + LSTM 1
+- ✅ KR:OTHER:LARGE — 100-trial × 3 + (default WIP)
+- ✅ KR:OTHER:MID — default × 3 (모두 weak)
+- ✅ KR:FIN:MID — default × 3
+- ✅ KR:OTHER:SMALL — default × 3 (CatBoost +0.209 ⭐)
+- ✅ US:FIN:LARGE — default × 3 (CatBoost +0.230 ⭐)
+- ✅ US:TECH:LARGE — default × 3 (CatBoost +0.233 ⭐)
+- ✅ US:INDUSTRIALS:LARGE — default × 3
+- ✅ US:CONS_DISC:LARGE — default × 3
+- ✅ US:FIN:MID — default × 3 (CatBoost +0.218 ⭐)
+- 🟦 KR:FIN:SMALL 100-trial × 3 진행 중
+- 🟦 US:UTILITIES:LARGE 100-trial × 3 진행 중
+- 🟦 US:HEALTH:LARGE default × 3 진행 중
+- 🟦 US:MATERIALS:LARGE / COMM:LARGE / CONS_STAPLES:LARGE / REAL_ESTATE:LARGE default × 3 진행 중
+- 🟦 KR:FIN:SMALL / KR:OTHER:SMALL / US:COMM:MID / US:REAL_ESTATE:MID / US:INDUSTRIALS:MID / US:CONS_STAPLES:MID default × 3 진행 중
+
+**측정된 IC (OOF + holdout)**:
+- ✅ US:ENERGY:LARGE tuned LGBM 100-trial **IC +0.353** (펀드급 신호)
+- ✅ KR:FIN:LARGE default CatBoost **IC +0.262** (튜닝보다 강함)
+- ✅ US:TECH:LARGE default CatBoost **IC +0.233**
+- ✅ US:FIN:LARGE default CatBoost **IC +0.230**
+- ✅ US:FIN:MID default CatBoost +0.218
+- ✅ KR:OTHER:SMALL default CatBoost +0.209
+- ✅ KR:OTHER:LARGE tuned CatBoost +0.091, hit 69%
+- ✅ KR:FIN:MID default CatBoost +0.103
+- ✅ LSTM US:ENERGY +0.227, LSTM KR:FIN:LARGE +0.074
+- ✅ Holdout test US:ENERGY default LGBM **+0.200** (OOF +0.286 → 실제 +0.200, overfit 측정)
+- ✅ Holdout test KR:FIN:LARGE default LGBM +0.159
+
+### 0.5 Phase 4 — Decision Engine + Paper Trading
+
+- ✅ Decision composer (F/T/I 가중합산 + regime-aware threshold/size scaler)
+- ✅ Sector rotation overlay (±15 bonus)
+- ✅ Regime classifier 5-voter (VIX level/trend, index vs SMA200, yield curve, DXY)
+- ✅ Composite gates (confidence floor 0.40, cooldown 1일, threshold ±25)
+- ✅ Sizer (Kelly-like × regime size_frac)
+- ✅ PaperBroker + 시장가 체결 + 슬리피지 ±1bps
+- ✅ 503 의사결정 (US) → 20 페이퍼 주문 (8 BUY + 12 SELL)
+- ✅ default-us 잔고 변동 검증 ($100k → $100,235.87)
+- ✅ decision_audit 1,006+ rows 적재
+- ✅ Walk-forward backtest pipeline (rescoring engine + paper sim)
+- ✅ Freshness gate 완화 (0-weight 모듈 스킵 — backtest/rescoring.py:121-127)
+- ✅ Walk-forward 실제 trades 발생 검증 (KR 1 + US 4)
+
+### 0.6 Phase 5 — UI (스캐폴드만, 라이브 검증 미실시)
+
+- ✅ FastAPI routes 19개 (auth/admin/scan/decision/regime/news/macro/backtest/etc.)
+- ✅ Frontend 14+ pages (dashboard/scan/decision_audit/macro+regime/training/freshness/login)
+- ⬜ 브라우저 라이브 테스트 (미실시)
+- ⬜ 종목별 3-module 점수 dashboard 검증
+- ⬜ 1버튼 킬스위치 UI
+
+### 0.7 Phase 6 — 운영 (미시작)
+
+- ⬜ 페이퍼 트레이딩 3개월 자동화 (Phase 6 본격)
+- ⬜ KIS Developers API 어댑터 (KR live)
+- ⬜ Alpaca API 어댑터 (US live)
+- ⬜ 단계적 실거래 (5% → 20% → 100%)
+
+### 0.8 MLOps Infra (완료)
+
+- ✅ Model registry + 영속화 (LGBM .txt / XGB .json / CatBoost .cbm / LSTM .pt / Ridge .joblib)
+- ✅ Ensemble spec append-only registry (supersedes chain → rollback 지원)
+- ✅ Drift detector (KS-test on output + rolling IC vs validated)
+- ✅ Scheduler integration (mlops.retrain.weekly Sunday 06:00 UTC + drift_check.daily 07:00 UTC, both disabled until first manual)
+- ✅ Multi-version models stored (data scientist가 historical 비교 가능)
+- ✅ Find_best by (target, cluster, metric) — 클러스터별 자동 best 선택
+
+### 0.9 Tests
+
+- ✅ Unit tests 49개 (tests/unit/)
+- ✅ Integration tests 1개 (tests/integration/test_strategy_api.py)
+- ⬜ Regression test 자동화 (CI 부재)
+
+### 0.10 외부 키 검증 완료
+
+- ✅ FRED (GS10 observations OK)
+- ✅ Naver Client ID + Secret (news search total=4,307,447 OK)
+- ✅ DART (status=000 OK)
+- ✅ BOK ECOS (기준금리 OK)
+- ✅ SEC EDGAR (AAPL Assets USD OK)
+- ✅ GDELT BigQuery (gcloud ADC 인증, 275GB 스캔 검증)
+- ⛔ BIGKinds (유료 전환)
+- ⛔ Reddit (가입 실패, 스킵)
+
+### 0.11 Git
+
+- ✅ `915e833` 첫 푸시 — Phase 0-4 scaffold (282 files)
+- ✅ `e79c3e1` — KR FDR + EDGAR + macro + loader fixes
+- ✅ `0c065b5` — WORK_LOG.md
+- ✅ `dff8cc8` — Phase 3 historical Tech + LightGBM v1 first training
+- ✅ `2478aaa` — EDGAR full + F historical + 섹터별 weights 학습
+- ✅ `8cd6e6d` — rescoring freshness gate + news mention remap
+- ✅ `303093d` — LGBM v2 122 features + XGB/CatBoost multi-trainer
+- ✅ `1b2f6f1` — 데이터 폭증 + Optuna 튜닝 + MLOps 1차
+- ✅ `47c609c` — MLOps infra (ensemble_spec/optimizer/drift/orchestrator)
+- ✅ `feea63d` — GAPS.md 영구 산출물
+
+### 0.12 Scripts (전수)
+
+backend/scripts/:
+- ✅ `smoke_test.py` (5-phase 부트스트랩 검증)
+- ✅ `fdr_backfill_us.py` (SP500 일봉 + chunk 인서트)
+- ✅ `fdr_backfill_kr.py` (KOSPI200+KOSDAQ150 marcap 프록시)
+- ✅ `fdr_backfill_macro.py` (5종 매크로 FDR)
+- ✅ `macro_extended_backfill.py` (FRED 10 + BOK 2 시리즈)
+- ✅ `dart_backfill_kr.py` (corp_code enrich + financial facts)
+- ✅ `edgar_backfill_us.py` (CIK enrich + companyconcept)
+- ✅ `sec_disclosures_backfill.py` (8-K/Form 4 metadata)
+- ✅ `sec_form4_parser.py` (XML body 파싱 → JSON)
+- ✅ `gdelt_backfill.py` (BigQuery GKG)
+- ✅ `gdelt_test.py` (연결 검증)
+- ✅ `naver_news_backfill.py` (검색 API 350 종목)
+- ✅ `cross_asset_backfill.py` (17 ETF FDR)
+- ✅ `backfill_technical_history.py` (365일 historical 스코어링)
+- ✅ `backfill_fundamental_history.py` (365일 historical)
+- ✅ `remap_news_mentions.py` (NER name index 재매핑)
+- ✅ `run_jobs.py` (technical/regime/decisions/info-classify/info-score/fundamental/training/walk-forward CLI)
+- ✅ `verify_keys.py` (5 외부 API 키 검증)
+- ✅ `train_lgbm.py` (LightGBM 단독 학습 + 클러스터별 + 메트릭 JSON)
+- ✅ `train_lstm.py` (PyTorch LSTM + registry 등록)
+- ✅ `smoke_lgbm.py` (20-ticker 파일럿)
+- ✅ `tune_and_save.py` (Optuna + 자동 등록)
+- ✅ `save_default_models.py` (default 파라미터로 학습 + 등록)
+- ✅ `compare_models.py` (단일 cluster 4-model 비교)
+- ✅ `compare_ensemble.py` (registry → holdout test → ensemble)
+- ✅ `optimize_ensembles.py` (전체 클러스터 spec 빌드)
+- ✅ `mlops_retrain.py` (retrain orchestrator + drift-only 모드)
+- ⏭️ `fdr_probe_kr.py`, `debug_features.py`, `debug_regime.py` (개발 도중 디버그용, 정리됨)
 
 ---
 
@@ -1153,6 +1380,86 @@
 - ⬜ **Federated learning** (multi-source)
 - ⬜ **Active learning** (uncertainty query)
 - ⬜ **Few-shot learning** (new ticker)
+
+---
+
+## W. 사용자 명시 지침 (절대 망각 금지)
+
+### W.1 HFT / Tick data — 점진 도입
+- **현재 scope**: 일봉만
+- **점진 계획**: 일봉 → 4h → 1h → 30m → 15m → 5m → 1m → tick (단계별)
+- 각 단계 도입 전 직전 단계 모델이 안정화돼야 진행
+- ⬜ 4시간봉 인제스트 + 모델 (Wave 5)
+- ⬜ 1시간봉 인제스트 + 모델 (Wave 6)
+- ⬜ 30분/15분/5분/1분 (Wave 7)
+- ⬜ Tick data (Wave 8 — 데이터 비용 검토 필요)
+- ⬜ Order book level 2 (Wave 9)
+- **데이터 소스 후보**:
+  - US: Polygon.io (5분봉 무료), IEX Cloud, Alpaca historical (분봉)
+  - KR: KIS Developers API (실시간), pykrx (intraday 일부)
+
+### W.2 Crypto/DeFi — 명시적 SCOPE 외 (당분간)
+- 결정: ⏭️ EXCLUDED (현 universe 집중)
+- 사유: 현실적 효용 + 시스템 한정
+- 만약 다시 검토 시점 오면 별도 워크플로우로 분리
+
+### W.3 ESG signals — 가치 판단 후 시도
+- ⬜ MSCI ESG 등급 (무료 tier 확인)
+- ⬜ Refinitiv ESG (무료 access 가능?)
+- ⬜ Sustainalytics (Yahoo Finance에 일부 노출)
+- ⬜ SEC 13F-에 ESG 관련 보유 정보 추출
+- ⬜ 한국 ESG 평가원 (KCGS)
+- ⬜ 본문 분석: 10-K Item 1A에 "ESG", "climate", "carbon" 등 빈도
+- ⬜ 효용 평가 후 production 통합 결정
+
+### W.4 Tax Optimization — 실거래 필수 (구현 의무)
+**중요**: 실거래에선 *알파보다 큰 영향* 가능. 기능 효용 판단 시 *항상 포함*.
+
+- ⬜ **Tax Loss Harvesting**:
+  - 손실 포지션을 31일 이전에 매도 → 손실 인식
+  - Wash sale rule (US): 30일 내 동일/유사 종목 재매수 시 손실 인정 안 됨
+  - 대체 종목 매수 (sector 비슷한 ETF 또는 peer)
+- ⬜ **Tax Lot Selection**:
+  - FIFO / LIFO / Highest-cost / Specific-lot 선택
+  - 단기(<1년 US) vs 장기(>1년 US) 자본이득세 차이
+- ⬜ **Holding Period Optimization**:
+  - 1년 직전 매도 시 vs 1년 직후 매도 시 세후 수익률 차이
+  - 모델 시그널이 약해도 1년 임박 시 보유 유리할 수 있음
+- ⬜ **Dividend Tax Drag**:
+  - 배당 시점 회피 (ex-dividend date 직전 매도)
+  - Qualified vs non-qualified dividend
+- ⬜ **KR 양도소득세** (대주주 기준):
+  - 본질적으로 운영 규모가 대주주 기준 미달이면 무세
+  - 대주주 기준 자동 추적
+  - 연말 회피 매도 전략 (12월 말 매도 → 1월 재매수)
+- ⬜ **State tax 고려** (US 거주지별 다름)
+- ⬜ **Tax-efficient rebalancing**:
+  - 차익 실현 최소화하는 리밸런싱 경로
+  - 손실 실현은 최대화
+
+### W.5 Macroeconomic Forecasting — 필요 시 별도 모델 구현
+- ⬜ 현재: macro_series는 *input만* 사용
+- ⬜ 별도 매크로 예측 모델:
+  - CPI 다음 발표값 예측 (LSTM, ARIMA, VAR)
+  - GDP 다음 분기 예측
+  - 실업률 추세 예측
+  - 금리 예측 (Fed Funds futures + 모델)
+- ⬜ 효용 평가 — 매크로 예측이 종목 시그널보다 유의미한지 측정
+- ⬜ Integration: 매크로 예측 결과를 종목 모델의 추가 feature로 투입
+
+### W.6 Currency Hedging Strategy — 베스트 구현 + 대안 리스트
+**현재 결정** (베스트로 판단되는 형태):
+- ⬜ **Natural Hedge**: 자본 일부를 USD로 보유 (USDKRW 노출 분산)
+- ⬜ **거래 시 통화 매칭**: KR 운영은 KRW 계좌, US는 USD 계좌
+- ⬜ **포지션별 currency exposure 추적**
+
+**대안 리스트** (나중에 검토):
+- ⬜ FX forward 헤지 (KIS FX forward 제공 시)
+- ⬜ Currency ETF hedge (UUP for USD long, FXE for EUR 등)
+- ⬜ Dynamic hedge ratio (변동성 기반 hedge 비율 조정)
+- ⬜ Cross-currency basis swap (institutional only)
+- ⬜ DLR(달러), DXJ(엔 헤지 일본) 같은 통화 헤지 ETF
+- ⬜ Options-based hedge (USD put options)
 
 ---
 
