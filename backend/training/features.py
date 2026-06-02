@@ -32,6 +32,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from core.models.classifications import ArticleClassification
+from core.models.disclosures import Disclosure
 from core.models.financials import FinancialFact
 from core.models.news import NewsArticle, NewsTickerMention
 from core.models.prices import DailyPrice, MacroSeries
@@ -107,51 +108,136 @@ def _obv_slope(close: pd.Series, volume: pd.Series, period: int = 21) -> pd.Seri
     return obv_change / (volume.rolling(period).mean() * period).replace(0, np.nan)
 
 
-def compute_price_features(bars: pd.DataFrame) -> pd.DataFrame:
-    """Compute ~20 price/volume features from one ticker's OHLCV bars.
+# ── Extra indicators (no pandas-ta dep; pure numpy/pandas) ──
+def _aroon(high: pd.Series, low: pd.Series, period: int = 25) -> tuple[pd.Series, pd.Series]:
+    aroon_up = high.rolling(period + 1).apply(
+        lambda x: 100 * (period - (period - x.argmax())) / period, raw=True
+    )
+    aroon_dn = low.rolling(period + 1).apply(
+        lambda x: 100 * (period - (period - x.argmin())) / period, raw=True
+    )
+    return aroon_up, aroon_dn
 
-    ``bars`` indexed by trade_date ascending with [open, high, low, close, volume]
-    Returns DataFrame indexed by same dates with feature columns.
-    """
+
+def _cmf(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int = 21) -> pd.Series:
+    mfv = ((close - low) - (high - close)) / (high - low).replace(0, np.nan) * volume
+    return mfv.rolling(period).sum() / volume.rolling(period).sum().replace(0, np.nan)
+
+
+def _mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int = 14) -> pd.Series:
+    tp = (high + low + close) / 3
+    mf = tp * volume
+    pos_mf = mf.where(tp > tp.shift(1), 0).rolling(period).sum()
+    neg_mf = mf.where(tp < tp.shift(1), 0).rolling(period).sum()
+    ratio = pos_mf / neg_mf.replace(0, np.nan)
+    return 100 - 100 / (1 + ratio)
+
+
+def _williams_r(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    hh = high.rolling(period).max()
+    ll = low.rolling(period).min()
+    return -100 * (hh - close) / (hh - ll).replace(0, np.nan)
+
+
+def _roc(close: pd.Series, period: int) -> pd.Series:
+    return (close - close.shift(period)) / close.shift(period).replace(0, np.nan) * 100
+
+
+def _bollinger_squeeze(close: pd.Series, period: int = 20, k: float = 2.0) -> pd.Series:
+    """Normalised band width — low values = squeeze (volatility compression)."""
+    ma = close.rolling(period).mean()
+    sd = close.rolling(period).std()
+    return (4 * k * sd) / ma.replace(0, np.nan)  # (upper - lower) / middle
+
+
+def _ulcer_index(close: pd.Series, period: int = 14) -> pd.Series:
+    """Pain index — RMS of % drawdowns over period."""
+    rolling_max = close.rolling(period).max()
+    dd = ((close - rolling_max) / rolling_max.replace(0, np.nan)) * 100
+    return ((dd ** 2).rolling(period).mean()) ** 0.5
+
+
+def _donchian_position(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 20) -> pd.Series:
+    hh = high.rolling(period).max()
+    ll = low.rolling(period).min()
+    return (close - ll) / (hh - ll).replace(0, np.nan)
+
+
+def compute_price_features(bars: pd.DataFrame) -> pd.DataFrame:
+    """~50 price/volume features per ticker from OHLCV bars."""
+    open_ = bars["open"].astype(float)
     close = bars["close"].astype(float)
     high = bars["high"].astype(float)
     low = bars["low"].astype(float)
     volume = bars["volume"].astype(float)
+    daily_ret = close.pct_change(1)
 
     feat = pd.DataFrame(index=bars.index)
-    # Returns
-    feat["ret_1d"] = close.pct_change(1)
-    feat["ret_5d"] = close.pct_change(5)
-    feat["ret_21d"] = close.pct_change(21)
-    feat["ret_63d"] = close.pct_change(63)
-    # Volatility (realized)
-    daily_ret = close.pct_change(1)
+    # Returns (multi-horizon)
+    for n in (1, 2, 3, 5, 10, 21, 42, 63, 126, 252):
+        feat[f"ret_{n}d"] = close.pct_change(n)
+    # Realised volatility
+    feat["vol_5d"] = daily_ret.rolling(5).std() * np.sqrt(252)
     feat["vol_21d"] = daily_ret.rolling(21).std() * np.sqrt(252)
     feat["vol_63d"] = daily_ret.rolling(63).std() * np.sqrt(252)
-    # Price vs moving average
+    feat["vol_252d"] = daily_ret.rolling(252).std() * np.sqrt(252)
+    # Skewness + Kurtosis (return distribution shape)
+    feat["ret_skew_21d"] = daily_ret.rolling(21).skew()
+    feat["ret_kurt_21d"] = daily_ret.rolling(21).kurt()
+    # Sharpe-like (return / vol)
+    feat["sharpe_21d"] = (close.pct_change(21)) / feat["vol_21d"].replace(0, np.nan)
+    feat["sharpe_63d"] = (close.pct_change(63)) / feat["vol_63d"].replace(0, np.nan)
+    # SMA vs price
+    sma20 = close.rolling(20).mean()
     sma50 = close.rolling(50).mean()
     sma200 = close.rolling(200).mean()
+    feat["px_vs_sma20"] = close / sma20 - 1.0
     feat["px_vs_sma50"] = close / sma50 - 1.0
     feat["px_vs_sma200"] = close / sma200 - 1.0
-    # Drawdown from rolling high
+    feat["sma50_above_sma200"] = (sma50 > sma200).astype(float)
+    # Drawdown
     feat["dd_from_high_63d"] = close / close.rolling(63).max() - 1.0
-    # Daily range
+    feat["dd_from_high_252d"] = close / close.rolling(252).max() - 1.0
+    # Range + volume
     feat["range_pct"] = (high - low) / close
-    # Volume z-score
-    vol_ma = volume.rolling(21).mean()
-    vol_sd = volume.rolling(21).std()
-    feat["volume_z21"] = (volume - vol_ma) / vol_sd.replace(0, np.nan)
-    # Technical indicators
+    feat["range_pct_5d_avg"] = feat["range_pct"].rolling(5).mean()
+    feat["volume_z21"] = (volume - volume.rolling(21).mean()) / volume.rolling(21).std().replace(0, np.nan)
+    feat["volume_z63"] = (volume - volume.rolling(63).mean()) / volume.rolling(63).std().replace(0, np.nan)
+    # Open-close gap
+    feat["gap_pct"] = (open_ - close.shift(1)) / close.shift(1)
+    # Classic indicators
     feat["rsi14"] = _rsi(close, 14)
+    feat["rsi5"] = _rsi(close, 5)
     macd_line, macd_sig, macd_hist = _macd(close, 12, 26, 9)
     feat["macd_hist"] = macd_hist
     feat["macd_above"] = (macd_line > macd_sig).astype(float)
     feat["bb_pctb"] = _bbands_percent(close, 20, 2.0)
+    feat["bb_squeeze"] = _bollinger_squeeze(close, 20, 2.0)
     feat["adx14"] = _adx(high, low, close, 14)
     feat["stoch_k14"] = _stoch_k(high, low, close, 14)
-    atr = _atr(high, low, close, 14)
-    feat["atr_pct"] = atr / close
+    feat["williams_r14"] = _williams_r(high, low, close, 14)
+    feat["mfi14"] = _mfi(high, low, close, volume, 14)
+    feat["cmf21"] = _cmf(high, low, close, volume, 21)
+    feat["atr_pct"] = _atr(high, low, close, 14) / close
     feat["obv_slope21"] = _obv_slope(close, volume, 21)
+    feat["ulcer14"] = _ulcer_index(close, 14)
+    feat["donchian_pos_20"] = _donchian_position(high, low, close, 20)
+    feat["donchian_pos_55"] = _donchian_position(high, low, close, 55)
+    aroon_up, aroon_dn = _aroon(high, low, 25)
+    feat["aroon_up"] = aroon_up
+    feat["aroon_dn"] = aroon_dn
+    feat["aroon_osc"] = aroon_up - aroon_dn
+    feat["roc_10"] = _roc(close, 10)
+    feat["roc_21"] = _roc(close, 21)
+    # Candle pattern bits (simplified)
+    body = (close - open_).abs()
+    upper_wick = high - close.where(close >= open_, open_)
+    lower_wick = close.where(close <= open_, open_) - low
+    rng = (high - low).replace(0, np.nan)
+    feat["candle_body_pct"] = body / rng
+    feat["candle_upper_wick_pct"] = upper_wick / rng
+    feat["candle_lower_wick_pct"] = lower_wick / rng
+    feat["is_doji"] = (body / rng < 0.1).astype(float)
 
     return feat
 
@@ -346,13 +432,298 @@ def compute_info_features(
 
 
 # ──────────────────────────────────────────────────────────────────────
+# Insider transaction features (from parsed Form 4 bodies)
+# ──────────────────────────────────────────────────────────────────────
+
+
+def compute_insider_features(
+    session: Session, market: str, ticker: str, dates: pd.DatetimeIndex,
+) -> pd.DataFrame:
+    """Buy/sell direction + value + role from parsed Form 4 bodies.
+
+    Requires sec_form4_parser.py to have populated disclosures.body_text
+    with structured JSON. Falls back to zeros if body not parsed.
+    """
+    feat = pd.DataFrame(index=dates, columns=[
+        "insider_net_value_30d", "insider_net_value_7d",
+        "insider_buys_30d", "insider_sells_30d",
+        "insider_ceo_buys_30d", "insider_director_buys_30d",
+        "insider_buy_sell_ratio_30d",
+    ], dtype=float)
+
+    panel = _load_insider_panel(session, market)
+    df = panel.get(ticker)
+    if df is None or df.empty:
+        return feat.fillna(0.0)
+
+    for dt in dates:
+        end = pd.Timestamp(dt)
+        win30 = df[(df["filing_date"] > end - pd.Timedelta(days=30))
+                   & (df["filing_date"] <= end)]
+        win7 = df[(df["filing_date"] > end - pd.Timedelta(days=7))
+                  & (df["filing_date"] <= end)]
+        feat.at[dt, "insider_net_value_30d"] = float(win30["net_value"].sum())
+        feat.at[dt, "insider_net_value_7d"] = float(win7["net_value"].sum())
+        feat.at[dt, "insider_buys_30d"] = float(win30["n_buys"].sum())
+        feat.at[dt, "insider_sells_30d"] = float(win30["n_sells"].sum())
+        feat.at[dt, "insider_ceo_buys_30d"] = float(
+            win30[win30["is_ceo"] == 1]["n_buys"].sum()
+        )
+        feat.at[dt, "insider_director_buys_30d"] = float(
+            win30[win30["is_director"] == 1]["n_buys"].sum()
+        )
+        buys = float(win30["n_buys"].sum())
+        sells = float(win30["n_sells"].sum())
+        feat.at[dt, "insider_buy_sell_ratio_30d"] = buys / max(sells, 1.0)
+    return feat.astype(float)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Calendar features (no DB needed)
+# ──────────────────────────────────────────────────────────────────────
+
+
+def compute_calendar_features(dates: pd.DatetimeIndex) -> pd.DataFrame:
+    feat = pd.DataFrame(index=dates)
+    dt = pd.to_datetime(dates)
+    feat["dow"] = dt.dayofweek.astype(float)              # 0=Mon
+    feat["dom"] = dt.day.astype(float)
+    feat["doq"] = ((dt.month - 1) % 3 * 30 + dt.day).astype(float)
+    feat["doy"] = dt.dayofyear.astype(float)
+    feat["month"] = dt.month.astype(float)
+    feat["quarter"] = dt.quarter.astype(float)
+    # Days to nearest quarter-end (earnings season approximation)
+    quarter_ends = pd.to_datetime(
+        [f"{y}-{m}-01" for y in range(2024, 2027) for m in (4, 7, 10)] +
+        [f"{y}-01-01" for y in range(2025, 2028)]
+    )
+    feat["days_to_q_end"] = [
+        min((qe - d).days for qe in quarter_ends if qe >= d) if any(qe >= d for qe in quarter_ends) else 999
+        for d in dt
+    ]
+    feat["is_jan"] = (dt.month == 1).astype(float)
+    feat["is_dec"] = (dt.month == 12).astype(float)
+    return feat
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Cross-asset features (sector ETFs, USDKRW, gold/oil)
+# ──────────────────────────────────────────────────────────────────────
+
+
+CROSS_ASSET_TICKERS = [
+    # US sector ETFs
+    ("US", "XLK"), ("US", "XLF"), ("US", "XLV"), ("US", "XLE"),
+    ("US", "XLY"), ("US", "XLP"), ("US", "XLI"), ("US", "XLB"),
+    ("US", "XLU"), ("US", "XLRE"), ("US", "XLC"),
+    # Broad
+    ("US", "SPY"), ("US", "QQQ"), ("US", "IWM"),
+    # Commodities + FX (yfinance/FDR symbols)
+    ("MACRO", "GLD"), ("MACRO", "USO"), ("MACRO", "TLT"),
+]
+
+
+_cross_asset_cache: dict[str, pd.DataFrame] = {}
+
+
+def _load_cross_asset_panel(session: Session, dates: pd.DatetimeIndex) -> pd.DataFrame:
+    """Wide panel of close prices for cross-asset tickers."""
+    key = "default"
+    if key in _cross_asset_cache:
+        panel = _cross_asset_cache[key]
+        return panel.reindex(dates, method="ffill")
+
+    tickers = [t for (_, t) in CROSS_ASSET_TICKERS]
+    stmt = (
+        select(DailyPrice.ticker, DailyPrice.trade_date, DailyPrice.close)
+        .where(DailyPrice.ticker.in_(tickers))
+        .order_by(DailyPrice.trade_date)
+    )
+    rows = list(session.execute(stmt).all())
+    if not rows:
+        return pd.DataFrame(index=dates)
+    df = pd.DataFrame(rows, columns=["ticker", "trade_date", "close"])
+    df["trade_date"] = pd.to_datetime(df["trade_date"])
+    df["close"] = df["close"].astype(float)
+    panel = df.pivot_table(index="trade_date", columns="ticker", values="close", aggfunc="last")
+    panel = panel.ffill()
+    _cross_asset_cache[key] = panel
+    return panel.reindex(dates, method="ffill")
+
+
+def compute_cross_asset_features(
+    session: Session, dates: pd.DatetimeIndex, ticker_close: pd.Series,
+) -> pd.DataFrame:
+    """Relative momentum vs sector ETFs + commodities."""
+    panel = _load_cross_asset_panel(session, dates)
+    feat = pd.DataFrame(index=dates)
+    if panel.empty:
+        return feat
+    own_close_f = ticker_close.astype(float).reindex(dates)
+    own_21d = own_close_f.pct_change(21)
+    for tkr in panel.columns:
+        ca_21d = panel[tkr].pct_change(21)
+        feat[f"rel_{tkr.lower()}_21d"] = own_21d - ca_21d
+    if "SPY" in panel.columns:
+        own_dr = own_close_f.pct_change(1)
+        spy_dr = panel["SPY"].pct_change(1)
+        feat["corr_spy_63d"] = own_dr.rolling(63).corr(spy_dr)
+    return feat.astype(float)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# SEC disclosure features (insider Form 4 + 8-K event counts)
+# ──────────────────────────────────────────────────────────────────────
+
+
+_disclosure_cache: dict[str, dict[str, pd.DataFrame]] = {}
+_insider_cache: dict[str, dict[str, pd.DataFrame]] = {}
+
+
+def _load_disclosure_panel(session: Session, market: str) -> dict[str, pd.DataFrame]:
+    """One bulk SELECT per market → cache by ticker. Saves N+1 queries."""
+    if market in _disclosure_cache:
+        return _disclosure_cache[market]
+    stmt = (
+        select(Disclosure.ticker, Disclosure.filing_date, Disclosure.filing_type_canonical)
+        .where(Disclosure.market == market)
+    )
+    rows = list(session.execute(stmt).all())
+    df = pd.DataFrame(rows, columns=["ticker", "filing_date", "canonical"])
+    df["filing_date"] = pd.to_datetime(df["filing_date"])
+    cache = {t: g for t, g in df.groupby("ticker")}
+    _disclosure_cache[market] = cache
+    return cache
+
+
+def _load_insider_panel(session: Session, market: str) -> dict[str, pd.DataFrame]:
+    """Parsed Form 4 bodies (body_fetched=True). Cache by ticker."""
+    import json as _json
+    if market in _insider_cache:
+        return _insider_cache[market]
+    if market != "US":
+        _insider_cache[market] = {}
+        return {}
+    stmt = (
+        select(Disclosure.ticker, Disclosure.filing_date, Disclosure.body_text)
+        .where(
+            Disclosure.market == "US",
+            Disclosure.filing_type_canonical.in_(["INSIDER", "INSIDER_FORM4"]),
+            Disclosure.body_fetched.is_(True),
+            Disclosure.body_text.isnot(None),
+        )
+    )
+    rows = list(session.execute(stmt).all())
+    if not rows:
+        _insider_cache[market] = {}
+        return {}
+    out: list[dict] = []
+    for ticker, fd, body in rows:
+        try:
+            parsed = _json.loads(body)
+        except Exception:
+            continue
+        net_value = 0.0
+        n_buys = 0
+        n_sells = 0
+        is_ceo = 1 if parsed.get("officer_title") and "ceo" in str(parsed.get("officer_title")).lower() else 0
+        is_director = 1 if parsed.get("is_director") else 0
+        for tx in parsed.get("transactions", []):
+            ad = tx.get("a_or_d", "")
+            value = float(tx.get("value", 0.0))
+            if ad == "A":
+                net_value += value
+                n_buys += 1
+            elif ad == "D":
+                net_value -= value
+                n_sells += 1
+        out.append({
+            "ticker": ticker, "filing_date": fd,
+            "net_value": net_value, "n_buys": n_buys, "n_sells": n_sells,
+            "is_ceo": is_ceo, "is_director": is_director,
+        })
+    df = pd.DataFrame(out)
+    df["filing_date"] = pd.to_datetime(df["filing_date"])
+    cache = {t: g for t, g in df.groupby("ticker")}
+    _insider_cache[market] = cache
+    return cache
+
+
+def compute_disclosure_features(
+    session: Session, market: str, ticker: str, dates: pd.DatetimeIndex,
+) -> pd.DataFrame:
+    """Trailing counts of insider (Form 4) + 8-K filings."""
+    feat = pd.DataFrame(index=dates, columns=[
+        "insider_count_7d", "insider_count_30d",
+        "event_8k_count_7d", "event_8k_count_30d",
+        "days_since_last_10k", "days_since_last_10q",
+    ], dtype=float)
+
+    if market != "US":
+        return feat.fillna(0.0)
+
+    panel = _load_disclosure_panel(session, market)
+    df = panel.get(ticker)
+    if df is None or df.empty:
+        return feat.fillna({"insider_count_7d": 0, "insider_count_30d": 0,
+                             "event_8k_count_7d": 0, "event_8k_count_30d": 0,
+                             "days_since_last_10k": 9999, "days_since_last_10q": 9999})
+
+    insider = df[df["canonical"].isin(["INSIDER", "INSIDER_FORM4"])]
+    event_8k = df[df["canonical"].isin(["MATERIAL_EVENT", "EVENT_8K"])]
+    annual = df[df["canonical"].isin(["ANNUAL"])]
+    quarterly = df[df["canonical"].isin(["QUARTERLY"])]
+
+    for dt in dates:
+        end = pd.Timestamp(dt)
+        feat.at[dt, "insider_count_7d"] = float(
+            ((insider["filing_date"] > end - pd.Timedelta(days=7))
+             & (insider["filing_date"] <= end)).sum()
+        )
+        feat.at[dt, "insider_count_30d"] = float(
+            ((insider["filing_date"] > end - pd.Timedelta(days=30))
+             & (insider["filing_date"] <= end)).sum()
+        )
+        feat.at[dt, "event_8k_count_7d"] = float(
+            ((event_8k["filing_date"] > end - pd.Timedelta(days=7))
+             & (event_8k["filing_date"] <= end)).sum()
+        )
+        feat.at[dt, "event_8k_count_30d"] = float(
+            ((event_8k["filing_date"] > end - pd.Timedelta(days=30))
+             & (event_8k["filing_date"] <= end)).sum()
+        )
+        prior_annual = annual[annual["filing_date"] <= end]
+        prior_q = quarterly[quarterly["filing_date"] <= end]
+        feat.at[dt, "days_since_last_10k"] = float(
+            (end - prior_annual["filing_date"].max()).days
+            if len(prior_annual) else 9999
+        )
+        feat.at[dt, "days_since_last_10q"] = float(
+            (end - prior_q["filing_date"].max()).days
+            if len(prior_q) else 9999
+        )
+
+    return feat.astype(float)
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Cross-asset + regime features
 # ──────────────────────────────────────────────────────────────────────
 
 
 def load_macro_features(session: Session, dates: pd.DatetimeIndex) -> pd.DataFrame:
-    """One row per date with VIX/DXY/SP500 derived features."""
-    series_codes = ["VIX", "FX_DXY", "IDX_SP500_FRED", "IDX_KOSPI_ECOS", "RATE_US_10Y"]
+    """Macro panel — VIX/DXY/SP500/Yield curve/CPI etc.
+
+    Expanded from 6 to ~14 features now that FRED + BOK ECOS feeds are
+    populated. Adds yield curve (2Y, slope 10Y-2Y), fed funds, CPI YoY,
+    M2 growth, unemployment, and KR base rate.
+    """
+    series_codes = [
+        "VIX", "FX_DXY", "IDX_SP500_FRED", "IDX_KOSPI_ECOS",
+        "RATE_US_10Y", "RATE_US_2Y", "RATE_US_3M", "FEDFUNDS_US",
+        "CPI_US", "M2_US", "UNRATE_US",
+        "RATE_KR_BASE", "CPI_KR",
+    ]
     stmt = (
         select(MacroSeries.series_code, MacroSeries.ts, MacroSeries.value)
         .where(MacroSeries.series_code.in_(series_codes))
@@ -371,13 +742,33 @@ def load_macro_features(session: Session, dates: pd.DatetimeIndex) -> pd.DataFra
     if "VIX" in panel:
         feat["vix"] = panel["VIX"]
         feat["vix_5d_chg"] = panel["VIX"].pct_change(5)
+        feat["vix_21d_chg"] = panel["VIX"].pct_change(21)
     if "FX_DXY" in panel:
         feat["dxy_5d_chg"] = panel["FX_DXY"].pct_change(5)
+        feat["dxy_21d_chg"] = panel["FX_DXY"].pct_change(21)
     if "IDX_SP500_FRED" in panel:
         feat["sp500_21d_ret"] = panel["IDX_SP500_FRED"].pct_change(21)
+        feat["sp500_63d_ret"] = panel["IDX_SP500_FRED"].pct_change(63)
     if "RATE_US_10Y" in panel:
         feat["us10y"] = panel["RATE_US_10Y"]
         feat["us10y_5d_chg"] = panel["RATE_US_10Y"].diff(5)
+    if "RATE_US_2Y" in panel:
+        feat["us2y"] = panel["RATE_US_2Y"]
+    if "RATE_US_10Y" in panel and "RATE_US_2Y" in panel:
+        feat["yield_curve_2_10"] = panel["RATE_US_10Y"] - panel["RATE_US_2Y"]
+    if "FEDFUNDS_US" in panel:
+        feat["fedfunds"] = panel["FEDFUNDS_US"]
+    if "CPI_US" in panel:
+        feat["cpi_us_yoy"] = panel["CPI_US"].pct_change(12)
+    if "M2_US" in panel:
+        feat["m2_us_yoy"] = panel["M2_US"].pct_change(12)
+    if "UNRATE_US" in panel:
+        feat["unrate_us"] = panel["UNRATE_US"]
+        feat["unrate_us_chg"] = panel["UNRATE_US"].diff(3)
+    if "RATE_KR_BASE" in panel:
+        feat["kr_base_rate"] = panel["RATE_KR_BASE"]
+    if "CPI_KR" in panel:
+        feat["cpi_kr_yoy"] = panel["CPI_KR"].pct_change(12)
     return feat
 
 
@@ -480,10 +871,18 @@ def build_feature_matrix(
             if ticker in fund_panels else pd.DataFrame(index=bars.index)
         )
         info_feat = compute_info_features(session, market, ticker, bars.index)
+        disc_feat = compute_disclosure_features(session, market, ticker, bars.index)
+        insider_feat = compute_insider_features(session, market, ticker, bars.index)
+        cal_feat = compute_calendar_features(bars.index)
+        cross_feat = compute_cross_asset_features(session, bars.index, bars["close"])
         block = pd.concat([
             price_feat,
             fund_feat,
             info_feat,
+            disc_feat,
+            insider_feat,
+            cal_feat,
+            cross_feat,
             macro_feat.reindex(bars.index),
             regime_feat.reindex(bars.index),
         ], axis=1)

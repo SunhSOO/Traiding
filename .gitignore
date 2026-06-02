@@ -41,3 +41,4 @@ Thumbs.db
 # Node (frontend dev)
 node_modules/
 dist/
+catboost_info

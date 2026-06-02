@@ -33,12 +33,34 @@ from training.lgbm_trainer import train_per_cluster_and_global
 
 
 FEATURE_COLS_PRICE = [
-    "ret_1d", "ret_5d", "ret_21d", "ret_63d",
-    "vol_21d", "vol_63d",
-    "px_vs_sma50", "px_vs_sma200",
-    "dd_from_high_63d", "range_pct", "volume_z21",
-    "rsi14", "macd_hist", "macd_above", "bb_pctb",
-    "adx14", "stoch_k14", "atr_pct", "obv_slope21",
+    # Multi-horizon returns
+    "ret_1d", "ret_2d", "ret_3d", "ret_5d", "ret_10d",
+    "ret_21d", "ret_42d", "ret_63d", "ret_126d", "ret_252d",
+    # Volatility + return distribution
+    "vol_5d", "vol_21d", "vol_63d", "vol_252d",
+    "ret_skew_21d", "ret_kurt_21d",
+    "sharpe_21d", "sharpe_63d",
+    # Trend / drawdown
+    "px_vs_sma20", "px_vs_sma50", "px_vs_sma200",
+    "sma50_above_sma200",
+    "dd_from_high_63d", "dd_from_high_252d",
+    # Range + volume
+    "range_pct", "range_pct_5d_avg",
+    "volume_z21", "volume_z63", "gap_pct",
+    # Indicators
+    "rsi14", "rsi5",
+    "macd_hist", "macd_above",
+    "bb_pctb", "bb_squeeze",
+    "adx14", "stoch_k14", "williams_r14",
+    "mfi14", "cmf21",
+    "atr_pct", "obv_slope21",
+    "ulcer14",
+    "donchian_pos_20", "donchian_pos_55",
+    "aroon_up", "aroon_dn", "aroon_osc",
+    "roc_10", "roc_21",
+    # Candle pattern bits
+    "candle_body_pct", "candle_upper_wick_pct", "candle_lower_wick_pct",
+    "is_doji",
 ]
 
 FEATURE_COLS_FUND = [
@@ -53,16 +75,50 @@ FEATURE_COLS_INFO = [
     "news_neg_count_7d", "news_impact_7d",
 ]
 
+FEATURE_COLS_DISC = [
+    "insider_count_7d", "insider_count_30d",
+    "event_8k_count_7d", "event_8k_count_30d",
+    "days_since_last_10k", "days_since_last_10q",
+]
+
+FEATURE_COLS_INSIDER = [
+    "insider_net_value_30d", "insider_net_value_7d",
+    "insider_buys_30d", "insider_sells_30d",
+    "insider_ceo_buys_30d", "insider_director_buys_30d",
+    "insider_buy_sell_ratio_30d",
+]
+
 FEATURE_COLS_MACRO = [
-    "vix", "vix_5d_chg", "dxy_5d_chg",
-    "sp500_21d_ret", "us10y", "us10y_5d_chg",
+    "vix", "vix_5d_chg", "vix_21d_chg",
+    "dxy_5d_chg", "dxy_21d_chg",
+    "sp500_21d_ret", "sp500_63d_ret",
+    "us10y", "us10y_5d_chg", "us2y", "yield_curve_2_10",
+    "fedfunds", "cpi_us_yoy", "m2_us_yoy",
+    "unrate_us", "unrate_us_chg",
+    "kr_base_rate", "cpi_kr_yoy",
 ]
 
 FEATURE_COLS_REGIME = ["regime_risk_on", "regime_risk_off", "regime_conf"]
 
+FEATURE_COLS_CALENDAR = [
+    "dow", "dom", "doq", "doy", "month", "quarter",
+    "days_to_q_end", "is_jan", "is_dec",
+]
+
+FEATURE_COLS_CROSS_ASSET = [
+    "rel_xlk_21d", "rel_xlf_21d", "rel_xlv_21d", "rel_xle_21d",
+    "rel_xly_21d", "rel_xlp_21d", "rel_xli_21d", "rel_xlb_21d",
+    "rel_xlu_21d", "rel_xlre_21d", "rel_xlc_21d",
+    "rel_spy_21d", "rel_qqq_21d", "rel_iwm_21d",
+    "rel_gld_21d", "rel_uso_21d", "rel_tlt_21d",
+    "corr_spy_63d",
+]
+
 ALL_FEATURE_COLS = (
     FEATURE_COLS_PRICE + FEATURE_COLS_FUND + FEATURE_COLS_INFO
+    + FEATURE_COLS_DISC + FEATURE_COLS_INSIDER
     + FEATURE_COLS_MACRO + FEATURE_COLS_REGIME
+    + FEATURE_COLS_CALENDAR + FEATURE_COLS_CROSS_ASSET
 )
 
 

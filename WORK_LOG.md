@@ -330,6 +330,122 @@ walk-forward 재실행 (US): trades=4 동일, outcome 변동 (sharpe 2.55 → -3
 3. LGBM 모델 → 디스크 영속화 + rescoring engine 통합
 4. 페이퍼 트레이딩 3개월 실제 진행 (Sharpe 측정)
 
+---
+
+## 2026-06-02 (화) — 데이터·모델 본격 확장 + MLOps
+
+### 외부 키 발급 완료 (사용자 작업)
+
+`backend/.env`에 안전하게 입력 + 모두 검증 OK:
+- ✅ FRED, Naver (검색+DataLab), DART, BOK ECOS, SEC EDGAR, GDELT(gcloud ADC)
+- ❌ BIGKinds 유료 전환 / Reddit 가입 막힘 (스킵)
+
+### Macro 매크로 완전체 (13 시리즈)
+
+- `scripts/macro_extended_backfill.py` 신규
+- FRED 10개: 10Y/2Y/3M 정식, FEDFUNDS, CPI/M2/UE/IP/Payroll/Retail
+- BOK ECOS: 기준금리 + CPI
+- **macro_series**: 2,500 → 5,749 행
+
+### DART KR 재무 백필
+
+- `scripts/dart_backfill_kr.py` 신규
+- corp_code 343/350 매핑, 3년 ANNUAL × 17 concept = **14,223 행 KR financial_facts** (이전 0)
+- → KR Fundamental 모듈 처음으로 가동 (317 종목)
+
+### SEC Form 4 XML 본문 파싱
+
+- `scripts/sec_form4_parser.py` 신규 — XSL viewer URL → raw XML 변환 + ElementTree 파싱
+- 5,000 filings 파싱: insider buy/sell 방향, 거래 가치, 임원 직급 → JSON
+- **이전엔 count만, 이제 magnitude + direction + role 사용 가능**
+
+### GDELT GKG (글로벌 뉴스) 폭증
+
+- `scripts/gdelt_backfill.py` 신규 (BigQuery 1TB 무료 quota 내)
+- SP500 × 180일 × V2Organizations REGEX_CONTAINS → 17 배치
+- 4번 실패-수정 사이클 (raw_body 컬럼, URL/dedup_key IN 절 65535 한계)
+- 최종: **1,418,585 기사 + 230,286 mention** (이전 1,500 / 655 — 1000배 폭증)
+- 275GB 스캔 (한도 27.5%)
+
+### Naver 뉴스 본격
+
+- `scripts/naver_news_backfill.py` 신규 (검색 API + DataLab API key 활용)
+- 350 KR 종목 × 100건/쿼리 = **22,654 기사 + 45,332 KR mention**
+
+### Cross-asset proxy 17개 적재
+
+- `scripts/cross_asset_backfill.py` 신규
+- 11 SPDR 섹터 ETF + SPY/QQQ/IWM + GLD/USO/TLT
+- daily_prices에 6,256 행 추가
+
+### Feature pipeline 전면 확장 (44 → 131 features)
+
+**Technical**: 19 → 50개 (pandas-ta 30개 추가: Aroon, CMF, MFI, Williams%R, ROC, ulcer, Donchian, candle pattern bits, multi-horizon returns)
+**Fundamental**: 10개 유지
+**Information**: 6 → 6개 유지 (mention count + sentiment)
+**Disclosure**: **NEW** 6개 (insider/8K count, days_since 10K/10Q)
+**Insider (Form 4 body)**: **NEW** 7개 (net_value, buys/sells count, CEO/Director 분해, buy_sell_ratio)
+**Macro**: 6 → 18개 (yield curve, FED funds, CPI/M2 yoy, unrate, KR base rate 등)
+**Regime**: 3개 유지
+**Calendar**: **NEW** 9개 (dow/dom/doq/doy/month/quarter, days_to_q_end, is_jan/dec)
+**Cross-asset**: **NEW** 18개 (vs 17 ETF 21d 상대 momentum + corr_spy_63d)
+
+### Multi-model 학습 인프라
+
+- `training/multi_trainer.py` — LightGBM/XGBoost/CatBoost/Ridge 통합 trainer, 동일 date-grouped CV
+- `training/lstm_trainer.py` — PyTorch LSTM (seq_len=30, hidden=128, 2-layer + dropout)
+- `training/optuna_tuner.py` — Optuna TPE 튜닝 + 검색공간 정의
+- `training/model_registry.py` — MLOps registry (`var/models/runs/<run_id>/...`)
+  - Booster pickling per kind (LGBM .txt / XGB .json / CatBoost .cbm / LSTM .pt / Ridge .joblib)
+  - `registry.json` 글로벌 인덱스 + `find_best(target, cluster, metric)` 자동 선택
+  - 드리프트 검출 + 재학습 + 롤백 지원하는 구조
+- `training/ensemble.py` — top-K 로드 + IC-weighted ensemble inference
+- `scripts/tune_and_save.py` — Optuna 튜닝 + 자동 등록
+- `scripts/save_default_models.py` — default 파라미터 모델 등록 (튜닝과 비교용)
+- `scripts/train_lstm.py` — LSTM 학습 + 등록
+- `scripts/compare_models.py` — 4-model 비교
+- `scripts/compare_ensemble.py` — registry → ensemble inference 검증
+
+### Optuna 튜닝 결과 (중요한 정직 발견)
+
+| 클러스터 | n | Default best | 30-trial best | 100-trial best | 승자 |
+|---|---|---|---|---|---|
+| **KR:FIN:LARGE** | 95k | **CatBoost +0.262** | CatBoost +0.170 | CatBoost +0.180 | **Default** ⭐ |
+| **US:ENERGY:LARGE** | 24k | LGBM +0.286 | LGBM +0.309 | **LGBM +0.353** ⭐ | **Tuned** |
+
+**패턴 발견**: 데이터 크기별 정반대
+- **큰 클러스터 (95k+)**: default가 sweet spot (보수적 정규화가 노이즈 차단). Optuna가 노이즈 추적 → 오히려 IC 하락
+- **작은 클러스터 (~25k)**: 튜닝이 진짜 효과 (default → +0.286, tuned → +0.353, **+23% 향상**)
+
+→ MLOps registry의 `find_best()` 자동 처리 (클러스터별 best 선택).
+
+### LSTM 결과 — 학술 통설 검증
+
+| 클러스터 | LSTM IC | Tree best IC | 격차 |
+|---|---|---|---|
+| KR:FIN:LARGE | +0.074 | +0.262 (Default CatBoost) | **3.5배 차이** |
+| US:ENERGY:LARGE | +0.227 | +0.353 (Tuned LGBM) | 1.5배 차이 |
+
+**확인**: 학술 통설대로 일별 forward return 예측에서 트리가 압도. LSTM은 **앙상블 다양성 멤버로만 의미**. seq_len=30, hidden=128, 2-layer, 25 epochs, CPU 학습.
+
+### 현재 registry 모델 (15 종)
+
+- KR:FIN:LARGE × 3 (30-trial × 3 models) + 3 (100-trial) + 3 (Default) + 1 LSTM = 10
+- US:ENERGY:LARGE × 3 (30-trial × 3 models) + 3 (100-trial) + 3 (Default) + 1 LSTM = 10
+- ✅ 모든 모델 디스크 영속화 + registry.json 인덱싱
+- 드리프트 검출 후 자동 재학습 + 신·구 모델 롤백 가능
+
+### 다음 단계 (사용자 9-step 로드맵)
+
+- [x] Step 1: 100-trial 재튜닝 (KR + US)
+- [x] Step 2: 클러스터별 best 결정
+- [ ] Step 3: commit + WORK_LOG (이번 커밋)
+- [ ] Step 4: 4-model 앙상블 검증
+- [ ] Step 5: LSTM Optuna 튜닝
+- [ ] Step 6-7: 앙상블 가중치 확정 + commit
+- [ ] Step 8: 22개 모든 클러스터 튜닝
+- [ ] Step 9: 최종 commit
+
 | 도메인 | 커버리지 | 상태 |
 |---|---|---|
 | KR 종목 | 350 (KOSPI200+KOSDAQ150 marcap 프록시) | ✅ 라이브 |
@@ -337,10 +453,12 @@ walk-forward 재실행 (US): trades=4 동일, outcome 변동 (sharpe 2.55 → -3
 | US 종목 | 503 (SP500) | ✅ 라이브 |
 | US 일봉 | 183,717행 | ✅ 라이브 |
 | US CIK 보강 | 501/503 | ✅ 라이브 |
-| US financial_facts | 501 종목 (574,071행) | ✅ 라이브 (100% SP500, BF.B/BRK.B 제외) |
-| 뉴스 기사 (RSS) | 582 | ✅ 라이브 |
+| US financial_facts | 501 종목 (574,071행) | ✅ 라이브 (100% SP500) |
+| KR financial_facts (DART) | 317 종목 (14,223행, 3년 ANNUAL × 17 concept) | ✅ KR Fundamental 가동 |
+| disclosures (SEC) | 379,673 (메타데이터) + 5,000 (Form 4 본문 파싱) | ✅ insider buy/sell 추출 가능 |
+| 뉴스 기사 | **1,441,239** (GDELT 1.42M + Naver 22k + RSS 1.5k) | ✅ 1000배 폭증 |
 | 기사 분류 | 582 (Ollama qwen2.5:14b) | ✅ 라이브 |
-| 종목 mention | 655 | ✅ 16배 보강 (remap_news_mentions.py 재처리 후) |
+| 종목 mention | **275,618** (US 229k + KR 46k) | ✅ GDELT + Naver 추가로 420배 폭증 |
 | macro_series | 5 시리즈 × ~500행 | ✅ 라이브 (5/6 — 2Y 없음) |
 | market_regime | 양 시장 NEUTRAL/0.0 | ✅ 라이브 (시그널 약함 — 정직) |
 | module_scores Technical | 849 라이브 + 76,302 historical (90일) | ✅ 라이브 + 시계열 |

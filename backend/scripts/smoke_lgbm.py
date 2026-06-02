@@ -27,27 +27,7 @@ SP500_PILOT = [
 ]
 
 
-FEATURES = [
-    # price
-    "ret_1d", "ret_5d", "ret_21d", "ret_63d",
-    "vol_21d", "vol_63d",
-    "px_vs_sma50", "px_vs_sma200",
-    "dd_from_high_63d", "range_pct", "volume_z21",
-    "rsi14", "macd_hist", "macd_above", "bb_pctb",
-    "adx14", "stoch_k14", "atr_pct", "obv_slope21",
-    # fundamental
-    "pe_ttm", "pb", "ev_ebitda", "roe_q", "roa_q",
-    "debt_equity", "current_ratio", "gross_margin",
-    "rev_yoy", "eps_yoy",
-    # info
-    "news_count_7d", "news_count_30d",
-    "news_sentiment_7d", "news_pos_count_7d",
-    "news_neg_count_7d", "news_impact_7d",
-    # macro / regime
-    "vix", "vix_5d_chg", "dxy_5d_chg",
-    "sp500_21d_ret", "us10y", "us10y_5d_chg",
-    "regime_risk_on", "regime_risk_off", "regime_conf",
-]
+from scripts.train_lgbm import ALL_FEATURE_COLS as FEATURES
 
 
 def main() -> None:
