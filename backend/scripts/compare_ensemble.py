@@ -98,16 +98,22 @@ def main() -> None:
         print(f"    {e['model_kind']:<10s} run={e['run_id']} "
               f"OOF_IC={e.get('final_ic_oof', 0):+.4f}")
 
-    # Predict per model and combined
-    X_test = test_df[cols].astype(float).values
+    # Predict per model — each uses ITS OWN feature_names (registry-stored).
+    # Different runs may have different feature counts (registry stores names per model).
     y_test = test_df[args.target].astype(float).values
 
     print(f"\n  {'model':<12s} {'R²':>9s} {'hit':>7s} {'IC':>7s} {'RMSE':>9s}")
     preds = []
     weights = []
     for m in models:
+        feat_cols = m.entry["feature_names"]
+        missing = [c for c in feat_cols if c not in test_df.columns]
+        if missing:
+            print(f"  {m.entry['model_kind']:<12s} SKIP — features missing: {missing[:3]}...")
+            continue
+        X_test = test_df[feat_cols].astype(float).values
         try:
-            pred = _predict_one(m.entry["model_kind"], m.booster, X_test, cols)
+            pred = _predict_one(m.entry["model_kind"], m.booster, X_test, feat_cols)
         except Exception as e:
             print(f"  {m.entry['model_kind']:<12s} FAILED {e}")
             continue

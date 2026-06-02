@@ -517,6 +517,49 @@ async def _job_training_weekly() -> None:
         )
 
 
+async def _job_mlops_retrain_weekly() -> None:
+    """Full MLOps retrain — LGBM/XGB/CatBoost (default + tune), then
+    forward-selection ensemble rebuild via scripts/mlops_retrain.py.
+
+    Runs 2 hours after training.weekly so legacy OLS cluster_weights are
+    already up to date when the LightGBM registry rebuilds.
+    """
+    import subprocess
+    from pathlib import Path
+    cwd = Path(__file__).resolve().parents[1]
+    log.info("job.mlops_retrain.start")
+    proc = subprocess.run(
+        ["uv", "run", "python", "scripts/mlops_retrain.py", "--markets", "KR,US"],
+        cwd=str(cwd), capture_output=True, text=True, timeout=4 * 3600,
+    )
+    log.info(
+        "job.mlops_retrain.done",
+        rc=proc.returncode,
+        stdout_tail=(proc.stdout or "")[-2000:],
+        stderr_tail=(proc.stderr or "")[-1000:],
+    )
+
+
+async def _job_drift_check_daily() -> None:
+    """Daily drift check on active EnsembleSpec via KS-test + rolling IC.
+
+    Cheap (~5 minutes); if any cluster drifts the operator can flip a flag
+    or wait for the next mlops_retrain.weekly cycle."""
+    import subprocess
+    from pathlib import Path
+    cwd = Path(__file__).resolve().parents[1]
+    proc = subprocess.run(
+        ["uv", "run", "python", "scripts/mlops_retrain.py",
+         "--drift-only", "--markets", "KR,US"],
+        cwd=str(cwd), capture_output=True, text=True, timeout=30 * 60,
+    )
+    log.info(
+        "job.drift_check.done",
+        rc=proc.returncode,
+        stdout_tail=(proc.stdout or "")[-1000:],
+    )
+
+
 async def _job_regime_daily() -> None:
     """Re-classify market regime each morning right after the macro
     daily refresh. Reads macro_series and writes one row per market
@@ -899,6 +942,29 @@ DEFAULT_JOBS: list[JobSpec] = [
         func=_job_walk_forward_weekly,
         trigger="cron",
         cron_kwargs={"day_of_week": "sun", "hour": 5, "minute": 0},
+        timezone="UTC",
+        enabled=False,
+    ),
+    JobSpec(
+        # Full MLOps retrain — LightGBM/XGBoost/CatBoost (default + tune
+        # per cluster size) → forward-selection ensemble rebuild → spec
+        # auto-deploy with rollback. Runs Sunday 06:00 UTC, ~2h after
+        # training.weekly so legacy OLS weights are fresh first.
+        id="mlops.retrain.weekly",
+        func=_job_mlops_retrain_weekly,
+        trigger="cron",
+        cron_kwargs={"day_of_week": "sun", "hour": 6, "minute": 0},
+        timezone="UTC",
+        enabled=False,    # operator flips on after first manual run
+    ),
+    JobSpec(
+        # Daily drift check — KS-test on prediction distribution + rolling
+        # IC of active EnsembleSpec. Cheap (~5 min). Logs warning when
+        # cluster drifts; off-cycle retrain decision left to operator.
+        id="mlops.drift_check.daily",
+        func=_job_drift_check_daily,
+        trigger="cron",
+        cron_kwargs={"hour": 7, "minute": 0},
         timezone="UTC",
         enabled=False,
     ),
