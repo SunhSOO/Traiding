@@ -238,6 +238,18 @@ backend/scripts/:
 - ✅ `mlops_retrain.py` (retrain orchestrator + drift-only 모드)
 - ⏭️ `fdr_probe_kr.py`, `debug_features.py`, `debug_regime.py` (개발 도중 디버그용, 정리됨)
 
+### 0.13 데이터 수집 세션 (2026-06-09) — FTI 3축 갭 메우기
+
+세션 OOM 후 DB 직접 점검 → 데이터가 문서보다 앞서 있었음. 핵심 갭(I축 historical) 해결 + 기타 보강. 상세는 WORK_LOG 2026-06-08~09.
+
+- ✅ **Information(I) 축 historical 백필** — 신규 `scripts/backfill_information_history.py`. LLM 분류는 38.7초/기사(=247k 110일, 비현실)라 **FinBERT(전 뉴스 1.45M 기보유) 경로 신설**. module_scores I축 **345/238행 → 67,491행(788종목)**. F/T축과 동등한 시계열 확보(범위는 뉴스 7개월에 종속).
+- ✅ **news mention 재매핑 효율화** — 신규 `scripts/remap_news_mentions_fast.py`. 구버전 `remap_news_mentions.py`는 티커별 정규식 재컴파일로 18h+ 미완 → 단일 사전컴파일 alternation + 24코어 병렬로 **137초**. mention **275,618 → 1,779,704**, US 종목 커버리지 288→438. (정합성 500건 mismatch=0)
+- ✅ **Fundamental 갭** — 우선주 7개 보통주 재무 상속(+3,292), BRKB/BFB CIK보정+EDGAR(+3,468). F 커버리지 KR 326→333, US 501→503. 잔여(KR 17 SPAC/신규상장/외국주, US 14 ETF)는 무료 소스에 데이터 없음 = 하드리밋.
+- ✅ **Options**(A.9) — `yfinance_options_ingest.py`로 전 US 513종목 현재 스냅샷. **과거 옵션체인은 무료 불가 → forward 누적만**.
+- ⛔ **Google Trends / USPTO Patents**(A.6/A.7 영역) — ⬜에서 ⛔로 정정. pytrends Google 429 차단, PatentsView 레거시 엔드포인트 폐기(API키 필요). 무료 수집 불가 실측.
+- ⏸️ **13F holdings** — 보유내역 파싱+OpenFIGI CUSIP매핑 신규코드 필요, feature 2개 저ROI → user 승인 하에 보류.
+- ⏸️ **10년 뉴스 백필** — 저장공간(~5TB) 확보 후 진행(user 결정). GDELT=BigQuery 5.5TB(무료 월1TB), KR뉴스=무료로 막힘. → "보류 결정" 섹션 + memory `project_news_history_plan` 참조.
+
 ---
 
 ## A. 데이터 / 피처
@@ -1460,6 +1472,61 @@ backend/scripts/:
 - ⬜ Cross-currency basis swap (institutional only)
 - ⬜ DLR(달러), DXJ(엔 헤지 일본) 같은 통화 헤지 ETF
 - ⬜ Options-based hedge (USD put options)
+
+---
+
+## W.7 Wave 4 — 매크로/Cross-asset 활용 깊이 (사용자 직접 제안, 2026-06-04)
+
+**근거**: 사용자 지적 — "금값/유류값/환율/기준금리/체감금리/국채 등이 지수와 개별 주가 예측에 시장 readability를 높일 텐데, 우리가 충분히 활용하고 있나?"
+
+**현재 상태**: 36개 macro/cross-asset features 보유 (vix/dxy/us10y/yield_curve/sector ETFs/gold/oil/...) 그러나 단순 join 만. 활용 깊이 부족.
+
+**Wave 4 구현 항목 (Wave 3 Optuna+Ensemble 완료 후)**:
+
+### W.7.1 Regime × Feature interaction (~16 features)
+- HMM 5-state regime을 핵심 features와 cross-multiply
+- 같은 RSI라도 risk_on에서는 follow-through / risk_off에서는 mean reversion
+- 모듈: `regime/hmm_classifier.py` + `features_cross_section.py` interaction 패턴
+- 우선순위: 매우 높음 (가장 큰 alpha 기여 추정)
+
+### W.7.2 누락 매크로 10개 백필 + features
+- Yield curve 3-factor decomposition (level/slope/curvature, Litterman-Scheinkman 1991)
+- VIX percentile in trailing 252d (절대값 < 분위수)
+- VIX term structure (VIX9D/VIX/VIX3M contango ratio)
+- Volatility Risk Premium (VIX² − realized vol)
+- Real yield momentum (TIPS DFII10 변화율)
+- Credit spread momentum (HY OAS BAMLH0A0HYM2 5d/21d change)
+- Funding stress proxy (DGS3MO − FEDFUNDS, TED 대체)
+- Equity Risk Premium (Forward EY − 10Y yield) — yfinance forward_estimates 활용
+- Global liquidity (RRPONTSYD Fed balance sheet)
+- Inflation breakeven momentum (T10YIE 변화율)
+
+### W.7.3 Sector × cross-asset interaction (~50 features)
+Sector 별로 다른 cross-asset 의존성:
+- Energy ↔ WTI_OIL 21d change (β_oil 강)
+- Bank ↔ yield_curve_2_10 (steepening favorable)
+- Utility ↔ us10y (rate duration)
+- Gold miner ↔ GLD momentum
+- Tech ↔ us10y_5d_chg (long-duration sensitivity)
+- REIT ↔ TLT momentum
+- 등 11 sector × 5 cross-asset = 55 interaction features
+
+### W.7.4 Market-level meta-prediction
+- Step 1: SPY/QQQ/KOSPI200 단독 macro-only 예측 모델
+- Step 2: 시장 prediction → 개별 ticker 모델의 추가 feature
+- Long/short 전략의 alpha-beta separation 핵심
+- 학술: "Hierarchical multi-task forecasting" (Tsai et al. 2024)
+
+### W.7.5 Lead-lag features
+- Leading (선행 6-12개월): yield curve, ISM PMI, building permits
+- Coincident: industrial production, employment
+- Lagging (후행): CPI, GDP (revision 많음)
+- 시계열별 lag 3개월/6개월 features 추가
+- 학술: Stock & Watson (2002) leading indicators
+
+**예상 alpha 영향**: +15-25% (Lopez de Prado quant 연구 평균치).
+
+**진행 트리거**: Wave 3 (Optuna 100×top10 cluster + Wave 3 모델 + Ensemble re-opt) 완료 후 즉시.
 
 ---
 

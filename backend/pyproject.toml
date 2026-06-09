@@ -90,11 +90,19 @@ ml = [
   "quantstats>=0.0.62",
   "mlflow>=2.17",
   "optuna>=4.0",
+  "hmmlearn>=0.3",
   "google-cloud-bigquery>=3.27",
   "google-cloud-bigquery-storage>=2.27",
   "pandas-gbq>=0.24",
   "torch>=2.4",
   "joblib>=1.4",
+  "pysentiment2>=0.1.1",
+  "darts>=0.44.1",
+  "pytorch-forecasting>=1.7.0",
+  "econml>=0.16.0",
+  "transformers>=5.9.0",
+  "pywavelets>=1.9.0",
+  "pytrends>=4.9.2",
 ]
 
 [tool.pytest.ini_options]

@@ -500,8 +500,190 @@ walk-forward 재실행 (US): trades=4 동일, outcome 변동 (sharpe 2.55 → -3
 
 ---
 
+## 2026-06-02 (화) — Wave 1: Advanced features + Macro + TLH/Hedge/Calendar/V2Tone
+
+근거: `backend/training/features_advanced.py`, `features_calendar.py`, `features_gdelt.py`, `decision/tax_loss_harvesting.py`, `decision/currency_hedge.py`, `regime/hmm_classifier.py`, `scripts/fred_extra_backfill.py`, `scripts/gdelt_v2tone_extract.py`, `scripts/train_lgbm.py`
+
+### 완료 항목 (코드 + smoke test 통과)
+
+- ✅ `features_advanced.py` 50+ feature 함수 — extra technical (TRIX/DPO/TSI/PPO/PVO/BOP/Chande/Vortex/UltimateOsc/Coppock/KAMA/HMA/SuperTrend), Garman-Klass/Yang-Zhang vol, 10개 candle pattern, 17개 stat feature (correlation/beta/alpha/Sortino/skew/kurt/autocorr/Hurst exponent), 9개 microstructure (close_range_strength/effective_spread_proxy/dollar_volume), Piotroski/Altman/Beneish composites
+- ✅ `features_calendar.py` 14개 event flag — FOMC/CPI/NFP/PCE/GDP/BOK 날짜 사전 + 거리 계산
+- ✅ `features_gdelt.py` 7개 V2Tone aggregator — 7d/30d 평균, std, momentum, pos/neg count, mention count
+- ✅ `decision/tax_loss_harvesting.py` (W.4 user 필수) — TaxConfig(KR/US 분기), TLHDecision, wash-sale lock 캐시, 31일 buyback 차단, sector ETF substitute, YTD realized loss 추적 (US 3k cap)
+- ✅ `decision/currency_hedge.py` (W.6 user 필수) — Best=VWDH (Volatility-Weighted Dynamic Hedge) 구현 + 대안 A-K 11개 (Static50, MVHR, Regime, Carry, Options, Forwards, Hedged ETF, Pair, Basket, Vol-Target) 문서화. 모드 5종 코드 활성: vwdh/static_50/mvhr/regime/carry
+- ✅ `regime/hmm_classifier.py` 5-state Gaussian HMM (calm_bull/risk_on/neutral/risk_off/crisis)
+- ✅ FRED 확장 백필 — 28개 시리즈 시도, 25개 성공 (~7,000 rows). 실패 3개 (ISM_MFG NAPM, BRENT POILBRENTUSDM, GOLD GOLDAMGBD228NLBM — FRED 코드 변경, 추후 fix)
+- ✅ GDELT V2Tone 추출 — `gdelt_aux` 신규 테이블, **229,547 tones** 추출
+- ✅ `train_lgbm.py` ALL_FEATURE_COLS = **215 features** (기존 124 → 215, +73%)
+- ✅ Smoke test: `build_feature_matrix(US, 120d, 3 tickers)` → rows=246 cols=215 통과; gdelt_tone_avg_7d/is_fomc_day/piotroski_score/hurst_100 전부 emit 확인
+
+### 진행중 / 다음
+
+- ⚪ 215 features로 LGBM/XGB/CatBoost 전 클러스터 재학습 (Wave 1 종료 후 batch)
+- ⚪ HMM regime smoke test (코드 작성됨, 미실행)
+- ⚪ TLH/Hedge logic을 `decision/runner.py`에 통합 (paper 시뮬 단계에서 활성화)
+- ⚪ FRED 실패 3개 시리즈 코드 fix (ISM/BRENT/GOLD)
+
+### 사용자 directive 반영 상태
+
+- W.1 HFT staged → GAPS.md 명시, 일봉 우선 (현재 단계)
+- W.2 Crypto/DeFi → EXCLUDED 확정
+- W.3 ESG → 다음 wave
+- W.4 Tax Loss Harvesting → ✅ 코드 완료
+- W.5 Macroeconomic forecasting → FRED 25 시리즈 백필 완료 (별도 모델은 다음 wave)
+- W.6 Currency Hedge → ✅ VWDH 구현 + 대안 11개 문서화
+
+---
+
+## 2026-06-02 (화) PM — Wave 2: FTI 대확장 (124 → 431 features)
+
+근거: `backend/training/features_fundamental_v2.py`, `features_technical_v2.py`, `features_information_v2.py`, `features_cross_section.py`, `features_alt_data.py`, `data/fundamental/concepts.py`, `scripts/sec_13f_ingest.py`, `scripts/finra_short_ingest.py`, `scripts/edgar_10k_lm_sentiment.py`, `scripts/yfinance_options_ingest.py`, `scripts/gdelt_gcam_extract.py`, `scripts/alt_data_ingest.py`
+
+### 코드 작성 (모두 완료)
+
+- ✅ Fundamental v2 — **55 features**: Valuation 12 (PEG/PS/PFCF/EV-Sales/EV-FCF/EV-EBIT/E-yield/D-yield/FCF-yield/Shiller-PE/P-TBV/Buyback-yield), Quality 12 (ROIC/ROCE/Op/Net/EBITDA-margin/Asset-turnover/Inv-turnover/Recv-turnover/CCC/EarningsQuality/Accruals/RnD-intensity), Growth 10 (3y/5y CAGR for Rev/EPS/BV/FCF/Div + QoQ/Accel/SGR), Leverage 8 (NetDebt-EBITDA/InterestCov/Quick/Cash-Debt/LT-Debt-Cap/FCF-Debt/Goodwill-Assets/Intang-Assets), CashFlow 7 (FCF-abs/FCF-margin/Capex-Sales/Capex-Dep/ΔWC/CashConv/OwnerEarnings-yield), Composites 6 (MagicFormula/QMJ/Ohlson-O/Sloan-Accruals/Mohanram-G/NCAV-Graham)
+- ✅ Technical v2 — **35 features**: Ichimoku 8, Divergence 4 (RSI/MACD/OBV/Hidden), TTM Squeeze 3, Pivot 6 (Std/R1/S1/Fib/Camarilla-H3/L3), Order-Flow 5 (Amihud/Kyle-λ/Roll-spread/Uptick-vol/VPOC-dist), Indicator Accel 5 (RSI/MACD-h/ADX/BB-pctB/Vol-z 5d 변화율), S/R 4 (52w-high/low/Round-num/Tests-21d)
+- ✅ Information v2 — **19 features**: News v2 8 (velocity/spike-z/source-quality-sentiment/headline-body-divergence/M&A/legal/earnings/product topic counts), Insider v2 6 (cluster-buy/CEO-CFO co-buy/openmarket-ratio/cost-dist/exec-buy-weight/director-buy-weight), SEC-text stub 5 (LM-sent-10K/risk-factor-chg-%/Fog/going-concern/restatement; populated by edgar_10k_lm_sentiment.py)
+- ✅ Cross-section v2 — **78 features**: per-date percentile rank for 36 high-signal features (PE/PS/PB/ROIC/Piotroski/momentum/composites), 16 interactions (Quality×Momentum / Value×Momentum / RSI×Vol / Vol×Sentiment / News×Insider 등), 26 lags (5d + 21d × 13 features)
+- ✅ Alt-Data v2 — **29 features**: Short Interest 5, Options 6 (PC-vol/OI/IV-ATM/Skew/Term-slope/Unusual), Wiki 3, Google Trends 3, Reddit 3, Patents 3, 13F 2, GCAM 4 (fear/anger/econ-neg/polarity)
+
+**Total feature 등록 수: 124 → 431** (+247%, +307 features)
+
+### Concept registry 확장
+
+- `data/fundamental/concepts.py`: 21 → 38 canonical concepts (EBITDA/DA/Interest/Tax/SGA/RnD/Inventory/Receivables/Payables/ShortDebt/PPE/RetainedEarn/Goodwill/Intang/Minority/Preferred/Buyback/StockIssued/ΔWC 추가). DART_MAP + SEC_MAP 양 마켓 모두 확장.
+- `training/features.py::_CONCEPTS_NEEDED`: 17 → 39
+
+### 데이터 수집 스크립트 (7개 신규)
+
+- `scripts/sec_13f_ingest.py` — Top 15 institutional filers (Berkshire/Vanguard/BlackRock/JPM/StateStreet/Bridgewater/Renaissance/Citadel/TwoSigma/DESHaw/Point72/Tiger/Pershing/Lone Pine/Coatue) 13F-HR 인덱스. CUSIP→ticker 매핑은 Phase 2 deferred.
+- `scripts/finra_short_ingest.py` — FINRA Reg SHO 일일 short volume (NYSE+Nasdaq) 90일 백필 가능. 무료 public file.
+- `scripts/edgar_10k_lm_sentiment.py` — SEC 10-K 본문 → Loughran-McDonald 사전 (positive/negative/litigious/uncertainty 4 카테고리) + Fog index + going-concern count + restatement flag. 사전은 Notre Dame SRAF 무료 CSV.
+- `scripts/yfinance_options_ingest.py` — yfinance option_chain → put/call vol·OI ratio, ATM IV, IV skew (10% OTM), term slope, unusual activity (vol > 3× OI).
+- `scripts/gdelt_gcam_extract.py` — GDELT 2.1 GKG `gcam` 필드 정규식 파싱 → 11 sentiment dimensions (anger/fear/joy/sadness/econ-neg/econ-pos/pol-neg/pol-pos/polarity/amp1/amp2) + orgs/persons/themes counts. 신규 테이블 `gdelt_gcam`.
+- `scripts/alt_data_ingest.py` — 4-in-1 dispatcher: Wikipedia REST API pageviews (무인증), Google Trends via pytrends, Reddit via PRAW (settings.reddit_client_id 필요), USPTO PatentsView API (무료).
+
+### Smoke test 결과
+
+- `build_feature_matrix(US, 180d, AAPL)` → rows=121, **cols=353** (cross-section/alt-data 일부 0/NaN; alt-data 테이블 아직 미존재라 정상). PostgreSQL InFailedSqlTransaction 회피 위해 `session.begin_nested()` savepoint로 alt-data/info-v2 쿼리 wrap.
+- Float casting 추가 (PostgreSQL Decimal → float) — tech_v2 silent failure 해결.
+
+### 다음 단계 (이번 wave 외)
+
+- ⚪ 데이터 수집 실제 실행 (FINRA-short/Wiki/Trends/Options/GCAM/LM-sentiment)
+- ⚪ 431 features 전체 활성 상태에서 LGBM/XGB/CatBoost 전 클러스터 재학습
+- ⚪ 13F XML body 파싱 + CUSIP→ticker 매핑 (OpenFIGI 무료 tier)
+- ⚪ Earnings call transcript sentiment (Seeking Alpha 스크래핑 또는 SEC 8-K Item 2.02 exhibit)
+- ⚪ Currency Hedge alternative 11개 중 추후 구현 (options-based / forwards / regime-conditional)
+
+---
+
+## 2026-06-02 (화) 저녁 — Wave 3: 10y 백필 + 모델 zoo 확장
+
+근거: `backend/scripts/{eda_data_explore,train_models_v3,finbert_news_score,earnings_call_sentiment,tune_top_clusters}.py`, `training/{models_v3,features_embeddings}.py`
+
+### 10y 백필 완료
+
+- ✅ US prices 2016-2024: 513/517 ticker, **1,118,558 rows** (10.4년)
+- ✅ KR prices 2016-2024: 332/350 ticker, **615,831 rows** (10.4년)
+- ✅ Cross-asset ETF 10년: 17 ETF, ~2,618 rows each
+- ✅ Macro (VIX/SP500/KOSPI/DXY/US10Y) 10년: ~2,600 rows each
+- ✅ FRED extra 10년: 25/28 시리즈
+- 🔄 EDGAR US financials (진행 중, ETA 3h)
+- 🔄 DART KR financials (진행 중, ETA 2.5h)
+
+### Wave 3 모델 zoo (8/10 가용)
+
+- ✅ `training/models_v3.py` 10 모델 통합 wrapper:
+  - **8 가용**: StackingEnsemble, GaussianProcessReg, NBEATSModel (darts), TFTModel (pytorch-forecasting), PatchTSTModel, CausalForestModel (econml), BNNModel (MC Dropout), FinBERTScorer
+  - **2 deferred**: ChronosForecaster, TimesFMForecaster (transformers version 충돌, 환경 분리 필요)
+- ✅ 의존성 설치: darts, pytorch-forecasting, transformers, econml, PyWavelets
+
+### Wave 3 추가 features
+
+- ✅ `features_embeddings.py` 10 features: Wavelet 5-level db4 (6 energy ratios + HF ratio) + STL (trend/seasonal/resid strength). PCA/Autoencoder lazy.
+- 전체 feature count: **441** (124 → 215 Wave 1 → 431 Wave 2 → 441 Wave 3)
+
+### Wave 3 trainer + 추가 ingest
+
+- ✅ `scripts/train_models_v3.py` — per-cluster GP/BNN/Stacking trainer with chrono 80/20 split, R²/Hit/IC metrics
+- ✅ `scripts/finbert_news_score.py` — FinBERT 3-class 점수를 모든 news_articles에 부여 → `news_finbert_score` 테이블
+- ✅ `scripts/earnings_call_sentiment.py` — SEC 8-K Item 2.02 exhibit 본문 → FinBERT + Loughran-McDonald 결합 → `earnings_call_sentiment` 테이블
+- ✅ `scripts/tune_top_clusters.py` — top-10 cluster auto-discovery + Optuna 200-trial wrapper
+- ✅ `scripts/eda_data_explore.py` — coverage / returns 분포 / cluster 분포 / 피처 non-null rate / survivorship bias / top 20 상관관계 통합 EDA
+
+### 동시 진행 (백그라운드, 8개)
+
+- Ablation A: US 1.5y `bp0b72rnr`
+- Ablation B: US 5y `bdi18c45y`
+- Ablation C: US 10y `b2cn5vog1`
+- EDGAR US fund `bugh2ho9w`
+- DART KR fund `bpzl6sdl6`
+- EDA 통합 리포트 `brpv8yaij`
+- HMM regime classifier (완료, 5 states × 880일)
+- Cluster 재산정 (완료, KR 350 + US 517)
+
+### 다음 단계
+
+- ablation 완료 → best 학습 윈도우 결정
+- v3 trainer 8 모델 × top 10 cluster 학습
+- Optuna 200-trial top-10 cluster 재튜닝
+- FinBERT 뉴스 전체 점수 + earnings call 점수 부여
+- Ensemble 재최적화 (forward selection + stacking meta-learner)
+
+---
+
+## 2026-06-08~09 — FTI 3축 데이터 수집 전수 점검 + 갭 메우기
+
+근거: `scripts/backfill_information_history.py`(신규), `scripts/remap_news_mentions.py`, `scripts/yfinance_options_ingest.py`, `scripts/dart_backfill_kr.py`, `scripts/edgar_backfill_us.py`, DB 직접 쿼리.
+
+### 배경 — 세션 OOM 후 실제 DB 재점검
+
+WORK_LOG가 06-02에서 멈춰 있어 실제 DB 상태와 괴리. 직접 쿼리로 전수 점검한 결과 **데이터는 문서보다 훨씬 앞서 있었음**: short_volume 17.9M, news_finbert 1.45M, gdelt_gcam 229k, wiki 548k, financial_facts 899k, daily_prices 2.06M, earnings_call_sentiment 11.3k 등 06-02 "다음 단계"가 대부분 적재 완료 상태.
+
+### 핵심 갭: Information(I) 축 historical 부재
+
+- F/T 모듈은 각 ~28만 module_scores 행(365일 백필)인데 **I 모듈은 라이브 345/238행뿐**.
+- 원인: `score_market`은 `article_classifications`(LLM 분류) 의존 → 247,528 mention 기사 중 **428개만 분류됨**. LLM 분류 측정: **기사당 38.7초**(Ollama qwen2.5:14b) → 247k = ~110일, 완료 비현실.
+- **해결: FinBERT 경로 신설.** 전 뉴스 1.45M에 이미 FinBERT 3-class 점수 존재. `backfill_information_history.py` 작성 — FinBERT label→direction, max(pos,neg)→impact, source_trust+time_decay 적용해 `score_information` 그대로 재사용. 중립 기사가 confidence 부풀리지 않도록 impact를 방향성 prob 기준으로 매핑.
+- ✅ **결과: I 모듈 module_scores 345/238 → 38,431행** (KR 16,901 / US 21,530, 2025-11~2026-06 전 구간). 점수 분포 정상(-98.7~100, 73% 방향성 신호).
+
+### Fundamental 갭 메우기
+
+- KR 누락 24개 분석 → 2그룹. **우선주 7개**(corp_code=None): KRX 코드규칙으로 보통주 부모 매핑(005935→005930 등) 후 `financial_facts` 상속 INSERT 3,292행. **나머지 17개**: corp_code 있으나 DART finstate `rows=0`(SPAC/신규상장/외국주 950160 — DART 데이터 자체 없음, 하드리밋).
+- US 누락 16개 = ETF 14 + **BRKB/BFB**. BRKB/BFB는 CIK 누락이 원인(SEC는 BRK-B 표기) → CIK 수동 보정(1067983/14693) + EDGAR 재무 3,468행.
+- ✅ **F 커버리지: KR 326→333, US 501→503** (잔여는 전부 ETF/SPAC 구조적 한계).
+
+### Alt-data
+
+- ✅ Options: yfinance 현재 스냅샷 **513/517 US** 적재(forward 누적 개시). 과거 옵션체인은 무료 불가.
+- ⛔ Google Trends(pytrends 429 차단), USPTO Patents(레거시 엔드포인트 폐기, API키 필요), Reddit(크리덴셜 미설정) — 무료 한계로 차단.
+- ⏸️ 13F 기관보유: filing 메타 106건만, 보유내역 0. CUSIP→ticker는 OpenFIGI 무료 가능하나 XML파싱+매핑 신규코드 필요, feature 2개 저ROI → 보류(user 승인).
+
+### remap 성능 버그 → 효율 재작성 (해결)
+
+- 구 `remap_news_mentions.py`: **17.5시간+ 미완료**. 진단 — `_word_boundary`가 US 티커 517개를 기사마다 **새 정규식으로 re.search** → 517패턴 × 2필드 × 144만기사 ≈ **15억 회 정규식 재컴파일**이 18시간 정체의 원인(이름 substring 매칭은 빠름).
+- ✅ `scripts/remap_news_mentions_fast.py` 신규: ① 517 티커를 **단일 사전컴파일 alternation 정규식**(필드당 517→1 finditer), ② **24코어 multiprocessing**, ③ 서버사이드 스트리밍 커서(읽기/쓰기 커넥션 분리, OOM 차단). 매칭 의미는 모듈 헬퍼(`_upsert`/`_contains_*`) 재사용 → 500건 정합성 검증 mismatch=0.
+- ✅ **결과: 137초 완료**(18h+ → 2분 17초, 실측 ~500배). news_ticker_mentions **275,620 → 1,779,704**(원본이 심하게 under-map). US 종목 커버리지 **288 → 438**.
+- ✅ Information 재실행: 37,848 → **66,908 ticker-days**(I 모듈 788종목, US 50,590행).
+
+### 미해결
+
+- ⚪ LLM 분류 247k: 스케줄러 시간당 점진 처리에 위임(강제 실행 비현실, 38.7초/기사).
+
+### 다음 단계
+
+- 442 feature로 OOM 없는 전 클러스터 재학습(이전 캐시 OOM 블로커 별건)
+- (옵션) 구 `remap_news_mentions.py` → fast 버전으로 교체 또는 `ticker_mapper._word_boundary` 자체를 사전컴파일로 수정(스케줄러도 수혜)
+
+---
+
 ## 보류 결정 (status=proposed)
 
+- ⏸️ **10년치 뉴스 백필 — 저장공간 확보 후 진행**(user 2026-06-09 결정). 현황: 뉴스가 ~6~7개월치(GDELT 영어 141.8만 2025-12~2026-06, Naver 한국어 2.3만)뿐이라 I축 historical이 F/T(10년)에 비해 빈약.
+  - **영어/GDELT**: GKG는 2015~ 존재해 확장 가능하나 **BigQuery 스캔 ~5.5TB**(180일=275GB 실측 × 20). 무료 한도 월 1TB → 한번에 하면 ~$22 과금(무료제약 위반). 옵션: ①월1TB 분할(무료,~6개월) ②원본 CSV 다운로드로 재작성(진짜 무료, ~5TB 디스크 필요) ③소액 과금. **저장공간(~5TB)+분할수집 전제라 보류.**
+  - **한국어**: Naver API=최근만(깊은 과거 불가), BIGKinds=로그인월·이전 크롤 0건 실패. **KR 10년 뉴스는 무료로 사실상 막힘** → 별도 BIGKinds 스크레이퍼 해결 필요.
+  - 공시(EDGAR/DART)는 이미 수년치 보유 → I축의 "공식 정보" 신호는 깊이 확보됨.
 - ⚪ KR 시가총액 프록시를 KRX CSV 스크래퍼(선호) 또는 pykrx(엔드포인트 복구 시)로 교체
 - ⚪ Phase 6 브로커 어댑터 — KIS Developers (KR 무료) vs Alpaca paper (US 무료); 둘 다 페이퍼 3개월 통과 후 착수
 - ⚪ TimescaleDB 설치 vs 일반 Postgres 유지 (행수 증가 속도에 따라 결정)

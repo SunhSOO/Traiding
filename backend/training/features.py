@@ -249,11 +249,16 @@ def compute_price_features(bars: pd.DataFrame) -> pd.DataFrame:
 
 # Concepts we'll use to build ratios (names match data/fundamental/concepts.py)
 _CONCEPTS_NEEDED = [
-    "REVENUE", "NET_INCOME", "GROSS_PROFIT", "OPERATING_INCOME",
+    "REVENUE", "COGS", "NET_INCOME", "GROSS_PROFIT", "OPERATING_INCOME",
     "TOTAL_ASSETS", "TOTAL_LIABILITIES", "TOTAL_EQUITY", "CASH",
-    "LONG_TERM_DEBT", "CURRENT_ASSETS", "CURRENT_LIABILITIES",
+    "LONG_TERM_DEBT", "SHORT_TERM_DEBT", "CURRENT_ASSETS", "CURRENT_LIABILITIES",
     "EPS_BASIC", "EPS_DILUTED", "SHARES_OUTSTANDING",
-    "CFO", "FREE_CASH_FLOW",
+    "CFO", "CFI", "CFF", "CAPEX", "FREE_CASH_FLOW", "DIVIDENDS_PAID",
+    # Wave 2 — extended concepts
+    "EBITDA", "DEPRECIATION_AMORT", "INTEREST_EXPENSE", "TAX_EXPENSE",
+    "SGA", "RND_EXPENSE", "INVENTORY", "RECEIVABLES", "PAYABLES",
+    "PROPERTY_PLANT_EQ", "RETAINED_EARNINGS", "GOODWILL", "INTANGIBLES",
+    "MINORITY_INTEREST", "PREFERRED_STOCK", "STOCK_BUYBACK", "STOCK_ISSUED",
 ]
 
 
@@ -861,6 +866,9 @@ def build_feature_matrix(
     all_blocks: list[pd.DataFrame] = []
     for ticker, group in px_df.groupby("ticker"):
         bars = group.set_index("trade_date").drop(columns=["ticker"]).sort_index()
+        for c in ("open", "high", "low", "close", "volume"):
+            if c in bars.columns:
+                bars[c] = bars[c].astype(float)
         if len(bars) < 60:
             continue
         report.tickers_processed += 1
@@ -875,14 +883,96 @@ def build_feature_matrix(
         insider_feat = compute_insider_features(session, market, ticker, bars.index)
         cal_feat = compute_calendar_features(bars.index)
         cross_feat = compute_cross_asset_features(session, bars.index, bars["close"])
+        # Wave 1 — advanced features (Technical extras / Stats / Micro / FS composites)
+        from training.features_advanced import (
+            compute_extra_technical, compute_stat_features,
+            compute_microstructure, compute_advanced_fundamental,
+        )
+        extra_tech = compute_extra_technical(bars)
+        # Use market panel from cross-asset cache (SPY for US, fall back)
+        try:
+            from training.features import _load_cross_asset_panel
+            ca_panel = _load_cross_asset_panel(session, bars.index)
+            mkt_close = ca_panel["SPY"] if "SPY" in ca_panel.columns else bars["close"].astype(float)
+        except Exception:
+            mkt_close = bars["close"].astype(float)
+        stat_feat = compute_stat_features(bars, mkt_close)
+        micro_feat = compute_microstructure(bars)
+        adv_fund = (
+            compute_advanced_fundamental(fund_panels[ticker], bars.index, bars["close"])
+            if ticker in fund_panels else pd.DataFrame(index=bars.index)
+        )
+        # Event calendar flags (FOMC/CPI/NFP/PCE/GDP/BOK)
+        from training.features_calendar import compute_event_calendar_features
+        evt_cal = compute_event_calendar_features(bars.index, market)
+        evt_cal = evt_cal.reindex(bars.index)
+        # GDELT V2Tone aggregator (US only — KR rarely tagged in GDELT)
+        try:
+            from training.features_gdelt import compute_gdelt_features
+            gdelt_feat = compute_gdelt_features(session, market, ticker, bars.index)
+        except Exception:
+            gdelt_feat = pd.DataFrame(index=bars.index)
+        # Wave 2 — comprehensive fundamental (~50 features)
+        try:
+            from training.features_fundamental_v2 import compute_fundamental_v2
+            fund_v2 = (
+                compute_fundamental_v2(fund_panels[ticker], bars.index, bars["close"])
+                if ticker in fund_panels else pd.DataFrame(index=bars.index)
+            )
+        except Exception:
+            fund_v2 = pd.DataFrame(index=bars.index)
+        # Wave 2 — technical v2 (Ichimoku/Divergence/TTM/Pivot/OrderFlow/Accel/SR)
+        try:
+            from training.features_technical_v2 import compute_technical_v2
+            tech_v2 = compute_technical_v2(bars)
+        except Exception as _ex:
+            import logging
+            logging.getLogger(__name__).warning("tech_v2 failed: %s", _ex)
+            tech_v2 = pd.DataFrame(index=bars.index)
+        # Wave 2 — information v2 (news/insider/SEC text)
+        try:
+            from training.features_information_v2 import compute_information_v2
+            info_v2 = compute_information_v2(session, market, ticker, bars.index)
+        except Exception:
+            info_v2 = pd.DataFrame(index=bars.index)
+        # Wave 2 — alt data (Short/Options/Wiki/Trends/Reddit/Patents/13F/GCAM)
+        try:
+            from training.features_alt_data import compute_alt_data_features
+            alt_feat = compute_alt_data_features(session, market, ticker, bars.index)
+        except Exception:
+            alt_feat = pd.DataFrame(index=bars.index)
+        # Wave 3 — Wavelet/STL/PCA decomposition embeddings
+        try:
+            from training.features_embeddings import compute_embedding_features
+            emb_feat = compute_embedding_features(bars, include_ae=False)
+        except Exception:
+            emb_feat = pd.DataFrame(index=bars.index)
+        # Wave 3 — FinBERT 12 sentiment aggregator features
+        try:
+            from training.features_finbert_agg import compute_finbert_features
+            finbert_feat = compute_finbert_features(session, market, ticker, bars.index)
+        except Exception:
+            finbert_feat = pd.DataFrame(index=bars.index)
         block = pd.concat([
             price_feat,
             fund_feat,
+            adv_fund,
             info_feat,
             disc_feat,
             insider_feat,
             cal_feat,
             cross_feat,
+            extra_tech,
+            stat_feat,
+            micro_feat,
+            evt_cal,
+            gdelt_feat,
+            fund_v2,
+            tech_v2,
+            info_v2,
+            alt_feat,
+            emb_feat,
+            finbert_feat,
             macro_feat.reindex(bars.index),
             regime_feat.reindex(bars.index),
         ], axis=1)

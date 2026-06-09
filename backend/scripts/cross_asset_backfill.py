@@ -32,8 +32,13 @@ TARGETS: list[tuple[str, str]] = [
 
 
 def main() -> None:
-    start = (date.today() - timedelta(days=540)).isoformat()
-    end = date.today().isoformat()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--start", default=(date.today() - timedelta(days=540)).isoformat())
+    ap.add_argument("--end", default=date.today().isoformat())
+    args = ap.parse_args()
+    start = args.start
+    end = args.end
     now = datetime.now(timezone.utc)
     print(f"Cross-asset backfill :: {start} -> {end}")
     summary: list[tuple[str, int, str]] = []

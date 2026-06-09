@@ -64,6 +64,26 @@ REGISTRY: dict[str, Concept] = {c.code: c for c in [
     Concept("CAPEX", Statement.CASHFLOW, "Capital expenditures (usually negative on CF statement)"),
     Concept("FREE_CASH_FLOW", Statement.CASHFLOW, "FCF = CFO - |CAPEX|"),
     Concept("DIVIDENDS_PAID", Statement.CASHFLOW, "Dividends paid"),
+    # Wave 2 — extended concepts
+    Concept("EBITDA", Statement.INCOME, "Earnings Before Interest, Taxes, Depreciation, Amortization"),
+    Concept("DEPRECIATION_AMORT", Statement.CASHFLOW, "Depreciation and amortization"),
+    Concept("INTEREST_EXPENSE", Statement.INCOME, "Interest expense"),
+    Concept("TAX_EXPENSE", Statement.INCOME, "Income tax expense"),
+    Concept("SGA", Statement.INCOME, "Selling, general & administrative expense"),
+    Concept("RND_EXPENSE", Statement.INCOME, "Research & development expense"),
+    Concept("INVENTORY", Statement.BALANCE, "Inventory"),
+    Concept("RECEIVABLES", Statement.BALANCE, "Accounts receivable"),
+    Concept("PAYABLES", Statement.BALANCE, "Accounts payable"),
+    Concept("SHORT_TERM_DEBT", Statement.BALANCE, "Short-term debt / current borrowings"),
+    Concept("PROPERTY_PLANT_EQ", Statement.BALANCE, "Property, plant and equipment (net)"),
+    Concept("RETAINED_EARNINGS", Statement.BALANCE, "Retained earnings"),
+    Concept("GOODWILL", Statement.BALANCE, "Goodwill"),
+    Concept("INTANGIBLES", Statement.BALANCE, "Intangible assets (excluding goodwill)"),
+    Concept("MINORITY_INTEREST", Statement.BALANCE, "Non-controlling interest"),
+    Concept("PREFERRED_STOCK", Statement.BALANCE, "Preferred stock par"),
+    Concept("STOCK_BUYBACK", Statement.CASHFLOW, "Repurchase of common stock"),
+    Concept("STOCK_ISSUED", Statement.CASHFLOW, "Proceeds from issuance of common stock"),
+    Concept("WORKING_CAPITAL_CHG", Statement.CASHFLOW, "Change in working capital (from CFO adj.)"),
 ]}
 
 
@@ -96,6 +116,49 @@ DART_MAP: dict[str, list[str]] = {
     "CFF": ["ifrs-full_CashFlowsFromUsedInFinancingActivities", "재무활동현금흐름"],
     "CAPEX": ["dart_PaymentsForPropertyPlantAndEquipment"],
     "DIVIDENDS_PAID": ["ifrs-full_DividendsPaidClassifiedAsFinancingActivities"],
+    "DEPRECIATION_AMORT": [
+        "ifrs-full_DepreciationAndAmortisationExpense",
+        "dart_DepreciationAndAmortisationExpense",
+        "감가상각비와상각비",
+    ],
+    "INTEREST_EXPENSE": [
+        "ifrs-full_InterestExpense", "이자비용",
+    ],
+    "TAX_EXPENSE": [
+        "ifrs-full_IncomeTaxExpenseContinuingOperations",
+        "ifrs-full_TaxExpenseContinuingOperations",
+        "법인세비용",
+    ],
+    "SGA": [
+        "ifrs-full_SellingGeneralAndAdministrativeExpense",
+        "판매비와관리비",
+    ],
+    "RND_EXPENSE": [
+        "ifrs-full_ResearchAndDevelopmentExpense", "연구개발비",
+    ],
+    "INVENTORY": ["ifrs-full_Inventories", "재고자산"],
+    "RECEIVABLES": [
+        "ifrs-full_TradeAndOtherCurrentReceivables", "매출채권및기타채권",
+    ],
+    "PAYABLES": [
+        "ifrs-full_TradeAndOtherCurrentPayables", "매입채무및기타채무",
+    ],
+    "SHORT_TERM_DEBT": [
+        "ifrs-full_CurrentBorrowings", "단기차입금",
+    ],
+    "PROPERTY_PLANT_EQ": ["ifrs-full_PropertyPlantAndEquipment", "유형자산"],
+    "RETAINED_EARNINGS": ["ifrs-full_RetainedEarnings", "이익잉여금"],
+    "GOODWILL": ["ifrs-full_Goodwill", "영업권"],
+    "INTANGIBLES": ["ifrs-full_IntangibleAssetsOtherThanGoodwill", "무형자산"],
+    "MINORITY_INTEREST": [
+        "ifrs-full_NoncontrollingInterests", "비지배지분",
+    ],
+    "STOCK_BUYBACK": [
+        "ifrs-full_PaymentsForRepurchaseOfTreasuryShares", "자기주식의취득",
+    ],
+    "STOCK_ISSUED": [
+        "ifrs-full_ProceedsFromIssuingShares", "주식의발행",
+    ],
 }
 
 
@@ -121,6 +184,43 @@ SEC_MAP: dict[str, list[str]] = {
     "CFF": ["NetCashProvidedByUsedInFinancingActivities"],
     "CAPEX": ["PaymentsToAcquirePropertyPlantAndEquipment"],
     "DIVIDENDS_PAID": ["PaymentsOfDividendsCommonStock", "PaymentsOfDividends"],
+    "DEPRECIATION_AMORT": [
+        "DepreciationDepletionAndAmortization", "DepreciationAndAmortization",
+        "Depreciation",
+    ],
+    "INTEREST_EXPENSE": ["InterestExpense", "InterestExpenseDebt"],
+    "TAX_EXPENSE": ["IncomeTaxExpenseBenefit"],
+    "SGA": [
+        "SellingGeneralAndAdministrativeExpense",
+        "GeneralAndAdministrativeExpense",
+    ],
+    "RND_EXPENSE": ["ResearchAndDevelopmentExpense"],
+    "INVENTORY": ["InventoryNet"],
+    "RECEIVABLES": [
+        "AccountsReceivableNetCurrent", "ReceivablesNetCurrent",
+    ],
+    "PAYABLES": [
+        "AccountsPayableCurrent", "AccountsPayableAndAccruedLiabilitiesCurrent",
+    ],
+    "SHORT_TERM_DEBT": [
+        "ShortTermBorrowings", "DebtCurrent", "LongTermDebtCurrent",
+    ],
+    "PROPERTY_PLANT_EQ": ["PropertyPlantAndEquipmentNet"],
+    "RETAINED_EARNINGS": ["RetainedEarningsAccumulatedDeficit"],
+    "GOODWILL": ["Goodwill"],
+    "INTANGIBLES": [
+        "IntangibleAssetsNetExcludingGoodwill", "FiniteLivedIntangibleAssetsNet",
+    ],
+    "MINORITY_INTEREST": [
+        "MinorityInterest", "StockholdersEquityAttributableToNoncontrollingInterest",
+    ],
+    "PREFERRED_STOCK": ["PreferredStockValue"],
+    "STOCK_BUYBACK": [
+        "PaymentsForRepurchaseOfCommonStock", "PaymentsForRepurchaseOfEquity",
+    ],
+    "STOCK_ISSUED": [
+        "ProceedsFromIssuanceOfCommonStock", "StockIssuedDuringPeriodValueNewIssues",
+    ],
 }
 
 

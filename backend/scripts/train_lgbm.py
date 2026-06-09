@@ -114,12 +114,189 @@ FEATURE_COLS_CROSS_ASSET = [
     "corr_spy_63d",
 ]
 
-ALL_FEATURE_COLS = (
+FEATURE_COLS_EXTRA_TECH = [
+    # extra technical from features_advanced.py
+    "trix_15", "dpo_20", "tsi", "ppo", "pvo", "bop", "chande_20",
+    "vortex_plus", "vortex_minus", "vortex_spread",
+    "ult_osc", "coppock",
+    "px_vs_kama", "px_vs_hma20", "supertrend_dir",
+    "vol_gk_21d", "vol_gk_63d", "vol_yz_21d", "vol_yz_63d",
+    "bb_width_5d_chg",
+    "volume_z5d", "volume_z252d",
+    "sma50_sma200_dist", "sma50_sma200_5d_chg",
+    # candle patterns
+    "pat_hammer", "pat_shooting_star",
+    "pat_bull_engulf", "pat_bear_engulf",
+    "pat_doji", "pat_marubozu", "pat_spinning_top",
+    "pat_3_white_soldiers", "pat_3_black_crows", "pat_inside_day",
+]
+
+FEATURE_COLS_STAT = [
+    "corr_mkt_21d", "corr_mkt_63d", "corr_mkt_252d",
+    "beta_21d", "beta_63d", "beta_252d",
+    "alpha_63d",
+    "tracking_err_63d", "info_ratio_63d", "sortino_63d",
+    "ret_skew_63d", "ret_kurt_63d", "ret_skew_252d",
+    "autocorr_1", "autocorr_5", "autocorr_21",
+    "hurst_100",
+]
+
+FEATURE_COLS_MICRO = [
+    "close_range_strength", "opening_gap", "abs_opening_gap",
+    "range_atr_ratio", "effective_spread_proxy",
+    "dollar_volume", "dollar_volume_z21", "dollar_volume_z63",
+    "distinct_closes_21d",
+]
+
+FEATURE_COLS_FS_COMPOSITE = [
+    "piotroski_score", "altman_z", "beneish_m",
+]
+
+FEATURE_COLS_EVENT_CAL = [
+    "is_fomc_day", "days_to_fomc", "days_since_fomc",
+    "is_bok_day", "days_to_bok",
+    "is_nfp_day", "days_to_nfp",
+    "is_cpi_day", "days_to_cpi",
+    "is_pce_day", "is_gdp_day", "is_earnings_season",
+    "days_to_quarter_end", "days_to_year_end",
+]
+
+FEATURE_COLS_GDELT = [
+    "gdelt_tone_avg_7d", "gdelt_tone_avg_30d", "gdelt_tone_std_30d",
+    "gdelt_tone_momentum", "gdelt_pos_count_7d", "gdelt_neg_count_7d",
+    "gdelt_mention_count_7d",
+]
+
+# Wave 2 — Fundamental v2 (Valuation/Quality/Growth/Leverage/CF/Composites)
+FEATURE_COLS_FUND_V2 = [
+    # Valuation 12
+    "peg", "ps", "pfcf", "ev_sales", "ev_fcf", "ev_ebit",
+    "earnings_yield", "dividend_yield", "fcf_yield",
+    "shiller_pe_ttm", "p_tangible_bv", "buyback_yield",
+    # Quality 12
+    "roic", "roce", "op_margin", "net_margin", "ebitda_margin",
+    "asset_turnover", "inv_turnover", "recv_turnover",
+    "ccc_days", "earnings_quality", "accruals_ratio", "rnd_intensity",
+    # Growth 10
+    "rev_3y_cagr", "rev_5y_cagr", "eps_3y_cagr", "eps_5y_cagr",
+    "bv_3y_cagr", "fcf_3y_cagr", "div_3y_cagr",
+    "rev_qoq", "rev_accel", "sgr",
+    # Leverage 8
+    "net_debt_ebitda", "interest_coverage", "quick_ratio",
+    "cash_total_debt", "lt_debt_capital", "fcf_total_debt",
+    "goodwill_assets", "intangibles_assets",
+    # Cash Flow 7
+    "fcf_abs_log", "fcf_margin", "capex_sales", "capex_dep",
+    "delta_wc_assets", "cash_conv", "owner_earnings_yield",
+    # Composites 6
+    "magic_formula_score", "qmj_score", "ohlson_o",
+    "sloan_accruals_signal", "mohanram_g_score", "ncav_to_mcap",
+]
+
+# Wave 2 — Technical v2 (Ichimoku/Divergence/TTM/Pivot/OrderFlow/Accel/SR)
+FEATURE_COLS_TECH_V2 = [
+    # Ichimoku 8
+    "ichimoku_tenkan_dist", "ichimoku_kijun_dist",
+    "ichimoku_senkou_a_dist", "ichimoku_senkou_b_dist",
+    "ichimoku_chikou_dist", "ichimoku_cloud_thick",
+    "ichimoku_px_vs_kumo", "ichimoku_kumo_twist",
+    # Divergence 4
+    "rsi_divergence", "macd_divergence", "obv_divergence", "hidden_divergence",
+    # TTM Squeeze 3
+    "ttm_squeeze_on", "ttm_squeeze_duration", "ttm_squeeze_fire",
+    # Pivot 6
+    "pivot_std_dist", "pivot_r1_dist", "pivot_s1_dist",
+    "pivot_fib_r1_dist", "pivot_cam_h3_dist", "pivot_cam_l3_dist",
+    # Order Flow 5
+    "amihud_illiquidity", "kyle_lambda", "roll_spread",
+    "uptick_volume_ratio", "vpoc_dist_proxy",
+    # Indicator accel 5
+    "rsi_5d_chg", "macd_hist_5d_chg", "adx_5d_chg",
+    "bb_pctb_5d_chg", "volume_z_5d_chg",
+    # S/R 4
+    "dist_to_52w_high", "dist_to_52w_low",
+    "round_number_dist", "tests_at_resistance_21d",
+]
+
+# Wave 2 — Information v2 (news/insider/SEC text)
+FEATURE_COLS_INFO_V2 = [
+    # News v2 8
+    "news_velocity_7d", "news_spike_z_30d", "news_source_q_sent_7d",
+    "news_headline_body_div_7d", "news_topic_ma_7d", "news_topic_legal_30d",
+    "news_topic_earnings_7d", "news_topic_product_30d",
+    # Insider v2 6
+    "insider_cluster_buy_30d", "insider_ceo_cfo_cobuy_30d",
+    "insider_openmarket_ratio", "insider_avg_cost_dist",
+    "insider_exec_buy_weight_30d", "insider_dir_buy_weight_30d",
+    # SEC text 5 (NaN until edgar_10k_lm_sentiment.py runs)
+    "lm_sent_10k", "risk_factor_chg_pct", "fog_index_10k",
+    "going_concern_count_10k", "restatement_flag",
+]
+
+from training.features_cross_section import (
+    get_xrank_cols, get_interaction_cols, get_lag_cols,
+    apply_cross_section_features,
+)
+FEATURE_COLS_XRANK = get_xrank_cols()
+FEATURE_COLS_INTERACTION = get_interaction_cols()
+FEATURE_COLS_LAG = get_lag_cols()
+
+# Wave 3 — FinBERT sentiment aggregators
+FEATURE_COLS_FINBERT = [
+    "finbert_pos_avg_7d", "finbert_pos_avg_30d",
+    "finbert_neg_avg_7d", "finbert_neg_avg_30d",
+    "finbert_net_sent_7d", "finbert_net_sent_30d",
+    "finbert_sent_vol_30d", "finbert_strong_pos_30d", "finbert_strong_neg_30d",
+    "finbert_sent_momentum", "finbert_label_pos_ratio_7d", "finbert_n_articles_7d",
+]
+
+# Wave 3 — Wavelet/STL embeddings
+FEATURE_COLS_EMB = [
+    "wavelet_e0", "wavelet_e1", "wavelet_e2", "wavelet_e3", "wavelet_e4", "wavelet_e5",
+    "wavelet_hf_ratio",
+    "stl_trend_strength", "stl_seasonal_strength", "stl_resid_ratio",
+]
+
+# Wave 2E — Alt data (Short/Options/Wiki/Trends/Reddit/Patents/13F/GCAM)
+FEATURE_COLS_ALT_DATA = [
+    "short_ratio", "short_ratio_5d", "short_ratio_z30",
+    "short_ratio_chg_7d", "short_squeeze_score",
+    "pc_vol_ratio", "pc_oi_ratio", "iv_atm", "iv_skew",
+    "iv_term_slope", "unusual_count",
+    "wiki_views_7d", "wiki_views_z_30d", "wiki_views_chg_7d",
+    "trends_interest_7d", "trends_z_30d", "trends_chg_7d",
+    "reddit_mentions_7d", "reddit_score_avg_7d", "reddit_z_30d",
+    "patents_count_90d", "patents_avg_cites_90d", "patents_chg_yoy",
+    "inst_filing_count_q", "inst_filing_count_q_chg",
+    "gcam_fear_7d", "gcam_anger_7d", "gcam_econ_neg_7d", "gcam_polarity_30d",
+]
+
+# Wave 3 — Duplicate features (corr=1.0 in EDA), drop to avoid multicollinearity
+_DUPLICATE_FEATURES = {
+    "roc_10", "roc_21",                          # == ret_10d / ret_21d
+    "williams_r14",                              # == stoch_k14
+    "hidden_divergence",                          # == rsi_divergence
+    "opening_gap",                                # == gap_pct
+    "cash_conv",                                  # == earnings_quality
+    "sloan_accruals_signal",                      # == -accruals_ratio
+    "gdelt_mention_count_7d", "finbert_n_articles_7d",
+    "news_source_q_sent_7d",                      # all == news_count_7d
+    "days_to_year_end",                           # == doy
+}
+
+_RAW_ALL = (
     FEATURE_COLS_PRICE + FEATURE_COLS_FUND + FEATURE_COLS_INFO
     + FEATURE_COLS_DISC + FEATURE_COLS_INSIDER
     + FEATURE_COLS_MACRO + FEATURE_COLS_REGIME
     + FEATURE_COLS_CALENDAR + FEATURE_COLS_CROSS_ASSET
+    + FEATURE_COLS_EXTRA_TECH + FEATURE_COLS_STAT
+    + FEATURE_COLS_MICRO + FEATURE_COLS_FS_COMPOSITE
+    + FEATURE_COLS_EVENT_CAL + FEATURE_COLS_GDELT
+    + FEATURE_COLS_FUND_V2 + FEATURE_COLS_TECH_V2 + FEATURE_COLS_INFO_V2
+    + FEATURE_COLS_XRANK + FEATURE_COLS_INTERACTION + FEATURE_COLS_LAG
+    + FEATURE_COLS_ALT_DATA + FEATURE_COLS_EMB + FEATURE_COLS_FINBERT
 )
+ALL_FEATURE_COLS = [c for c in _RAW_ALL if c not in _DUPLICATE_FEATURES]
 
 
 def attach_clusters(df: pd.DataFrame, session) -> pd.DataFrame:
@@ -159,6 +336,10 @@ def main() -> None:
         close_panel = load_close_panel(s, market=args.market, start=start - timedelta(days=10), end=end)
         feat_df = attach_labels(feat_df, close_panel)
         feat_df = attach_clusters(feat_df, s)
+
+    # Wave 2D: apply cross-sectional rank + interactions + lags
+    # Done outside session because it's pure pandas
+    feat_df = apply_cross_section_features(feat_df)
 
     # Optionally restrict to active feature cols that actually exist
     cols_avail = [c for c in ALL_FEATURE_COLS if c in feat_df.columns]
