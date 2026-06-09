@@ -18,6 +18,25 @@ KR (KOSPI200 + KOSDAQ150) + US (S&P500 + NASDAQ-100) 주식을 대상으로
 
 ---
 
+## 데이터 현황 (2026-06-09 기준)
+
+| 영역 | 적재량 |
+|---|---|
+| 일봉 가격 | **2.06M 행** (KR 350 / US 515 종목, 2016~2026 10년) |
+| 재무 (DART/EDGAR) | **906K 행** — F 커버리지 KR 333/350, US 503/517 (잔여는 ETF/SPAC 구조적) |
+| 공시 | 379K (EDGAR insider/8-K/10-K/10-Q) |
+| 뉴스 | **1.44M 기사** + FinBERT 1.45M 점수 + mention 1.78M (※ 현재 ~7개월치, 10년 백필은 저장공간 확보 후 예정) |
+| 매크로 | 57개 시리즈 (금리/일드커브/TIPS/VIX/FX/원자재/신용스프레드 등) |
+| 숏볼륨·옵션·센티먼트 | short_volume 17.9M, options 513종목 스냅샷, GCAM/earnings/wiki 적재 |
+| **모듈 점수 (F/T/I)** | F 282K / T 288K / **I 67K** 행 — 3축 모두 historical 시계열 보유 |
+| 피처 | 442개 (가격/기술 50, 재무 v2 55, 정보 v2 19, cross-section 78, 매크로/cross-asset 등) |
+
+> 정보(I)축 historical은 LLM 분류(기사당 ~39초로 대량 비현실) 대신 전 뉴스 FinBERT 점수를
+> 집계하는 `scripts/backfill_information_history.py`로 산출. 자세한 수집 이력은
+> [WORK_LOG.md](WORK_LOG.md), 미실현·보류 항목은 [GAPS.md](GAPS.md) 참고.
+
+---
+
 ## 사전 환경
 
 | 항목 | 요구 |
@@ -56,7 +75,7 @@ psql -U postgres -c "CREATE DATABASE woonam OWNER woonam;"
 # TimescaleDB 확장 (시계열 테이블용)
 psql -U postgres -d woonam -c "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;"
 
-# 스키마 마이그레이션 (10개 revision)
+# 스키마 마이그레이션 (11개 revision)
 uv run alembic upgrade head
 ```
 
@@ -97,7 +116,7 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000
 | news.intraday.rss | 매 15분 | 주요 RSS 피드 |
 | news.daily.kr | 매일 06:45 KST | BIGKinds + Naver |
 | news.daily.global | 매일 01:00 UTC | GDELT |
-| information.classify.hourly | 매시 :15 | 미분류 기사 LLM 분류 |
+| information.classify.hourly | 매시 :15 | 미분류 최신 기사 LLM 분류 (점진 보강용; 대량 historical은 FinBERT 경로 사용) |
 | information.score.daily | 22:00 UTC | 정보 점수 산출 |
 | technical.score.daily | 21:30 UTC | 기술 점수 산출 |
 | fundamental.score.weekly | 토 03:00 UTC | 재무 비율 → 기본 점수 |
@@ -121,7 +140,7 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000
 
 ### 분석
 - **결정 감사** — 모든 결정의 이유, 모듈별 기여, 가중치, 게이트, 리스크, 실행 결과
-- **종목 분석** — F/T/I 점수 추이 + 30일 sparkline + decision 마커 + 뉴스 + 지수 멤버십
+- **종목 분석** — F/T/I 점수 추이 + 30일 sparkline + decision 마커 + 뉴스 + 지수 멤버십 (정보 점수는 LLM 분류 + 전 뉴스 FinBERT 점수 병행)
 - **시그널 스캔** — 현재 학습된 가중치로 dry-run, 다음 결정 사이클 예측 (BUY/SELL/HOLD 분포)
 - **학습 결과** — 클러스터별 가중치, 메트릭 (R², hit rate), 운영자 override 패널
 - **백테스트** — Replay (과거 결정 그대로) vs Re-scoring (현재 가중치 적용) + survivorship-bias 가드 + 저장된 실행 비교
@@ -186,22 +205,22 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 backend/
 ├── core/                       # 인프라 (config, db, auth, security, risk, types)
-│   ├── models/                 # ORM (15개 테이블)
+│   ├── models/                 # ORM 코어 스키마 (라이브 DB 총 43개 테이블 — 인제스트 스크립트가 alt-data 테이블 추가 생성)
 │   └── llm/                    # Ollama/Groq/Gemini 어댑터
 ├── markets/                    # 시장별 어댑터 (kr, us)
 ├── brokers/                    # mt5 (FX/금), paper, paper_equity (math)
 ├── data/                       # 인제스천 (price/fundamental/disclosures/news/macro/universe)
 ├── fundamental/                # 기본 분석 모듈 (재무 비율 → 점수)
 ├── technical/                  # 기술 분석 모듈 (다중 시그널, Red-Green 포함)
-├── information/                # 정보 분석 모듈 (LLM 분류기 → 점수)
+├── information/                # 정보 분석 모듈 (LLM 분류기 / FinBERT → 점수; historical은 scripts/backfill_information_history.py)
 ├── decision/                   # 합성 결정 엔진 (composite, gates, sizer, runner, drift)
 ├── training/                   # 클러스터 가중치 OLS 학습
 ├── analytics/                  # Attribution + data quality (pure math)
 ├── backtest/                   # Replay + Rescoring engines
 ├── scan/                       # 시그널 스캔 dry-run engine
-├── runtime/                    # APScheduler (16+ 잡)
-├── routes/                     # FastAPI 라우터 (26개)
-├── alembic/                    # DB 마이그레이션 (10개)
+├── runtime/                    # APScheduler (19개 잡)
+├── routes/                     # FastAPI 라우터 (27개)
+├── alembic/                    # DB 마이그레이션 (11개)
 └── tests/
     ├── unit/                   # 41개 파일, 520+ 테스트
     └── integration/            # DB 필요
