@@ -607,11 +607,47 @@ def _load_disclosure_panel(session: Session, market: str) -> dict[str, pd.DataFr
     return cache
 
 
+def _load_insider_panel_kr(session: Session) -> dict[str, pd.DataFrame]:
+    """KR insider panel from `insider_transactions` (DART 임원·주요주주
+    소유보고 — the Form-4 equivalent). price_per_share is unreliable
+    (mostly 0), so net_value uses signed share count as the value proxy.
+    transaction_type: 'P' = 취득(buy), 'S' = 처분(sell). Role strings
+    are Korean: 대표* → CEO, contains 이사 → director."""
+    from sqlalchemy import text
+    rows = list(session.execute(text(
+        "SELECT ticker, trade_date, transaction_type, shares, role "
+        "FROM insider_transactions WHERE market = 'KR'"
+    )).all())
+    if not rows:
+        return {}
+    out: list[dict] = []
+    for ticker, td, ttype, shares, role in rows:
+        shares = float(shares or 0)
+        is_buy = (ttype == "P")
+        role_s = str(role or "")
+        out.append({
+            "ticker": ticker,
+            "filing_date": td,
+            "net_value": shares if is_buy else -shares,
+            "n_buys": 1 if is_buy else 0,
+            "n_sells": 0 if is_buy else 1,
+            "is_ceo": 1 if "대표" in role_s else 0,
+            "is_director": 1 if "이사" in role_s else 0,
+        })
+    df = pd.DataFrame(out)
+    df["filing_date"] = pd.to_datetime(df["filing_date"])
+    return {t: g for t, g in df.groupby("ticker")}
+
+
 def _load_insider_panel(session: Session, market: str) -> dict[str, pd.DataFrame]:
     """Parsed Form 4 bodies (body_fetched=True). Cache by ticker."""
     import json as _json
     if market in _insider_cache:
         return _insider_cache[market]
+    if market == "KR":
+        cache = _load_insider_panel_kr(session)
+        _insider_cache[market] = cache
+        return cache
     if market != "US":
         _insider_cache[market] = {}
         return {}
