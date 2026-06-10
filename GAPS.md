@@ -250,6 +250,18 @@ backend/scripts/:
 - ⏸️ **13F holdings** — 보유내역 파싱+OpenFIGI CUSIP매핑 신규코드 필요, feature 2개 저ROI → user 승인 하에 보류.
 - ⏸️ **10년 뉴스 백필** — 저장공간(~5TB) 확보 후 진행(user 결정). GDELT=BigQuery 5.5TB(무료 월1TB), KR뉴스=무료로 막힘. → "보류 결정" 섹션 + memory `project_news_history_plan` 참조.
 
+### 0.14 피처엔지니어링 면밀검토 + 버그수정 (2026-06-09~10)
+
+샘플 매트릭스 실측 결과 무신호 US 43/KR 76 → 검토 후 핵심 버그/얕음 해소. 상세 WORK_LOG 2026-06-09~10.
+
+- ✅ **10년 F/T 모듈점수 백필** — `backfill_ft_history_parallel.py`(20워커, OOM-free). T KR **113,858→710,202**(10년), T US 209k, F US 1.06M, F KR 392k.
+- ✅ **버그: KR daily_prices.as_of_ts 미래스탬프** 정정(trade_date+16h) → KR 기술백필 historical 가능해짐.
+- ✅ **버그: regime 피처 dead**(market_regime NEUTRAL 6행+라벨불일치) → `backfill_regime_history.py`로 HMM 5-state 882일 영속화 + load_regime_features 소문자매핑 + one-hot 3추가. regime_conf/risk_on/risk_off 부활.
+- ✅ **버그: pb dead**(SHARES_OUTSTANDING 미추출) → NET_INCOME/EPS로 shares 유도, pb 100% 부활.
+- ✅ **매크로 심화 18피처**(범주B, raw 57시리즈 중 13→활용 확대): TIPS/breakeven/HY신용/copper/WTI/natgas/yield곡률/FX/VIX-percentile/VRP/funding-stress 전부 100% non-null. `ALL_FEATURE_COLS` 442→462.
+- ✅ cross-section 학습경로 편입 확인(train_lgbm+cache 둘다).
+- ⚪ 잔여 구조적결손: 현금흐름 concept 미추출(재백필 필요), insider-v2, 죽은 alt-data(trends/reddit/patents/13F 빈테이블), KR 구조부재(Form-4/FINRA/EDGAR/GDELT 무료등가물 없음).
+
 ---
 
 ## A. 데이터 / 피처

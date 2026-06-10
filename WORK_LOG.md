@@ -678,6 +678,50 @@ WORK_LOG가 06-02에서 멈춰 있어 실제 DB 상태와 괴리. 직접 쿼리�
 
 ---
 
+## 2026-06-09~10 — FTI 피처엔지니어링 면밀검토 + 버그수정 + 매크로 심화 + 10년 F/T 백필
+
+근거: `scripts/backfill_ft_history_parallel.py`(신규), `scripts/backfill_regime_history.py`(신규), `training/features.py`(load_macro_features/load_regime_features/compute_fundamental_features), `scripts/train_lgbm.py`(FEATURE_COLS_MACRO/REGIME).
+
+### 면밀 검토 (샘플 매트릭스 실측 + 코드분석)
+
+`build_feature_matrix` 375컬럼 실측 → 무신호(완전NULL+항상0): US 43 / KR 76. 4범주 분류:
+- A 진짜버그, B 매크로 얕음, C 죽은 alt-data(외부차단), D KR 구조적 데이터부재.
+
+### 10년 F/T 모듈점수 백필 (저장공간 무관 — module_scores는 수GB)
+
+- ✅ `backfill_ft_history_parallel.py` 신규 — 날짜 병렬화(20워커), score_market은 종목별 lookback만 로드라 OOM-free(RAM 128GB 중 4GB 미만 사용). 1차 18.5분.
+- ✅ **버그1: KR `daily_prices.as_of_ts`가 전부 미래스탬프**(2024-12~2026-06, 2018년 봉도 as_of=2026) → look-ahead 가드가 과거봉 가려 KR 기술백필 abstain → T KR 17개월에 멈춤. 정정(trade_date+16h UTC, 738,758행) 후 재백필.
+- ✅ 결과: **T KR 113,858 → 710,202행(10년)**, T US 209,148(10년), F US 1,063,124, F KR 392,274. (KR F는 DART 재무깊이로 일부 abstain — 별도 KR재무 10년수집 과제)
+
+### 버그수정
+
+- ✅ **버그2: regime 피처 완전고장** — market_regime에 NEUTRAL 6행뿐(HMM 출력 미영속), 코드는 RISK_ON/OFF(대문자) 탐색 → 항상 0. `backfill_regime_history.py` 신규(HMM 5-state를 882일×2시장 영속화, 라벨분포 neutral39/risk_on·calm_bull각25/risk_off10/crisis1%) + `load_regime_features`를 소문자 5-state 매핑으로 수정 + one-hot 3개(calm_bull/neutral/crisis) 추가. 검증: regime_conf 100%, regime_risk_off 40%, neutral 60% nonzero.
+- ✅ **버그3: pb(주가순자산) 양시장 dead** — `SHARES_OUTSTANDING` 개념이 EDGAR/DART에서 미추출. NET_INCOME/EPS로 shares 유도하도록 `compute_fundamental_features` 수정 → pb 100% nonzero(AAPL P/B≈59.6 정상).
+
+### 매크로 심화 (범주B — raw 57시리즈 중 13개만 쓰던 것 확장)
+
+- ✅ `load_macro_features`에 **18 신규피처**: real_yield_10y(+chg), breakeven_10y(+chg), hy_credit_spread(+5d/21d chg), copper_63d_ret, wti_21d_ret, natgas_21d_ret, yield_curve_5_30, yield_curvature(2·10Y−5Y−30Y), usdkrw/usdjpy_21d_chg, vix_pctile_252d, vol_risk_premium(VIX−realized), funding_stress. **전부 100% non-null 검증.** (US2Y/3M은 2024+만 있어 2-10커브 대신 5/10/30 사용)
+- ✅ `ALL_FEATURE_COLS` **442 → 462** (+macro 17 +regime 3, 1중복제거).
+
+### 검증된 사항
+
+- ✅ cross-section(percentile/interaction/lag)은 `train_lgbm.py:353` + `cache_feature_matrix_v4.py:125` 둘 다 `apply_cross_section_features` 호출 → 학습경로 정상편입(검토 의심 해소).
+- ✅ FinBERT/info_v2 뉴스피처 살아있음(finbert_* 64-65% nonzero) — v1 info_feat(news_sentiment/impact/pos/neg)만 LLM의존으로 dead, FinBERT가 대체커버.
+
+### 남은 구조적 결손 (재수집/별도과제, 버그 아님)
+
+- ⚪ **현금흐름 피처**(owner_earnings_yield, fcf_3y_cagr, fcf_total_debt, capex_*): EDGAR/DART concept_map에 OPERATING_CASH_FLOW/CAPEX/FCF 미포함 → concepts.py 확장 + 재무 재백필 필요.
+- ⚪ **insider-v2**(cluster_buy/ceo_cfo_cobuy 등): Form-4 body 파생, US 조인/희소.
+- ⚪ **죽은 alt-data**(trends/reddit/patents/13F): 외부 무료차단으로 빈 테이블 → 0-fill(LightGBM이 상수피처 무시하므로 무해, 데이터 들어오면 자동활성).
+- ⚪ **KR 구조적 부재**(~40피처): KR엔 Form-4 insider/FINRA short/EDGAR 8K·10K·SEC텍스트/GDELT 무료등가물 없음. DART insider 등 일부만 추후 대체가능.
+
+### 다음 단계
+
+- (저장소 확보 후) 10년 뉴스 → I축 10년 + regime 입력(US2Y) 10년 백필 → regime/yield_curve_2_10도 10년 확장
+- 462 feature로 전 클러스터 재학습
+
+---
+
 ## 보류 결정 (status=proposed)
 
 - ⏸️ **10년치 뉴스 백필 — 저장공간 확보 후 진행**(user 2026-06-09 결정). 현황: 뉴스가 ~6~7개월치(GDELT 영어 141.8만 2025-12~2026-06, Naver 한국어 2.3만)뿐이라 I축 historical이 F/T(10년)에 비해 빈약.

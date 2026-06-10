@@ -96,9 +96,20 @@ FEATURE_COLS_MACRO = [
     "fedfunds", "cpi_us_yoy", "m2_us_yoy",
     "unrate_us", "unrate_us_chg",
     "kr_base_rate", "cpi_kr_yoy",
+    # Wave 4 — macro/cross-asset depth
+    "real_yield_10y", "real_yield_21d_chg",
+    "breakeven_10y", "breakeven_21d_chg",
+    "hy_credit_spread", "hy_credit_5d_chg", "hy_credit_21d_chg",
+    "copper_63d_ret", "wti_21d_ret", "natgas_21d_ret",
+    "yield_curve_5_30", "yield_curvature",
+    "usdkrw_21d_chg", "usdjpy_21d_chg",
+    "vix_pctile_252d", "vol_risk_premium", "funding_stress",
 ]
 
-FEATURE_COLS_REGIME = ["regime_risk_on", "regime_risk_off", "regime_conf"]
+FEATURE_COLS_REGIME = [
+    "regime_risk_on", "regime_risk_off", "regime_conf",
+    "regime_calm_bull", "regime_neutral", "regime_crisis",
+]
 
 FEATURE_COLS_CALENDAR = [
     "dow", "dom", "doq", "doy", "month", "quarter",

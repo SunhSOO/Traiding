@@ -342,6 +342,12 @@ def compute_fundamental_features(
         # TTM-ish proxy: 4 × latest Q (rough but cheap)
         if eps and eps != 0 and price and not np.isnan(price):
             feat.at[dt, "pe_ttm"] = float(price) / (eps * 4)
+        # SHARES_OUTSTANDING isn't reliably extracted from EDGAR/DART, so
+        # derive share count from NET_INCOME / EPS (EPS := NI / shares).
+        # Works for losses too (both negative -> positive ratio).
+        if (not shares or shares <= 0) and ni and eps and eps != 0:
+            derived = ni / eps
+            shares = derived if derived > 0 else shares
         if equity and equity > 0 and shares and shares > 0 and price and not np.isnan(price):
             book_per_share = equity / shares
             if book_per_share > 0:
@@ -728,6 +734,11 @@ def load_macro_features(session: Session, dates: pd.DatetimeIndex) -> pd.DataFra
         "RATE_US_10Y", "RATE_US_2Y", "RATE_US_3M", "FEDFUNDS_US",
         "CPI_US", "M2_US", "UNRATE_US",
         "RATE_KR_BASE", "CPI_KR",
+        # Wave 4 — macro/cross-asset depth (raw already in macro_series)
+        "RATE_US_10Y_TIPS", "BREAKEVEN_INFLATION_10Y", "HY_CREDIT_SPREAD",
+        "COPPER", "WTI_OIL", "NAT_GAS",
+        "RATE_US_5Y", "RATE_US_30Y",
+        "FX_USDKRW", "FX_USDJPY",
     ]
     stmt = (
         select(MacroSeries.series_code, MacroSeries.ts, MacroSeries.value)
@@ -774,6 +785,52 @@ def load_macro_features(session: Session, dates: pd.DatetimeIndex) -> pd.DataFra
         feat["kr_base_rate"] = panel["RATE_KR_BASE"]
     if "CPI_KR" in panel:
         feat["cpi_kr_yoy"] = panel["CPI_KR"].pct_change(12)
+
+    # ── Wave 4 — macro/cross-asset depth ──────────────────────────────
+    # Real yield (TIPS) — level + momentum. Falling real yields = risk-on.
+    if "RATE_US_10Y_TIPS" in panel:
+        feat["real_yield_10y"] = panel["RATE_US_10Y_TIPS"]
+        feat["real_yield_21d_chg"] = panel["RATE_US_10Y_TIPS"].diff(21)
+    # Inflation breakeven — level + momentum.
+    if "BREAKEVEN_INFLATION_10Y" in panel:
+        feat["breakeven_10y"] = panel["BREAKEVEN_INFLATION_10Y"]
+        feat["breakeven_21d_chg"] = panel["BREAKEVEN_INFLATION_10Y"].diff(21)
+    # High-yield credit spread — widening = risk-off (strong signal).
+    if "HY_CREDIT_SPREAD" in panel:
+        feat["hy_credit_spread"] = panel["HY_CREDIT_SPREAD"]
+        feat["hy_credit_5d_chg"] = panel["HY_CREDIT_SPREAD"].diff(5)
+        feat["hy_credit_21d_chg"] = panel["HY_CREDIT_SPREAD"].diff(21)
+    # Dr. Copper — leading growth proxy (monthly series; ffill'd).
+    if "COPPER" in panel:
+        feat["copper_63d_ret"] = panel["COPPER"].pct_change(63)
+    # Energy — direct WTI / nat-gas momentum (not just the USO/sector ETF).
+    if "WTI_OIL" in panel:
+        feat["wti_21d_ret"] = panel["WTI_OIL"].pct_change(21)
+    if "NAT_GAS" in panel:
+        feat["natgas_21d_ret"] = panel["NAT_GAS"].pct_change(21)
+    # Yield-curve shape from the 10y-deep tenors (5Y/10Y/30Y; 2Y/3M are
+    # only 2024+). Litterman-Scheinkman level/slope/curvature analog.
+    if "RATE_US_5Y" in panel and "RATE_US_30Y" in panel:
+        feat["yield_curve_5_30"] = panel["RATE_US_30Y"] - panel["RATE_US_5Y"]
+    if all(c in panel for c in ("RATE_US_5Y", "RATE_US_10Y", "RATE_US_30Y")):
+        feat["yield_curvature"] = (2 * panel["RATE_US_10Y"]
+                                   - panel["RATE_US_5Y"] - panel["RATE_US_30Y"])
+    # FX momentum beyond DXY — won/yen carry-relevant.
+    if "FX_USDKRW" in panel:
+        feat["usdkrw_21d_chg"] = panel["FX_USDKRW"].pct_change(21)
+    if "FX_USDJPY" in panel:
+        feat["usdjpy_21d_chg"] = panel["FX_USDJPY"].pct_change(21)
+    # VIX percentile in trailing 252d — regime-relative fear (rank beats level).
+    if "VIX" in panel:
+        feat["vix_pctile_252d"] = panel["VIX"].rolling(252, min_periods=63).rank(pct=True)
+    # Volatility Risk Premium — implied (VIX) minus realised SP500 vol.
+    if "VIX" in panel and "IDX_SP500_FRED" in panel:
+        rv = (panel["IDX_SP500_FRED"].pct_change()
+              .rolling(21, min_periods=10).std() * (252 ** 0.5) * 100.0)
+        feat["vol_risk_premium"] = panel["VIX"] - rv
+    # Funding stress — 3M T-bill minus fed funds (short history, guarded).
+    if "RATE_US_3M" in panel and "FEDFUNDS_US" in panel:
+        feat["funding_stress"] = panel["RATE_US_3M"] - panel["FEDFUNDS_US"]
     return feat
 
 
@@ -784,16 +841,24 @@ def load_regime_features(session: Session, market: str, dates: pd.DatetimeIndex)
         .order_by(MarketRegime.ts)
     )
     rows = list(session.execute(stmt).all())
-    feat = pd.DataFrame(index=dates, columns=["regime_risk_on", "regime_risk_off", "regime_conf"], dtype=float)
+    cols = ["regime_risk_on", "regime_risk_off", "regime_conf",
+            "regime_calm_bull", "regime_neutral", "regime_crisis"]
+    feat = pd.DataFrame(index=dates, columns=cols, dtype=float)
     if not rows:
-        return feat.fillna({"regime_risk_on": 0, "regime_risk_off": 0, "regime_conf": 0})
+        return feat.fillna(0.0)
     df = pd.DataFrame(rows, columns=["ts", "label", "conf"])
     df["ts"] = pd.to_datetime(df["ts"])
     df["conf"] = df["conf"].astype(float)
     df = df.set_index("ts").reindex(dates, method="ffill")
-    feat["regime_risk_on"] = (df["label"] == "RISK_ON").astype(float)
-    feat["regime_risk_off"] = (df["label"] == "RISK_OFF").astype(float)
+    # HMM 5-state labels are lowercase: calm_bull/risk_on/neutral/risk_off/crisis.
+    # (Also tolerate legacy uppercase RISK_ON/RISK_OFF.)
+    lab = df["label"].astype(str).str.lower()
+    feat["regime_risk_on"] = lab.isin(["risk_on", "calm_bull"]).astype(float)
+    feat["regime_risk_off"] = lab.isin(["risk_off", "crisis"]).astype(float)
     feat["regime_conf"] = df["conf"].fillna(0.0)
+    feat["regime_calm_bull"] = (lab == "calm_bull").astype(float)
+    feat["regime_neutral"] = (lab == "neutral").astype(float)
+    feat["regime_crisis"] = (lab == "crisis").astype(float)
     return feat
 
 
