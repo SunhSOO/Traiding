@@ -708,12 +708,15 @@ WORK_LOG가 06-02에서 멈춰 있어 실제 DB 상태와 괴리. 직접 쿼리�
 - ✅ cross-section(percentile/interaction/lag)은 `train_lgbm.py:353` + `cache_feature_matrix_v4.py:125` 둘 다 `apply_cross_section_features` 호출 → 학습경로 정상편입(검토 의심 해소).
 - ✅ FinBERT/info_v2 뉴스피처 살아있음(finbert_* 64-65% nonzero) — v1 info_feat(news_sentiment/impact/pos/neg)만 LLM의존으로 dead, FinBERT가 대체커버.
 
-### 남은 구조적 결손 (재수집/별도과제, 버그 아님)
+### 남은 구조적 결손 — 후속 처리 결과 (2026-06-10 추가)
 
-- ⚪ **현금흐름 피처**(owner_earnings_yield, fcf_3y_cagr, fcf_total_debt, capex_*): EDGAR/DART concept_map에 OPERATING_CASH_FLOW/CAPEX/FCF 미포함 → concepts.py 확장 + 재무 재백필 필요.
-- ⚪ **insider-v2**(cluster_buy/ceo_cfo_cobuy 등): Form-4 body 파생, US 조인/희소.
-- ⚪ **죽은 alt-data**(trends/reddit/patents/13F): 외부 무료차단으로 빈 테이블 → 0-fill(LightGBM이 상수피처 무시하므로 무해, 데이터 들어오면 자동활성).
-- ⚪ **KR 구조적 부재**(~40피처): KR엔 Form-4 insider/FINRA short/EDGAR 8K·10K·SEC텍스트/GDELT 무료등가물 없음. DART insider 등 일부만 추후 대체가능.
+처리 후 재분류. **"구조부재"로 적었던 것 중 KR insider는 실은 배선버그였고 수정함.**
+
+- ✅ **KR insider 배선 수정** — `_load_insider_panel`이 KR은 무조건 빈 패널 반환하던 버그. `insider_transactions`(DART 임원·주요주주 소유보고 11,802행/327종목 = Form-4 등가물, 이미 적재돼 있었음)를 `_load_insider_panel_kr`로 연결. 검증: insider_net_value_30d **89% nonzero**(삼성전자 등), ~7 KR insider 피처 부활. 커밋 84c8d15.
+- 🟡 **현금흐름 — 대부분 이미 존재**(오판 정정): CFO US 30k/KR 3.8k, CAPEX US 23k, CFI 양시장 모두 적재돼 있음. fcf_yield 등 작동 중. 실제 dead는 fcf_3y_cagr/fcf_total_debt/owner_earnings(3 US 파생 edge, 3y이력/공식 의존) + **KR capex-flow**(DART가 현금흐름표 PPE취득 미수집, raw엔 PPE 잔액만) → minor, 재수집 저ROI.
+- ⛔ **죽은 alt-data 확정 차단**: trends(Google 429), reddit(크리덴셜 없음), patents(PatentsView 엔드포인트 폐기·API키 필요), 13F(OpenFIGI+XML 신규코드 저ROI). 빈 테이블 0-fill, LightGBM이 상수 무시하므로 무해.
+- ⛔ **KR 공매도 차단 확정**: pykrx가 이제 KRX 로그인(KRX_ID/PW) 요구 → 크리덴셜 없어 실패. KRX 별도 인증 필요.
+- ⚪ **KR 진짜 구조부재**: EDGAR 8K·10K·SEC텍스트, GDELT/GCAM(영어) — KR 무료등가물 없음. (insider는 위에서 해결됨)
 
 ### 다음 단계
 
