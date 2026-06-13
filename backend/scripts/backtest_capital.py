@@ -52,6 +52,40 @@ def close_panel(market: str, tickers, d0, d1) -> pd.DataFrame:
     return p.pivot_table(index="date", columns="ticker", values="close", aggfunc="first")
 
 
+def _build_period(market: str, start: str, end: str) -> pd.DataFrame:
+    """Build the feature matrix for an arbitrary past window [start, end]
+    (ISO). Caches both the raw build and the labelled+cross-section matrix
+    so re-runs skip the slow build. Lets us backtest historical bear markets
+    (2020 COVID, 2022) using the 10y price/fundamental data — news/regime
+    features are NaN/0 back then but they're not in the model's top-50."""
+    from datetime import date, timedelta
+    cache = Path(f"var/_bt_period_{market}_{start}_{end}.parquet")
+    if cache.exists():
+        print(f"[bt] loading period cache {cache}", flush=True)
+        return pd.read_parquet(cache)
+    from core.db import session_scope as _ss
+    from training.features import build_feature_matrix
+    from training.features_cross_section import apply_cross_section_features
+    from training.labels_multi import attach_labels, load_close_panel
+    s0, e0 = date.fromisoformat(start), date.fromisoformat(end)
+    raw = Path(f"var/_bt_raw_{market}_{start}_{end}.parquet")
+    if raw.exists():
+        df = pd.read_parquet(raw)
+    else:
+        print(f"[bt] building {market} {s0}..{e0} (slow) ...", flush=True)
+        with _ss() as s:
+            df, _ = build_feature_matrix(s, market=market, start=s0, end=e0)
+        df.to_parquet(raw)
+        print(f"[bt] raw build rows={len(df)} -> {raw}", flush=True)
+    with _ss() as s:
+        close = load_close_panel(s, market=market, start=s0 - timedelta(days=10), end=e0)
+    df = attach_labels(df, close)
+    df = apply_cross_section_features(df)
+    df.to_parquet(cache)
+    print(f"[bt] period matrix rows={len(df)} cols={df.shape[1]} -> {cache}", flush=True)
+    return df
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--market", default="US")
@@ -64,10 +98,18 @@ def main() -> None:
     ap.add_argument("--full", action="store_true", help="walk the whole period (burn-in then to end)")
     ap.add_argument("--regime-gate", action="store_true",
                     help="go to CASH when market regime is risk_off/crisis (bear defense)")
+    ap.add_argument("--build-start", type=str, default=None,
+                    help="build matrix for a past window [build-start, build-end] (ISO)")
+    ap.add_argument("--build-end", type=str, default=None)
+    ap.add_argument("--vix-gate", type=float, default=None,
+                    help="proxy bear defense: cash when VIX percentile(252d) >= this (e.g. 0.8)")
     args = ap.parse_args()
 
     cost = args.cost if args.cost is not None else (0.003 if args.market == "KR" else 0.001)
-    df = pd.read_parquet(f"var/_fs_ab_{args.market}_365.parquet")
+    if args.build_start:
+        df = _build_period(args.market, args.build_start, args.build_end)
+    else:
+        df = pd.read_parquet(f"var/_fs_ab_{args.market}_365.parquet")
     df["date"] = pd.to_datetime(df["date"])
     dates = np.sort(df["date"].unique())
     feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
@@ -119,9 +161,15 @@ def main() -> None:
         atR["pct"] = atR["score"].rank(pct=True)
         picks = atR[atR["pct"] >= 1 - args.decile]["ticker"].tolist()
 
-        # Bear defense: risk_off / crisis -> hold CASH this period (no position).
+        # Bear defense: risk_off / crisis (HMM, 2024+) OR high VIX percentile
+        # (proxy, available 10y) -> hold CASH this period (no position).
         rg = regime_at(R)
         gated = args.regime_gate and rg in ("risk_off", "crisis")
+        if args.vix_gate is not None and "vix_pctile_252d" in atR.columns and len(atR):
+            vp = float(atR["vix_pctile_252d"].iloc[0])
+            if pd.notna(vp) and vp >= args.vix_gate:
+                gated = True
+                rg = f"vixpct={vp:.2f}"
         if gated:
             picks = []
 
