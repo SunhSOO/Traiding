@@ -103,6 +103,10 @@ def main() -> None:
     ap.add_argument("--build-end", type=str, default=None)
     ap.add_argument("--vix-gate", type=float, default=None,
                     help="proxy bear defense: cash when VIX percentile(252d) >= this (e.g. 0.8)")
+    ap.add_argument("--long-short", action="store_true",
+                    help="market-neutral: long top decile, SHORT bottom decile (can profit in bear)")
+    ap.add_argument("--borrow", type=float, default=0.0,
+                    help="extra per-rebalance short borrow cost frac (long-short only)")
     args = ap.parse_args()
 
     cost = args.cost if args.cost is not None else (0.003 if args.market == "KR" else 0.001)
@@ -182,12 +186,25 @@ def main() -> None:
                     if pd.notna(a) and pd.notna(b) and a > 0:
                         r.append(b/a - 1)
             return float(np.mean(r)) if r else 0.0
-        port = 0.0 if gated else ret(picks)          # cash earns 0% (ignore rate)
         allr = ret([c for c in px.columns])
-        cash *= (1 + port) * (1.0 if gated else (1 - cost))
+        if args.long_short and not gated:
+            # Market-neutral: long top decile, short bottom decile. Return is
+            # the rank SPREAD (long - short). Net-0 market exposure -> can be
+            # positive even when the market falls. 2 legs -> 2x cost + borrow.
+            shorts = atR[atR["pct"] <= args.decile]["ticker"].tolist()
+            long_r, short_r = ret(picks), ret(shorts)
+            port = (long_r - short_r) - 2 * cost - args.borrow
+        else:
+            port = 0.0 if gated else ret(picks)      # cash earns 0% (ignore rate)
+            if not gated:
+                port -= cost
+        cash *= (1 + port)
         bench *= (1 + allr)
         log.append((pd.Timestamp(R).date(), pd.Timestamp(E).date(), len(picks), port, allr, cash))
-        tag = f"  [CASH:{rg}]" if gated else ("" if not args.regime_gate else f"  [{rg}]")
+        tag = (f"  [CASH:{rg}]" if gated else
+               (f"  [{rg}]" if args.regime_gate or args.vix_gate else ""))
+        if args.long_short and not gated:
+            tag = f"  [L/S {long_r*100:+.1f}/{short_r*100:+.1f}]"
         print(f"  [{j+1:>2}] {pd.Timestamp(R).date()}->{pd.Timestamp(E).date()}  "
               f"picks={len(picks):>3}  port={port*100:+6.2f}%  bench={allr*100:+6.2f}%  "
               f"cash={cash:,.0f}{tag}", flush=True)
