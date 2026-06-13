@@ -804,9 +804,17 @@ joblib 번들 = rank모델(top50) + quantile(q10/q50/q90 목표가) + conformal 
 - **목표가** = last×(1+q50), **신뢰밴드** = last×(1+[q10−Q, q90+Q]) (보정됨)
 - **사이즈** = rank 신뢰도 × 분산 × regime 스케일(decision layer)
 
+### 추론 배선 완료 (`decision/production_inference.py`)
+- `ProductionRecommender`: 번들 로드 → 종목별 rank_score/rank_pct + pred_ret(q50) + **목표가**=last×(1+q50) + **보정밴드**=last×(1+[q10−Q, q90+Q]) + **action** + **size_fraction**(base×rank신뢰도×regime, 캡).
+- **신호 일관성 수정**: action은 rank모델(상대)+return모델(절대 q50 부호)이 **합의**할 때만 BUY/SELL(둘이 충돌 가능 — bottom-rank인데 q50 양수 케이스 제거). KR 공매도 제약상 BUY는 q50>0 필수.
+- 스모크: US TOP BUY=LITE/INTC/LRCX/AMAT(반도체), 목표가+밴드 산출. KR TOP BUY=322000/041960 등. SELL은 전부 음수수익+bottom-rank로 일관.
+
+### 글로벌 vs per-cluster 결정
+- **글로벌 유지** — ~1년 데이터를 클러스터로 쪼개면 과적합 위험(글로벌 top50이 walk-forward IC US+0.28/KR+0.21로 견고). per-cluster는 10년 데이터 확보 후 refinement.
+
 ### 다음
-- top50+rank로 **전 클러스터** 프로덕션 학습(현재 글로벌) + 모델레지스트리 통합
-- decision layer가 production_{market}.joblib 로드하도록 배선
+- decision/runner를 production 번들 추론과 통합(현 composite F/T/I와 병행/대체 결정)
+- 모델레지스트리 통합 + 페이퍼 시뮬로 실측 검증
 - (저장소) 10년 데이터로 regime 교차 walk-forward
 
 ---
