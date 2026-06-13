@@ -776,6 +776,41 @@ WORK_LOG가 06-02에서 멈춰 있어 실제 DB 상태와 괴리. 직접 쿼리�
 
 ---
 
+## 2026-06-11~13 — Conformal 보정 + 프로덕션 번들 + US 확인
+
+### 피처선택 A/B — US 확인 (KR과 동일 결론)
+| 구성 | US ret IC | US rank IC |
+|---|---|---|
+| 전 462 | 0.046 | 0.094 |
+| top50 | 0.107 | 0.112 |
+| top50+reg | **0.113** | **0.118** |
+- **top50이 양 시장 모두 압승** (US 둘 다 ~2배). 과적합 가설 두 시장 견고 입증. US는 원수익률도 예측가능(KR과 달리).
+
+### Conformal 보정 (`conformal_ab.py`) — 목표가 밴드 정직화
+- CQR(Romano 2019): 캘리브레이션셋 잔차로 밴드 확장. KR coverage **0.61→0.84**(목표 0.80 달성). 밴드 q50±30%(KR)·±19%(US 보정 후 ±tighter).
+
+### 프로덕션 번들 (`train_production.py`) — 검증된 설정 배포
+joblib 번들 = rank모델(top50) + quantile(q10/q50/q90 목표가) + conformal Q + walk-forward 메트릭. 최종모델은 전체데이터 학습.
+| 시장 | rank IC (walk-forward) | band coverage | conformal Q | top피처 성격 |
+|---|---|---|---|---|
+| **US** | **+0.277** (std0.06, 100%양수) | 0.805 | +0.039(타이트) | 펀더멘털(bv/eps_cagr/quick_ratio) |
+| **KR** | **+0.207** (std0.06, 100%양수) | 0.843 | +0.127(넓음) | 기술·유동성(STL/amihud/vol) |
+- **핵심**: walk-forward(expanding, 라이브와 동일) rank IC가 양 시장 6구간 전부 양수, 평균 0.21~0.28 → 견고한 횡단면 엣지. (단일분할 IC는 −0.02~+0.28로 노이즈 → walk-forward가 정직값.)
+- 시장별 신호구조 상이: US=펀더멘털, KR=기술/유동성.
+- ⚠️ 데이터가 ~1년(2025-06~2026-06)이라 단일 regime 내 검증. 10년 데이터 확보 시 regime 교차검증 필요.
+
+### 자동매매 결정 산출 (번들로 가능)
+- 종목별 **rank** → 횡단면 선택(top decile long, bottom 회피/short)
+- **목표가** = last×(1+q50), **신뢰밴드** = last×(1+[q10−Q, q90+Q]) (보정됨)
+- **사이즈** = rank 신뢰도 × 분산 × regime 스케일(decision layer)
+
+### 다음
+- top50+rank로 **전 클러스터** 프로덕션 학습(현재 글로벌) + 모델레지스트리 통합
+- decision layer가 production_{market}.joblib 로드하도록 배선
+- (저장소) 10년 데이터로 regime 교차 walk-forward
+
+---
+
 ## 보류 결정 (status=proposed)
 
 - ⏸️ **10년치 뉴스 백필 — 저장공간 확보 후 진행**(user 2026-06-09 결정). 현황: 뉴스가 ~6~7개월치(GDELT 영어 141.8만 2025-12~2026-06, Naver 한국어 2.3만)뿐이라 I축 historical이 F/T(10년)에 비해 빈약.
