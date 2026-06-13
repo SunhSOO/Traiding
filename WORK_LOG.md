@@ -846,6 +846,29 @@ joblib 번들 = rank모델(top50) + quantile(q10/q50/q90 목표가) + conformal 
 
 ---
 
+## 2026-06-13 후반 — 풀 페이퍼실행 배선 + regime 게이팅
+
+### 풀 페이퍼실행 (`decision/ml_runner.py`, `scripts/run_ml_decisions_job.py`)
+- `run_ml_decisions`: ProductionRecommender 추천 → OrderIntent → **RiskEngine.check → PaperBroker.execute → 실제 체결 → decision_audit**. 기존 인프라(`core.risk`, `brokers.paper`, `_default_risk_state`) 재사용. 전용 계좌 `ml-kr`/`ml-us`.
+- 사이징: 총자산(현금+포지션) 기준 균등 1/n_long, 가용현금 한도. (1차 버그: `get_account().equity`가 현금만 반환 → 총자산으로 수정.)
+- 스모크: US/KR 각 19개 BUY 실제 체결, 전액 정확 배분(US 현금$50+포지션$950=$1000). risk_engine 통과, 포지션·audit 영속.
+- **스케줄러 등록**: `runtime/scheduler.py`에 `_job_ml_decisions_daily` + JobSpec `ml_decisions.daily`(22:45 UTC, 총 22잡). 캐시(`_fs_ab_{m}_365.parquet`)+번들 없으면 skip(안전).
+
+### Regime 게이팅 (`backtest_capital.py --regime-gate`, ml_runner `regime_gate`)
+risk_off/crisis → 현금화. 전기간 백테스트 비교:
+| | 무게이팅 | 게이팅 |
+|---|---|---|
+| US | +55.0% | +27.0% (−28%p, **손해**) |
+| KR | +124.2% | +140.6% (+16%p, **이득**) |
+- **시장·기간 의존적**(정직): KR은 risk_off가 실제 하락과 맞아 이득, US는 짧은 눌림목→반등이라 손해. MDD는 양쪽 불변(−6~7%). **약세장 데이터 없어 진짜 가치 검증 불가** → 튜닝 옵션으로 유지(기본 ON).
+
+### 다음
+- 라이브 피처 리프레시 잡(현재 ML잡은 수동빌드 캐시 의존) → 일일 자동빌드
+- per-market 게이팅 튜닝 + 약세장 포함 데이터로 재검증
+- 페이퍼 3개월 실적 누적 후 live 단계 검토
+
+---
+
 ## 보류 결정 (status=proposed)
 
 - ⏸️ **10년치 뉴스 백필 — 저장공간 확보 후 진행**(user 2026-06-09 결정). 현황: 뉴스가 ~6~7개월치(GDELT 영어 141.8만 2025-12~2026-06, Naver 한국어 2.3만)뿐이라 I축 historical이 F/T(10년)에 비해 빈약.

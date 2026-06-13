@@ -62,6 +62,8 @@ def main() -> None:
     ap.add_argument("--decile", type=float, default=0.1)
     ap.add_argument("--cost", type=float, default=None, help="round-trip cost frac (default KR .003/US .001)")
     ap.add_argument("--full", action="store_true", help="walk the whole period (burn-in then to end)")
+    ap.add_argument("--regime-gate", action="store_true",
+                    help="go to CASH when market regime is risk_off/crisis (bear defense)")
     args = ap.parse_args()
 
     cost = args.cost if args.cost is not None else (0.003 if args.market == "KR" else 0.001)
@@ -74,6 +76,21 @@ def main() -> None:
     rebal_idxs = list(range(start_idx, len(dates) - 1, args.step))
     px = close_panel(args.market, None, pd.Timestamp(dates[start_idx-1]).date(),
                      pd.Timestamp(dates[-1]).date())
+
+    # Regime series (for bear-defense gating): date -> label, ffilled.
+    reg = None
+    if args.regime_gate:
+        with session_scope() as s:
+            rr = s.execute(text(
+                "SELECT ts, label FROM market_regime WHERE market=:m ORDER BY ts"
+            ), {"m": args.market}).all()
+        reg = pd.Series({pd.Timestamp(t): str(l).lower() for t, l in rr}).sort_index()
+
+    def regime_at(d):
+        if reg is None or reg.empty:
+            return None
+        s = reg[reg.index <= d]
+        return s.iloc[-1] if len(s) else None
 
     base = dict(n_estimators=400, num_leaves=31, learning_rate=0.03,
                 min_child_samples=100, subsample=0.7, colsample_bytree=0.6,
@@ -102,6 +119,12 @@ def main() -> None:
         atR["pct"] = atR["score"].rank(pct=True)
         picks = atR[atR["pct"] >= 1 - args.decile]["ticker"].tolist()
 
+        # Bear defense: risk_off / crisis -> hold CASH this period (no position).
+        rg = regime_at(R)
+        gated = args.regime_gate and rg in ("risk_off", "crisis")
+        if gated:
+            picks = []
+
         # realised equal-weight return R->E from actual closes
         def ret(tickers):
             r = []
@@ -111,14 +134,15 @@ def main() -> None:
                     if pd.notna(a) and pd.notna(b) and a > 0:
                         r.append(b/a - 1)
             return float(np.mean(r)) if r else 0.0
-        port = ret(picks)
+        port = 0.0 if gated else ret(picks)          # cash earns 0% (ignore rate)
         allr = ret([c for c in px.columns])
-        cash *= (1 + port) * (1 - cost)
+        cash *= (1 + port) * (1.0 if gated else (1 - cost))
         bench *= (1 + allr)
         log.append((pd.Timestamp(R).date(), pd.Timestamp(E).date(), len(picks), port, allr, cash))
+        tag = f"  [CASH:{rg}]" if gated else ("" if not args.regime_gate else f"  [{rg}]")
         print(f"  [{j+1:>2}] {pd.Timestamp(R).date()}->{pd.Timestamp(E).date()}  "
               f"picks={len(picks):>3}  port={port*100:+6.2f}%  bench={allr*100:+6.2f}%  "
-              f"cash={cash:,.0f}", flush=True)
+              f"cash={cash:,.0f}{tag}", flush=True)
 
     tot = cash/args.start_cash - 1
     btot = bench/args.start_cash - 1

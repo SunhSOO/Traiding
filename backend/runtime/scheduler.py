@@ -788,6 +788,63 @@ async def _job_decisions_daily() -> None:
             )
 
 
+async def _job_ml_decisions_daily() -> None:
+    """ML production-bundle decisions → gates/risk/paper-broker (ml-* accounts).
+
+    Routes the trained rank/quantile model's picks through the real risk +
+    execution path with regime-based bear defense. Reads the latest cached
+    feature matrix (var/_fs_ab_{market}_365.parquet) — a refresh job should
+    rebuild it before this fires; if the bundle/cache is absent the market is
+    skipped (no-op, safe)."""
+    from datetime import UTC, datetime
+    from pathlib import Path
+    from core.db import session_scope
+    from core.risk import RiskEngine, RiskLimits
+    from core.types import Market
+    from brokers.db_price_oracle import DBPriceOracle
+    from brokers.paper import PaperBroker
+    from brokers.paper_persistence import load_or_create_account, rehydrate_logic
+    from decision.ml_runner import run_ml_decisions
+    from decision.production_inference import (
+        ProductionRecommender, latest_rows_from_cache, latest_close_map,
+    )
+
+    now = datetime.now(UTC)
+    risk_engine, risk_limits = RiskEngine(), RiskLimits()
+    oracle = DBPriceOracle(session_factory=session_scope)
+    accounts = [(Market.KR, "ml-kr", "KRW", 1_000_000.0),
+                (Market.US, "ml-us", "USD", 1_000.0)]
+    for market, acct, ccy, init_bal in accounts:
+        cache = Path(f"var/_fs_ab_{market.value}_365.parquet")
+        bundle = Path(f"var/models/production_{market.value}.joblib")
+        if not cache.exists() or not bundle.exists():
+            log.warning("job.ml_decisions.skip", market=market.value,
+                        reason="missing cache or bundle")
+            continue
+        try:
+            rec = ProductionRecommender(market.value)
+            feat = latest_rows_from_cache(cache)
+            with session_scope() as s:
+                close_map = latest_close_map(s, market.value)
+                account = load_or_create_account(s, name=acct, base_currency=ccy,
+                                                 initial_balance=init_bal)
+                logic = rehydrate_logic(s, account)
+                account_id = account.id
+            broker = PaperBroker(logic, oracle, session_factory=session_scope,
+                                 account_id=account_id)
+            with session_scope() as s:
+                rep = run_ml_decisions(
+                    s, market=market, as_of=now, broker=broker,
+                    risk_engine=risk_engine, risk_limits=risk_limits,
+                    recommender=rec, feat_df=feat, close_map=close_map,
+                    n_long=20, regime_gate=True)
+            log.info("job.ml_decisions", market=market.value, regime=rep.regime,
+                     defensive=rep.defensive, buys=rep.buys_executed,
+                     sells=rep.sells_executed, rejected=rep.rejected)
+        except Exception as e:
+            log.exception("job.ml_decisions.failed", market=market.value, error=str(e))
+
+
 async def _job_fundamental_score_weekly() -> None:
     """Weekly fundamental scoring — financials don't change daily, so
     weekly cadence keeps GPU/CPU free for the higher-frequency jobs."""
@@ -914,6 +971,13 @@ DEFAULT_JOBS: list[JobSpec] = [
         func=_job_decisions_daily,
         trigger="cron",
         cron_kwargs={"hour": 22, "minute": 30},   # after all scoring jobs finish
+        timezone="UTC",
+    ),
+    JobSpec(
+        id="ml_decisions.daily",
+        func=_job_ml_decisions_daily,
+        trigger="cron",
+        cron_kwargs={"hour": 22, "minute": 45},   # after composite decisions
         timezone="UTC",
     ),
     JobSpec(
