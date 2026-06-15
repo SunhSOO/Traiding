@@ -200,7 +200,11 @@ def main() -> None:
                 port -= cost
         cash *= (1 + port)
         bench *= (1 + allr)
-        log.append((pd.Timestamp(R).date(), pd.Timestamp(E).date(), len(picks), port, allr, cash))
+        vp_now = (float(atR["vix_pctile_252d"].iloc[0])
+                  if "vix_pctile_252d" in atR.columns and len(atR)
+                  and pd.notna(atR["vix_pctile_252d"].iloc[0]) else float("nan"))
+        log.append((pd.Timestamp(R).date(), pd.Timestamp(E).date(), len(picks),
+                    port, allr, cash, vp_now))
         tag = (f"  [CASH:{rg}]" if gated else
                (f"  [{rg}]" if args.regime_gate or args.vix_gate else ""))
         if args.long_short and not gated:
@@ -212,7 +216,7 @@ def main() -> None:
     tot = cash/args.start_cash - 1
     btot = bench/args.start_cash - 1
     unit = "원" if args.market == "KR" else "$"
-    L = pd.DataFrame(log, columns=["R", "E", "n", "port", "bench", "cash"])
+    L = pd.DataFrame(log, columns=["R", "E", "n", "port", "bench", "cash", "vixpct"])
     eq = L["cash"].values / args.start_cash
     mdd = float((eq / np.maximum.accumulate(eq) - 1).min()) if len(eq) else 0.0
     win = float((L["port"] > L["bench"]).mean()) if len(L) else 0.0
@@ -229,6 +233,18 @@ def main() -> None:
     print(f"  전략 최대낙폭(MDD): {mdd*100:.2f}%   벤치 상회 리밸런스: {win*100:.0f}%")
     if len(dn):
         print(f"  ▼ 하락구간({len(dn)}회, 벤치<0): 전략 평균 {dn_port*100:+.2f}% vs 벤치 {dn_bench*100:+.2f}%")
+    # VIX-regime breakdown: where does the edge actually live?
+    if L["vixpct"].notna().any():
+        print("  ── VIX 국면별 (전략 vs 벤치, 알파):")
+        buckets = [("저VIX calm  <0.4", L["vixpct"] < 0.4),
+                   ("중VIX 0.4-0.7", (L["vixpct"] >= 0.4) & (L["vixpct"] < 0.7)),
+                   ("고VIX stress≥0.7", L["vixpct"] >= 0.7)]
+        for name, mask in buckets:
+            sub = L[mask]
+            if len(sub):
+                a = (sub["port"] - sub["bench"]).mean()
+                print(f"     {name}: {len(sub):>2}회  전략 {sub['port'].mean()*100:+.2f}% "
+                      f"벤치 {sub['bench'].mean()*100:+.2f}%  알파 {a*100:+.2f}%p")
 
 
 if __name__ == "__main__":
