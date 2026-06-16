@@ -968,6 +968,30 @@ mn 위에 피처수 스윕(다중시드 step42): KR mn_top30 **+39.3±3.5%/년**
 
 ---
 
+## 2026-06-16 — regime-adaptive 4종 전수 테스트: 전부 mn_long에 패배
+
+user 아이디어("국면 판별→best 레버 라우팅") + 제안한 안전판 3종을 최초원칙대로 전수 구현·검증(`alpha_lab` run_regime_suite/mn_regfeat, KR 3시드 step42).
+
+| 접근 | 알파/년 mean±std | vs base |
+|---|---|---|
+| **base = mn_long 단독** | **+9.5 ± 5.5%** | 기준 |
+| 하드 라우터(best-past-in-regime) | −8.2 ± 8.0% | ✗ |
+| 노출 오버레이(dn→0.5배) | +5.9 ± 6.2% | ✗ |
+| 소프트 블렌딩(추세로 mn_long↔ls) | −2.7 ± 6.7% | ✗ |
+| regime을 피처로(mkt_trail/vol 주입) | +6.1 ± 4.5% | ✗ |
+
+### 결론 (정직, 데이터로 기각 — 미리 판단 아님)
+- **regime-conditioning은 어떤 형태(스위치/오버레이/블렌딩/피처)로도 robust mn 신호를 못 이김** — 전부 희석.
+- 라우터 `chosen` 분석: 상승장에 cash, 횡보장에 ls를 고름 = **"국면별 best"라는 선택 자체가 적은 regime샘플의 노이즈에 과적합**.
+- 근본 이유: mn 모델은 이미 다regime 학습 + 시장중립 타깃이라 cross-regime robust. regime 특화는 적은 샘플로 과적합만 추가.
+- (앞선 regime-conditional 모델 artifact와 일관) → **regime은 알파 신호로 쓰지 말 것.** mn 단독 유지가 최선.
+- 남은 regime 용도는 리스크 한도/포지션캡 정도(알파 아닌 거버넌스), 그것도 신호품질 전제.
+
+### 캠페인 총괄 (모델링 레버)
+**검증 통과 = mn 라벨 단 하나(~+10%/년).** 기각: regime-conditional, topk30, 섹터중립, 롱숏, VIX게이팅, 앙상블, regime-라우터/오버레이/블렌딩/피처. → **모델링 레버 수렴. 다음 도약은 신호(정보/뉴스축).**
+
+---
+
 ## 보류 결정 (status=proposed)
 
 - ⏸️ **10년치 뉴스 백필 — 저장공간 확보 후 진행**(user 2026-06-09 결정). 현황: 뉴스가 ~6~7개월치(GDELT 영어 141.8만 2025-12~2026-06, Naver 한국어 2.3만)뿐이라 I축 historical이 F/T(10년)에 비해 빈약.

@@ -64,11 +64,22 @@ def _vix_bucket(v):
 
 def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                    portfolio="long", vix_gate=None, decile=0.1, step=21, cost=None,
-                   reselect=False, seed=42, model="lgbm"):
+                   reselect=False, seed=42, model="lgbm", regfeat=False):
     cost = cost if cost is not None else (0.003 if market == "KR" else 0.001)
     feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
     dates = np.sort(df["date"].unique())
     px = _close_panel(market, pd.Timestamp(dates[0]).date(), pd.Timestamp(dates[-1]).date())
+
+    if regfeat:
+        # #1 regime-as-feature: inject market-level trend/vol so the TREE can
+        # split on regime and learn regime-conditional feature behaviour.
+        mkt = px.mean(axis=1)
+        trend = pd.DataFrame({"date": mkt.index,
+                              "mkt_trail_63d": mkt.pct_change(63).values,
+                              "mkt_trail_21d": mkt.pct_change(21).values,
+                              "mkt_vol_21d": mkt.pct_change().rolling(21).std().values})
+        df = df.merge(trend, on="date", how="left")
+        feats = feats + ["mkt_trail_63d", "mkt_trail_21d", "mkt_vol_21d"]
 
     # target column
     if label == "rank":
@@ -173,6 +184,89 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
             "vix_alpha": vb, "n": len(L)}
 
 
+def run_regime_suite(df, market, *, seed=42, step=21, decile=0.1, cost=None,
+                     reg_lookback=63, up_thr=0.03, dn_thr=-0.03):
+    """No-look-ahead online regime router. Each rebalance: (1) classify the
+    market state from the TRAILING eq-weight return (up/side/down), (2) pick
+    the lever with the best PAST realised return in that same regime, (3) use
+    it. Lever menu = {mn_long, mn_ls(long-short), cash}. The regime->lever map
+    is learned online from past rebalances only.
+
+    Reports the router vs always-mn_long vs benchmark, and which lever it
+    chose per regime."""
+    cost = cost if cost is not None else (0.003 if market == "KR" else 0.001)
+    feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
+    df = df.copy()
+    df["mn_fwd_21d"] = df["ret_fwd_21d"] - df.groupby("date")["ret_fwd_21d"].transform("mean")
+    tgt = "mn_fwd_21d"
+    dates = np.sort(df["date"].unique())
+    px = _close_panel(market, pd.Timestamp(dates[0]).date(), pd.Timestamp(dates[-1]).date())
+    mkt = px.mean(axis=1)                         # eq-weight index level proxy
+
+    def trail_at(R):
+        s = mkt[mkt.index <= R]
+        if len(s) < reg_lookback + 1:
+            return 0.0
+        return float(s.iloc[-1] / s.iloc[-(reg_lookback+1)] - 1)
+
+    def regime_of(t):
+        return "up" if t >= up_thr else ("dn" if t <= dn_thr else "side")
+
+    start_idx = 63
+    rebal = list(range(start_idx, len(dates) - 1, step))
+    rows = []   # per rebalance: dict(date, reg, allr, mn_long, mn_ls, cash)
+    for j, i in enumerate(rebal):
+        R = dates[i]; E = dates[rebal[j+1]] if j+1 < len(rebal) else dates[-1]
+        cut = dates[max(0, i-21)]
+        tr = df[df["date"] <= cut].dropna(subset=[tgt]); atR = df[df["date"] == R].copy()
+        if len(tr) < 500 or atR.empty:
+            continue
+        sel = lgb.LGBMRegressor(**_base(seed)).fit(tr[feats].astype(float), tr[tgt].astype(float))
+        top = pd.Series(sel.feature_importances_, index=feats).sort_values(ascending=False).head(50).index.tolist()
+        m = lgb.LGBMRegressor(**_base(seed)).fit(tr[top].astype(float), tr[tgt].astype(float))
+        atR["pct"] = pd.Series(m.predict(atR[top].astype(float))).rank(pct=True).values
+
+        def ret(tks):
+            r = [px.at[E, t]/px.at[R, t]-1 for t in tks
+                 if t in px.columns and R in px.index and E in px.index
+                 and pd.notna(px.at[R, t]) and pd.notna(px.at[E, t]) and px.at[R, t] > 0]
+            return float(np.mean(r)) if r else 0.0
+        longs = atR[atR["pct"] >= 1-decile]["ticker"].tolist()
+        shorts = atR[atR["pct"] <= decile]["ticker"].tolist()
+        tr_v = trail_at(R)
+        rows.append({"R": R, "trail": tr_v, "reg": regime_of(tr_v),
+                     "allr": ret(list(px.columns)),
+                     "mn_long": ret(longs) - cost,
+                     "mn_ls": (ret(longs) - ret(shorts)) - 2*cost,
+                     "cash": 0.0})
+
+    levers = ["mn_long", "mn_ls", "cash"]
+    # Four meta-strategies on the SAME per-rebalance lever returns:
+    #  base   = always mn_long
+    #  router = hard pick best-past-in-regime lever (#switch)
+    #  expo   = mn_long scaled by regime exposure (#2 risk overlay: dn->0.5)
+    #  soft   = continuous blend mn_long<->mn_ls by trailing-return (#3)
+    c = {"base": 1.0, "router": 1.0, "expo": 1.0, "soft": 1.0}
+    bench = 1.0
+    hist, chosen = [], {"up": {}, "dn": {}, "side": {}}
+    for x in rows:
+        same = [h for h in hist if h["reg"] == x["reg"]]
+        pick = "mn_long" if len(same) < 3 else max(levers, key=lambda lv: np.mean([h[lv] for h in same]))
+        chosen[x["reg"]][pick] = chosen[x["reg"]].get(pick, 0) + 1
+        expo = 0.5 if x["reg"] == "dn" else 1.0
+        w = float(np.clip((x["trail"] - dn_thr) / (up_thr - dn_thr), 0.0, 1.0))  # 0 in dn, 1 in up
+        c["base"] *= (1 + x["mn_long"])
+        c["router"] *= (1 + x[pick])
+        c["expo"] *= (1 + expo * x["mn_long"])
+        c["soft"] *= (1 + (w * x["mn_long"] + (1 - w) * x["mn_ls"]))
+        bench *= (1 + x["allr"])
+        hist.append(x)
+    ny = (pd.Timestamp(dates[-1]) - pd.Timestamp(dates[start_idx])).days / 365.25
+    out = {k: round((v - bench) / ny * 100, 2) for k, v in c.items()}  # alpha/yr each
+    out["chosen"] = chosen; out["n"] = len(rows)
+    return out
+
+
 CONFIGS = {
     "baseline":   dict(label="rank", regime_cond=False, portfolio="long"),
     "mn":         dict(label="mn",   regime_cond=False, portfolio="long"),
@@ -192,6 +286,7 @@ CONFIGS = {
     "mn_ls":      dict(label="mn", regime_cond=False, portfolio="ls",   reselect=True),
     "sn_rs":      dict(label="sn", regime_cond=False, portfolio="long", reselect=True),
     "mn_ens":     dict(label="mn", regime_cond=False, portfolio="long", reselect=True, model="ens"),
+    "mn_regfeat": dict(label="mn", regime_cond=False, portfolio="long", reselect=True, regfeat=True),
 }
 
 
@@ -201,11 +296,29 @@ def main():
     ap.add_argument("--configs", default="baseline,mn,regime,ls,gate")
     ap.add_argument("--seeds", default="42", help="comma-separated seeds; >1 => mean±std")
     ap.add_argument("--step", type=int, default=21)
+    ap.add_argument("--router", action="store_true", help="run the online regime router")
     args = ap.parse_args()
     seeds = [int(s) for s in args.seeds.split(",")]
     cache = Path(f"var/_bt_period_{args.market}_{PERIOD}.parquet")
     df = pd.read_parquet(cache); df["date"] = pd.to_datetime(df["date"])
     print(f"[lab] {args.market} rows={len(df):,} seeds={seeds} step={args.step}", flush=True)
+
+    if args.router:
+        strat = ["base", "router", "expo", "soft"]
+        acc = {s: [] for s in strat}
+        for sd in seeds:
+            r = run_regime_suite(df, args.market, seed=sd, step=args.step)
+            for s in strat:
+                acc[s].append(r[s])
+            print(f"  seed{sd}: " + "  ".join(f"{s}={r[s]:+.1f}" for s in strat) +
+                  f"  chosen={r['chosen']}", flush=True)
+        print(f"\n{'strategy':<10} {'alpha/yr mean±std':>20} {'min..max':>14}")
+        for s in strat:
+            a = np.array(acc[s])
+            tag = "  (baseline)" if s == "base" else (
+                "  ✓BEATS" if a.mean() > np.array(acc['base']).mean() + 1 else "  ✗")
+            print(f"{s:<10} {a.mean():>10.2f} ± {a.std():>5.2f}%/yr {a.min():>6.1f}..{a.max():<5.1f}{tag}")
+        return
     if len(seeds) > 1:
         print(f"{'config':<13} {'alpha/yr mean±std':>22} {'min..max':>14} {'MDD~':>7}")
     else:
