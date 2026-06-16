@@ -64,7 +64,7 @@ def _vix_bucket(v):
 
 def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                    portfolio="long", vix_gate=None, decile=0.1, step=21, cost=None,
-                   reselect=False, seed=42):
+                   reselect=False, seed=42, model="lgbm"):
     cost = cost if cost is not None else (0.003 if market == "KR" else 0.001)
     feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
     dates = np.sort(df["date"].unique())
@@ -79,6 +79,15 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
         df = df.copy()
         df["mn_fwd_21d"] = df["ret_fwd_21d"] - df.groupby("date")["ret_fwd_21d"].transform("mean")
         tgt = "mn_fwd_21d"
+    elif label == "sn":   # sector-neutral residual (subtract date-sector mean)
+        df = df.copy()
+        with session_scope() as s:
+            secmap = {t: sec for t, sec in s.execute(text(
+                "SELECT ticker, COALESCE(sector,'NA') FROM securities WHERE market=:m"),
+                {"m": market}).all()}
+        df["_sec"] = df["ticker"].map(secmap).fillna("NA")
+        df["sn_fwd_21d"] = df["ret_fwd_21d"] - df.groupby(["date", "_sec"])["ret_fwd_21d"].transform("mean")
+        tgt = "sn_fwd_21d"
     else:
         raise ValueError(label)
 
@@ -113,8 +122,17 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
         if reselect:  # re-select features from this window's past data
             selr = lgb.LGBMRegressor(**_base(seed)).fit(tr[feats].astype(float), tr[tgt].astype(float))
             top_r = pd.Series(selr.feature_importances_, index=feats).sort_values(ascending=False).head(topk).index.tolist()
-        m = lgb.LGBMRegressor(**_base(seed)).fit(tr_use[top_r].astype(float), tr_use[tgt].astype(float))
-        atR["score"] = m.predict(atR[top_r].astype(float))
+        Xtr, ytr, Xte = tr_use[top_r].astype(float), tr_use[tgt].astype(float), atR[top_r].astype(float)
+        m = lgb.LGBMRegressor(**_base(seed)).fit(Xtr, ytr)
+        if model == "ens":
+            from sklearn.ensemble import HistGradientBoostingRegressor as HGB
+            h = HGB(max_iter=300, learning_rate=0.05, max_leaf_nodes=31,
+                    l2_regularization=1.0, random_state=seed).fit(Xtr, ytr)
+            s1 = pd.Series(m.predict(Xte)).rank(pct=True).values
+            s2 = pd.Series(h.predict(Xte)).rank(pct=True).values
+            atR["score"] = (s1 + s2) / 2.0
+        else:
+            atR["score"] = m.predict(Xte)
         atR["pct"] = atR["score"].rank(pct=True)
 
         gated = vix_gate is not None and np.isfinite(vp) and vp >= vix_gate
@@ -168,6 +186,12 @@ CONFIGS = {
     "mn_rs":      dict(label="mn",   regime_cond=False, portfolio="long", reselect=True),
     "regime_rs":  dict(label="rank", regime_cond=True,  portfolio="long", reselect=True),
     "regime_mn_rs":dict(label="mn",  regime_cond=True,  portfolio="long", reselect=True),
+    # mn-label lever stack (build on the validated winner)
+    "mn_top30":   dict(label="mn", regime_cond=False, portfolio="long", reselect=True, topk=30),
+    "mn_top100":  dict(label="mn", regime_cond=False, portfolio="long", reselect=True, topk=100),
+    "mn_ls":      dict(label="mn", regime_cond=False, portfolio="ls",   reselect=True),
+    "sn_rs":      dict(label="sn", regime_cond=False, portfolio="long", reselect=True),
+    "mn_ens":     dict(label="mn", regime_cond=False, portfolio="long", reselect=True, model="ens"),
 }
 
 

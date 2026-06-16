@@ -73,14 +73,13 @@ class ProductionRecommender:
         out["band_low"] = out["last_close"] * (1 + out["ret_lo"])
         out["band_high"] = out["last_close"] * (1 + out["ret_hi"])
 
-        # Action requires the rank model (relative) and the return model
-        # (absolute q50) to AGREE — the two are separate models and can
-        # contradict (bottom-rank but positive expected return). Demanding
-        # agreement removes incoherent calls and is the conservative choice
-        # (esp. for KR where shorting is restricted -> BUY needs q50>0).
+        # The model targets the market-neutral residual (mn) — i.e. a RELATIVE
+        # cross-sectional signal — so selection is by rank, not absolute q50
+        # sign (in a down tape even the best names have q50<0). This matches
+        # the validated long-only top-decile strategy.
         out["action"] = "HOLD"
-        out.loc[(out["rank_pct"] >= cfg.buy_pct) & (out["pred_ret"] > 0), "action"] = "BUY"
-        out.loc[(out["rank_pct"] <= cfg.sell_pct) & (out["pred_ret"] < 0), "action"] = "SELL"
+        out.loc[out["rank_pct"] >= cfg.buy_pct, "action"] = "BUY"
+        out.loc[out["rank_pct"] <= cfg.sell_pct, "action"] = "SELL"
         # Size: confidence = how far from the median rank (0..1), scaled by regime.
         conf = (out["rank_pct"] - 0.5).abs() * 2.0
         out["size_fraction"] = np.minimum(

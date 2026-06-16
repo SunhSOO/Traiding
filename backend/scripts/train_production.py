@@ -66,10 +66,21 @@ def main() -> None:
     ap.add_argument("--days", type=int, default=365)
     ap.add_argument("--topk", type=int, default=50)
     ap.add_argument("--alpha", type=float, default=0.2)
+    ap.add_argument("--cache", type=str, default=None,
+                    help="explicit feature-matrix parquet (e.g. multi-regime 2018-2024)")
     args = ap.parse_args()
 
-    df = _load_or_build(args.market, args.days)
-    df = df.dropna(subset=[RANK_TARGET, RET_TARGET]).copy()
+    if args.cache:
+        print(f"[prod] loading {args.cache}", flush=True)
+        df = pd.read_parquet(args.cache)
+    else:
+        df = _load_or_build(args.market, args.days)
+    # Adopt the VALIDATED target: market-neutral residual (ret - date-mean).
+    # Multi-seed/multi-regime A/B showed this is the one robust lever
+    # (~+10%/yr vs ~0 for rank/raw). Selection + rank model train on it.
+    df["mn_fwd_21d"] = df["ret_fwd_21d"] - df.groupby("date")["ret_fwd_21d"].transform("mean")
+    target = "mn_fwd_21d"
+    df = df.dropna(subset=[target, RET_TARGET]).copy()
     df["date"] = pd.to_datetime(df["date"]); df = df.sort_values("date")
     feats_all = [c for c in ALL_FEATURE_COLS if c in df.columns]
 
@@ -86,7 +97,7 @@ def main() -> None:
 
     # 1) Feature selection: fit a rank model on the train slice, take top-K.
     sel = lgb.LGBMRegressor(**base)
-    sel.fit(tr[feats_all].astype(float), tr[RANK_TARGET].astype(float))
+    sel.fit(tr[feats_all].astype(float), tr[target].astype(float))
     imp = pd.Series(sel.feature_importances_, index=feats_all).sort_values(ascending=False)
     topk = imp.head(args.topk).index.tolist()
 
@@ -104,9 +115,9 @@ def main() -> None:
         if len(wte) < 200:
             continue
         m = lgb.LGBMRegressor(**base)
-        m.fit(wtr[topk].astype(float), wtr[RANK_TARGET].astype(float))
+        m.fit(wtr[topk].astype(float), wtr[target].astype(float))
         p = m.predict(wte[topk].astype(float))
-        wf_ics.append(spearmanr(p, wte[RANK_TARGET].values).correlation)
+        wf_ics.append(spearmanr(p, wte[target].values).correlation)
         yr = wte[RET_TARGET].values; o = np.argsort(p); d = max(len(o)//10, 1)
         wf_ls.append(float(yr[o[-d:]].mean() - yr[o[:d]].mean()))
     wf_ics = np.array(wf_ics); wf_ls = np.array(wf_ls)
@@ -116,7 +127,7 @@ def main() -> None:
 
     # 3) Final deployable rank model on ALL data (latest info included).
     rank_model = lgb.LGBMRegressor(**base)
-    rank_model.fit(df[topk].astype(float), df[RANK_TARGET].astype(float))
+    rank_model.fit(df[topk].astype(float), df[target].astype(float))
 
     # 4) Quantile models for target price + CQR conformal Q.
     qmodels = {}
@@ -137,7 +148,7 @@ def main() -> None:
     cov = float(((yt_ret >= tlo - Q) & (yt_ret <= thi + Q)).mean())
 
     bundle = {
-        "market": args.market, "target": RANK_TARGET,
+        "market": args.market, "target": target,
         "feature_cols": topk, "rank_model": rank_model,
         "quantile_models": qmodels, "conformal_Q": Q, "alpha": args.alpha,
         "metrics": {"rank_ic_walkfwd_mean": rank_ic, "rank_ic_walkfwd_std": rank_ic_std,
