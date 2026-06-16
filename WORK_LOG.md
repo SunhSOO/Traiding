@@ -992,6 +992,20 @@ user 아이디어("국면 판별→best 레버 라우팅") + 제안한 안전판
 
 ---
 
+## 2026-06-16 — 알파 기법 battery 전수 테스트 착수 (열린 루프)
+
+user 지적: "수렴" 성급했다 — 라벨/전처리/모델클래스/신규피처 미탐색. 전 기법 battery를 **GAPS.md §X에 영구 enumeration**(tested/untested/기각). 평가바: 2018-2024 다regime walk-forward 다중시드로 mn_long(+9.5%/년) 넘는가, cross-market 확인.
+
+- **Wave1**(진행): 횡단면 z-score 정규화 / Ridge 선형 / vadj(vol조정) 라벨.
+- **Wave2**(코드 ready): rank-transform·winsorize 전처리, ElasticNet/Lasso/XGBoost/CatBoost/ExtraTrees 모델, conviction 가중. (xgboost/catboost 설치 확인)
+- **Wave3**: Wave-4 상호작용피처(미구현), residual momentum, idio-vol, 샘플 uniqueness 가중.
+- **Wave4**: meta-labeling, triple-barrier, MLP/LSTM/TFT, Optuna OOF-IC.
+- `alpha_lab.py`에 전 레버 옵션화(label/normalize/model/portfolio/regfeat). 각 Wave 승자만 cross-market 확인 후 채택.
+
+**원칙(영구 기록 [[feedback-no-complacency]])**: 미테스트 0이 돼도 새 기법·아이디어 떠오르면 즉시 복귀. "끝" 선언 금지.
+
+---
+
 ## 보류 결정 (status=proposed)
 
 - ⏸️ **10년치 뉴스 백필 — 저장공간 확보 후 진행**(user 2026-06-09 결정). 현황: 뉴스가 ~6~7개월치(GDELT 영어 141.8만 2025-12~2026-06, Naver 한국어 2.3만)뿐이라 I축 historical이 F/T(10년)에 비해 빈약.

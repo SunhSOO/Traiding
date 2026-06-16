@@ -1551,3 +1551,42 @@ Sector 별로 다른 cross-asset 의존성:
 - [ ] 한 카테고리만 deep-dive하고 다른 카테고리 무시하고 있지 않나?
 - [ ] WORK_LOG와 GAPS.md 둘 다 갱신했나?
 - [ ] 사용자가 발견하기 전에 누락 발굴했나?
+
+---
+
+## X. 알파 개선 기법 battery (2026-06-16~ 전수 테스트, 정직한 다regime 알파 기준)
+
+> **평가 바**: 2018-2024 다regime walk-forward(재선택+다중시드 mean±std)에서 **mn_long 단독(+9.5%/년, KR)을 robust하게 넘는가**. cross-market(US) 확인 필수.
+> **교훈**: 단일/단일시장 스파이크는 대부분 artifact(강세장+46/1회선택+22/regime+8/topk30+39/앙상블+16% 전부 가짜). **다중시드 비중첩만 진짜.**
+> **열린 루프**: 미테스트 0이 돼도 새 기법/아이디어 떠오르면 즉시 복귀.
+
+### A. 타깃/라벨
+- ✅ mn(시장중립 잔차) — **유일 검증 승자 ~+10%/년** (프로덕션 반영됨)
+- ⏭️ rank/raw(baseline ~0), sn(섹터중립 +0.6%, 죽임)
+- 🟦 vadj(vol조정 Sharpe형) — Wave1 측정중
+- ⬜ triple-barrier(López), meta-labeling, 베타중립 잔차(beta 회귀), 다호라이즌 블렌드, winsorized 타깃
+
+### B. 피처 전처리 (거의 미탐색)
+- 🟦 횡단면 z-score(normalize) — Wave1
+- ⬜ rank-transform(구현됨, Wave2), winsorize(구현됨, Wave2), 팩터중립화(beta/size/sector 잔차), PCA, 분위 binning
+
+### C. 모델 클래스 (트리만 썼었음)
+- ✅ LGBM | ⏭️ LGBM+HGB앙상블(±15 분산, 죽임)
+- 🟦 Ridge — Wave1
+- ⬜ ElasticNet/Lasso(구현됨), XGBoost(구현됨), CatBoost(구현됨), ExtraTrees(구현됨) — Wave2; MLP, LSTM/TFT/PatchTST(models_v3 보유) — Wave4
+
+### D. 신규 피처/신호
+- ⬜ Wave-4 상호작용(regime×feat, yield 3-factor, sector×cross-asset, lead-lag — 계획만, 미구현), residual momentum, idio-vol, 계절성 상호작용 — Wave3
+
+### E. 샘플 처리
+- ⬜ uniqueness 가중(중첩라벨), recency/vol 가중, purged/combinatorial CV — Wave3
+
+### F. 포트폴리오/사이징
+- ✅ 균등 top-decile | ⏭️ 롱숏(죽임)
+- ⬜ conviction 가중(구현됨, Wave2), vol-타게팅, decile 변형(5%/20%)
+
+### G. 튜닝
+- ⬜ Optuna OOF-IC — Wave4
+
+### 기각 확정 (이유)
+regime-conditional / topk30 / 섹터중립 / 롱숏 / VIX게이팅 / 앙상블(LGBM+HGB) / regime-라우터·오버레이·소프트블렌딩·피처 — **전부 다중시드서 mn_long 미달**(노이즈 과적합/희석).

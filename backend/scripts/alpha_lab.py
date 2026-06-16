@@ -64,7 +64,7 @@ def _vix_bucket(v):
 
 def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                    portfolio="long", vix_gate=None, decile=0.1, step=21, cost=None,
-                   reselect=False, seed=42, model="lgbm", regfeat=False):
+                   reselect=False, seed=42, model="lgbm", regfeat=False, normalize=False):
     cost = cost if cost is not None else (0.003 if market == "KR" else 0.001)
     feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
     dates = np.sort(df["date"].unique())
@@ -99,8 +99,29 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
         df["_sec"] = df["ticker"].map(secmap).fillna("NA")
         df["sn_fwd_21d"] = df["ret_fwd_21d"] - df.groupby(["date", "_sec"])["ret_fwd_21d"].transform("mean")
         tgt = "sn_fwd_21d"
+    elif label == "vadj":  # vol-adjusted market-neutral residual (Sharpe-like)
+        df = df.copy()
+        mnr = df["ret_fwd_21d"] - df.groupby("date")["ret_fwd_21d"].transform("mean")
+        vol = df["vol_21d"] if "vol_21d" in df.columns else df.groupby("ticker")["ret_fwd_21d"].transform("std")
+        df["vadj_fwd_21d"] = mnr / (vol.abs() + 1e-4)
+        tgt = "vadj_fwd_21d"
     else:
         raise ValueError(label)
+
+    if normalize:
+        # cross-sectional per-date feature transform (standard quant prep).
+        # method: "z"/True z-score | "rank" percentile | "winsor" clipped-z.
+        method = "z" if normalize is True else str(normalize)
+        g = df.groupby("date")
+        if method == "rank":
+            z = df[feats].groupby(df["date"]).rank(pct=True) - 0.5
+        else:
+            z = (df[feats] - g[feats].transform("mean")) / (g[feats].transform("std") + 1e-9)
+            if method == "winsor":
+                z = z.clip(-3, 3)
+        z.columns = [c + "_z" for c in feats]
+        df = pd.concat([df, z], axis=1)
+        feats = list(z.columns)
 
     start_idx = 63
     rebal = list(range(start_idx, len(dates) - 1, step))
@@ -134,15 +155,39 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
             selr = lgb.LGBMRegressor(**_base(seed)).fit(tr[feats].astype(float), tr[tgt].astype(float))
             top_r = pd.Series(selr.feature_importances_, index=feats).sort_values(ascending=False).head(topk).index.tolist()
         Xtr, ytr, Xte = tr_use[top_r].astype(float), tr_use[tgt].astype(float), atR[top_r].astype(float)
-        m = lgb.LGBMRegressor(**_base(seed)).fit(Xtr, ytr)
-        if model == "ens":
+        if model in ("ridge", "lasso", "enet"):
+            from sklearn.linear_model import Ridge, Lasso, ElasticNet
+            lm = {"ridge": Ridge(alpha=10.0),
+                  "lasso": Lasso(alpha=1e-4, max_iter=2000),
+                  "enet": ElasticNet(alpha=1e-4, l1_ratio=0.5, max_iter=2000)}[model]
+            lm.fit(Xtr.fillna(0.0), ytr)
+            atR["score"] = lm.predict(Xte.fillna(0.0))
+        elif model == "xgb":
+            import xgboost as xgb
+            xm = xgb.XGBRegressor(n_estimators=300, max_depth=5, learning_rate=0.04,
+                                  subsample=0.7, colsample_bytree=0.6, reg_lambda=5.0,
+                                  random_state=seed, n_jobs=-1, tree_method="hist")
+            xm.fit(Xtr, ytr); atR["score"] = xm.predict(Xte)
+        elif model == "cat":
+            from catboost import CatBoostRegressor
+            cm = CatBoostRegressor(iterations=300, depth=5, learning_rate=0.04,
+                                   l2_leaf_reg=5.0, random_seed=seed, verbose=0,
+                                   allow_writing_files=False)
+            cm.fit(Xtr.fillna(0.0), ytr); atR["score"] = cm.predict(Xte.fillna(0.0))
+        elif model == "et":
+            from sklearn.ensemble import ExtraTreesRegressor
+            em = ExtraTreesRegressor(n_estimators=300, max_features=0.5, min_samples_leaf=50,
+                                     random_state=seed, n_jobs=-1)
+            em.fit(Xtr.fillna(0.0), ytr); atR["score"] = em.predict(Xte.fillna(0.0))
+        elif model == "ens":
             from sklearn.ensemble import HistGradientBoostingRegressor as HGB
+            m = lgb.LGBMRegressor(**_base(seed)).fit(Xtr, ytr)
             h = HGB(max_iter=300, learning_rate=0.05, max_leaf_nodes=31,
                     l2_regularization=1.0, random_state=seed).fit(Xtr, ytr)
-            s1 = pd.Series(m.predict(Xte)).rank(pct=True).values
-            s2 = pd.Series(h.predict(Xte)).rank(pct=True).values
-            atR["score"] = (s1 + s2) / 2.0
+            atR["score"] = (pd.Series(m.predict(Xte)).rank(pct=True).values
+                            + pd.Series(h.predict(Xte)).rank(pct=True).values) / 2.0
         else:
+            m = lgb.LGBMRegressor(**_base(seed)).fit(Xtr, ytr)
             atR["score"] = m.predict(Xte)
         atR["pct"] = atR["score"].rank(pct=True)
 
@@ -154,12 +199,19 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                  and pd.notna(px.at[R, t]) and pd.notna(px.at[E, t]) and px.at[R, t] > 0]
             return float(np.mean(r)) if r else 0.0
 
-        longs = atR[atR["pct"] >= 1-decile]["ticker"].tolist()
+        longset = atR[atR["pct"] >= 1-decile]
+        longs = longset["ticker"].tolist()
         if gated:
             port = 0.0
         elif portfolio == "ls":
             shorts = atR[atR["pct"] <= decile]["ticker"].tolist()
             port = (ret(longs) - ret(shorts)) - 2*cost
+        elif portfolio == "conv":     # conviction-weighted longs (by score rank)
+            w = (longset["pct"] - (1-decile)); w = w / (w.sum() + 1e-9)
+            rr = [(px.at[E, t]/px.at[R, t]-1, wi) for t, wi in zip(longs, w)
+                  if t in px.columns and R in px.index and E in px.index
+                  and pd.notna(px.at[R, t]) and pd.notna(px.at[E, t]) and px.at[R, t] > 0]
+            port = (sum(r*wi for r, wi in rr)/sum(wi for _, wi in rr) if rr else 0.0) - cost
         else:
             port = ret(longs) - cost
         allr = ret(list(px.columns))
@@ -287,6 +339,20 @@ CONFIGS = {
     "sn_rs":      dict(label="sn", regime_cond=False, portfolio="long", reselect=True),
     "mn_ens":     dict(label="mn", regime_cond=False, portfolio="long", reselect=True, model="ens"),
     "mn_regfeat": dict(label="mn", regime_cond=False, portfolio="long", reselect=True, regfeat=True),
+    # untested categories: feature preprocessing, linear model, vol-adj label
+    "mn_norm":    dict(label="mn",   regime_cond=False, portfolio="long", reselect=True, normalize=True),
+    "mn_ridge":   dict(label="mn",   regime_cond=False, portfolio="long", reselect=True, normalize=True, model="ridge"),
+    "mn_ridge_raw":dict(label="mn",  regime_cond=False, portfolio="long", reselect=True, model="ridge"),
+    "vadj_rs":    dict(label="vadj", regime_cond=False, portfolio="long", reselect=True),
+    # Wave 2 — preprocessing variants, model classes, portfolio
+    "mn_rank":    dict(label="mn", reselect=True, normalize="rank"),
+    "mn_winsor":  dict(label="mn", reselect=True, normalize="winsor"),
+    "mn_enet":    dict(label="mn", reselect=True, normalize=True, model="enet"),
+    "mn_lasso":   dict(label="mn", reselect=True, normalize=True, model="lasso"),
+    "mn_xgb":     dict(label="mn", reselect=True, model="xgb"),
+    "mn_cat":     dict(label="mn", reselect=True, model="cat"),
+    "mn_et":      dict(label="mn", reselect=True, model="et"),
+    "mn_conv":    dict(label="mn", reselect=True, portfolio="conv"),
 }
 
 
