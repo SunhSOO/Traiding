@@ -47,6 +47,50 @@ def _base(seed):
     b = dict(BASE); b["random_state"] = seed; return b
 
 
+def _mlp_predict(Xtr, ytr, Xte, seed, *, epochs=40, batch=4096,
+                 hidden=(256, 128, 64), dropout=0.1, lr=1e-3, arch="mlp"):
+    """GPU MLP on the SAME reselected feature set as the GBDT path. Inputs are
+    standardized with TRAIN-fold stats only (point-in-time safe). Output scale
+    is irrelevant downstream (portfolio uses rank(pct)). CPU threads capped so a
+    parallel CPU job (e.g. Wave-1 LightGBM) isn't starved."""
+    import torch
+    import torch.nn as nn
+    torch.manual_seed(seed); np.random.seed(seed)
+    torch.set_num_threads(2)
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+
+    xtr = Xtr.fillna(0.0).to_numpy(dtype="float32")
+    xte = Xte.fillna(0.0).to_numpy(dtype="float32")
+    mu = xtr.mean(0); sd = xtr.std(0) + 1e-6
+    xtr = (xtr - mu) / sd; xte = (xte - mu) / sd
+    y = ytr.to_numpy(dtype="float32")
+    y = (y - y.mean()) / (y.std() + 1e-9)
+    xt = torch.tensor(xtr, device=dev); yt = torch.tensor(y, device=dev).view(-1, 1)
+
+    d = xtr.shape[1]
+    layers = []
+    for h in hidden:
+        layers += [nn.Linear(d, h), nn.BatchNorm1d(h), nn.ReLU(), nn.Dropout(dropout)]
+        d = h
+    layers += [nn.Linear(d, 1)]
+    net = nn.Sequential(*layers).to(dev)
+    opt = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=1e-5)
+    lossf = nn.MSELoss()
+    n = xt.shape[0]
+    net.train()
+    for _ in range(epochs):
+        perm = torch.randperm(n, device=dev)
+        for k in range(0, n, batch):
+            idx = perm[k:k + batch]
+            if idx.numel() < 2:
+                continue
+            opt.zero_grad()
+            loss = lossf(net(xt[idx]), yt[idx]); loss.backward(); opt.step()
+    net.eval()
+    with torch.no_grad():
+        return net(torch.tensor(xte, device=dev)).cpu().numpy().ravel()
+
+
 def _close_panel(market, lo, hi):
     with session_scope() as s:
         rows = s.execute(text(
@@ -179,6 +223,13 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
             em = ExtraTreesRegressor(n_estimators=300, max_features=0.5, min_samples_leaf=50,
                                      random_state=seed, n_jobs=-1)
             em.fit(Xtr.fillna(0.0), ytr); atR["score"] = em.predict(Xte.fillna(0.0))
+        elif model == "mlp":
+            atR["score"] = _mlp_predict(Xtr, ytr, Xte, seed)
+        elif model == "mlp_wide":
+            atR["score"] = _mlp_predict(Xtr, ytr, Xte, seed, hidden=(512, 256, 128), dropout=0.2)
+        elif model == "mlp_ens":   # avg of 3 MLP seeds (rank-blended) — variance cut
+            ps = [pd.Series(_mlp_predict(Xtr, ytr, Xte, seed + k)).rank(pct=True).values for k in range(3)]
+            atR["score"] = np.mean(ps, axis=0)
         elif model == "ens":
             from sklearn.ensemble import HistGradientBoostingRegressor as HGB
             m = lgb.LGBMRegressor(**_base(seed)).fit(Xtr, ytr)
@@ -353,6 +404,10 @@ CONFIGS = {
     "mn_cat":     dict(label="mn", reselect=True, model="cat"),
     "mn_et":      dict(label="mn", reselect=True, model="et"),
     "mn_conv":    dict(label="mn", reselect=True, portfolio="conv"),
+    # Wave 4 — GPU deep learning (same cache/walk-forward/eval bar)
+    "mn_mlp":     dict(label="mn", reselect=True, model="mlp"),
+    "mn_mlp_wide":dict(label="mn", reselect=True, model="mlp_wide"),
+    "mn_mlp_ens": dict(label="mn", reselect=True, model="mlp_ens"),
 }
 
 
