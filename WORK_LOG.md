@@ -1028,6 +1028,17 @@ ridge와 달리 mn_norm은 성급 기각 안 하고 4컷×bear까지 검증 → 
 
 > ridge vs mn_norm 대조가 규율의 핵심: 둘 다 정규화인데 ridge(선형)는 IC붕괴+step취약+84%집중=가짜, mn_norm(트리)은 IC유지+bear양수+step강건=진짜. **숫자 크기 아니라 IC·집중도·regime·step강건성으로 판별.**
 
+### Wave2(정규화 위 모델/전처리/포트) — mn_norm 넘는 것 없음, 전부 기각
+
+정규화 baseline 위에서 7종 테스트, IC+conc5+bear로 판정:
+- **mn_et**(ExtraTrees) US수익 21.7로 최고였으나 **IC 0.0077/fold 46%=선택능력 0** → 함정 기각(ridge와 동일 패턴).
+- **mn_rank** US 20.5이나 IC<mn_norm+고분산 → 틸트 기각.
+- **mn_cat**(CatBoost) US IC 0.0297 최고지만 **KR 분산 ±14.04**(앙상블 기각기준 동일) 기각.
+- **mn_xgb** mn_norm 미달. **mn_conv** KR conc5 1136% 극단집중 기각.
+- **mn_winsor**(근소 아쉬움): IC 양시장↑(US 0.0305/KR 0.0168) + US 전면우세(bear 1.21). 하지만 **KR top-decile 수익↓(음수)**. 교훈: **rank-IC(전체횡단면) ≠ top-decile 수익(실거래분)** — winsor가 KR 전체순위는 개선해도 우리가 롱하는 상위10%엔 무용. 시장대칭 파이프라인엔 미채택.
+
+**결론: GBDT+per-date정규화(mn_norm)가 모델/전처리 최적 확정.** Wave2는 신규 채택 0 — 깨끗한 승리만 채택하는 규율의 정상 작동. (mn_conv Decimal 버그 수정)
+
 ---
 
 ## 보류 결정 (status=proposed)

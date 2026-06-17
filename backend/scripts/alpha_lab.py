@@ -260,7 +260,7 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
             port = (ret(longs) - ret(shorts)) - 2*cost
         elif portfolio == "conv":     # conviction-weighted longs (by score rank)
             w = (longset["pct"] - (1-decile)); w = w / (w.sum() + 1e-9)
-            rr = [(px.at[E, t]/px.at[R, t]-1, wi) for t, wi in zip(longs, w)
+            rr = [(float(px.at[E, t])/float(px.at[R, t])-1, wi) for t, wi in zip(longs, w)
                   if t in px.columns and R in px.index and E in px.index
                   and pd.notna(px.at[R, t]) and pd.notna(px.at[E, t]) and px.at[R, t] > 0]
             port = (sum(r*wi for r, wi in rr)/sum(wi for _, wi in rr) if rr else 0.0) - cost
@@ -417,10 +417,10 @@ CONFIGS = {
     "mn_winsor":  dict(label="mn", reselect=True, normalize="winsor"),
     "mn_enet":    dict(label="mn", reselect=True, normalize=True, model="enet"),
     "mn_lasso":   dict(label="mn", reselect=True, normalize=True, model="lasso"),
-    "mn_xgb":     dict(label="mn", reselect=True, model="xgb"),
-    "mn_cat":     dict(label="mn", reselect=True, model="cat"),
-    "mn_et":      dict(label="mn", reselect=True, model="et"),
-    "mn_conv":    dict(label="mn", reselect=True, portfolio="conv"),
+    "mn_xgb":     dict(label="mn", reselect=True, normalize=True, model="xgb"),
+    "mn_cat":     dict(label="mn", reselect=True, normalize=True, model="cat"),
+    "mn_et":      dict(label="mn", reselect=True, normalize=True, model="et"),
+    "mn_conv":    dict(label="mn", reselect=True, normalize=True, portfolio="conv"),
     # Wave 4 — GPU deep learning (same cache/walk-forward/eval bar)
     "mn_mlp":     dict(label="mn", reselect=True, model="mlp"),
     "mn_mlp_wide":dict(label="mn", reselect=True, model="mlp_wide"),

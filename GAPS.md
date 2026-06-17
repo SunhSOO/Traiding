@@ -1568,12 +1568,14 @@ Sector 별로 다른 cross-asset 의존성:
 
 ### B. 피처 전처리 (거의 미탐색)
 - ✅ **횡단면 per-date z-score(mn_norm) — 채택(2026-06-17)**. mn_rs 대비 4컷중 3컷 우세, step강건(8~15 vs mn_rs 1~9), **bear 양수**(US hi-vix +0.80 vs mn_rs −0.94), MDD −22 vs −34%, **IC 유지(0.025)=안정화지 팩터틸트 아님**. train_production/production_inference 양쪽 배선.
-- ⬜ rank-transform(구현됨, Wave2), winsorize(구현됨, Wave2), 팩터중립화(beta/size/sector 잔차), PCA, 분위 binning
+- ⏭️ **rank-transform 기각**(Wave2): US 수익20.5이나 IC 0.023<mn_norm 0.025, 고분산 — 틸트.
+- ⏭️ **winsorize 기각**(Wave2, 근소): IC는 양시장↑(US 0.0305/KR 0.0168), US 전면우세지만 **KR top-decile 수익↓(음수)**. 교훈: *rank-IC(전체횡단면)≠top-decile 수익(실거래)*. 시장대칭 파이프라인엔 미채택(per-market 전처리 허용 시 US만 재고 여지).
+- ⬜ 팩터중립화(beta/size/sector 잔차), PCA, 분위 binning — 잔존
 
 ### C. 모델 클래스 (트리만 썼었음)
-- ✅ LGBM | ⏭️ LGBM+HGB앙상블(±15 분산, 죽임)
-- 🟦 Ridge — Wave1
-- ⬜ ElasticNet/Lasso(구현됨), XGBoost(구현됨), CatBoost(구현됨), ExtraTrees(구현됨) — Wave2; MLP, LSTM/TFT/PatchTST(models_v3 보유) — Wave4
+- ✅ **LGBM 유지 (최적)** | ⏭️ 앙상블(±15)/Ridge(기각)/MLP·wide·ens(기각)
+- ⏭️ **Wave2 기각(2026-06-17)**: XGBoost(US IC 0.019<mn_norm), CatBoost(US IC 0.030 좋으나 KR 분산±14 불안정), ExtraTrees(수익 21.7이나 IC 0.008/46%=선택능력0 함정), ENet/Lasso(선형 열세). GBDT+정규화가 모델클래스 최적 확정.
+- ⬜ LSTM/TFT/PatchTST 시퀀스(models_v3 보유) — Wave4 잔존(GPU)
 
 ### D. 신규 피처/신호
 - ⬜ Wave-4 상호작용(regime×feat, yield 3-factor, sector×cross-asset, lead-lag — 계획만, 미구현), residual momentum, idio-vol, 계절성 상호작용 — Wave3
@@ -1582,8 +1584,8 @@ Sector 별로 다른 cross-asset 의존성:
 - ⬜ uniqueness 가중(중첩라벨), recency/vol 가중, purged/combinatorial CV — Wave3
 
 ### F. 포트폴리오/사이징
-- ✅ 균등 top-decile | ⏭️ 롱숏(죽임)
-- ⬜ conviction 가중(구현됨, Wave2), vol-타게팅, decile 변형(5%/20%)
+- ✅ 균등 top-decile | ⏭️ 롱숏(죽임), **conviction 가중 기각**(Wave2: KR conc5 1136% 극단집중)
+- ⬜ vol-타게팅, decile 변형(5%/20%) — 잔존
 
 ### G. 튜닝
 - ⬜ Optuna OOF-IC — Wave4
