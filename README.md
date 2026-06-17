@@ -38,9 +38,10 @@ KR (KOSPI200 + KOSDAQ150) + US (S&P500 + NASDAQ-100) 주식을 대상으로
 > **ML 알파 리서치 트랙** — 운영 F/T/I 합성(클러스터 가중치 OLS)과 별도로,
 > 횡단면 cross-sectional 모델(`backend/scripts/train_production.py`,
 > `decision/production_inference.py`)을 다regime walk-forward로 검증 중. 현재 검증된
-> 단일 레버는 **시장중립 잔차 라벨(mn)** ~+10%/년. 전 기법 전수 테스트 battery와 진행
-> 상황은 [GAPS.md](GAPS.md) §X, [WORK_LOG.md](WORK_LOG.md) 참고. 캠페인 승자가 운영
-> 결정 경로로 승격되면 본 문서의 잡/방법론 설명을 갱신.
+> 검증된 레버는 **시장중립 잔차 라벨(mn)** + **per-date 횡단면 정규화** (~+10%/년, bear 양수).
+> 전 기법 전수 테스트 battery는 [GAPS.md](GAPS.md) §X, 일자별 상세는 [WORK_LOG.md](WORK_LOG.md),
+> **검증 기준을 더할 때마다 랭킹이 뒤집힌 시간순 연대기**는 [ALPHA_CAMPAIGN.md](ALPHA_CAMPAIGN.md) 참고.
+> 캠페인 승자가 운영 결정 경로로 승격되면 본 문서의 잡/방법론 설명을 갱신.
 
 ---
 

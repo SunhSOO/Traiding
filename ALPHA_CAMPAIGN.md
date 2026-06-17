@@ -1,0 +1,116 @@
+# 알파 개선 캠페인 — 검증 연대기
+
+> 목적: "수익 숫자"가 아니라 **검증 기준을 추가할 때마다 랭킹이 어떻게 뒤집혔는지**를 시간순으로 남긴다.
+> 핵심 교훈: 매 시점 *수익 1위는 전부 가짜*였고, IC·bear·집중도·step·cross-market을 기준에 더할 때마다
+> 가짜가 탈락해 결국 **mn(라벨) + norm(정규화)** 두 개만 살아남았다.
+>
+> 관련: [WORK_LOG.md](WORK_LOG.md)(일자별 상세) · [GAPS.md](GAPS.md) §X(미테스트 battery) · `backend/scripts/alpha_lab.py`(하니스)
+
+---
+
+## 1. 검증 방식 (무엇으로 판정하는가)
+
+| 방식 | 무엇을 잡아내나 | 기준 |
+|---|---|---|
+| **no-look-ahead walk-forward** | 미래정보 누수 | 확장창 + 21d embargo, 매 step 재학습 |
+| **다중시드 (mean±std)** | seed 노이즈(±9%/yr 가짜) | 시드 42/1/7, 비중첩이어야 진짜 |
+| **cross-market (KR↔US)** | 단일시장 과적합 | 양 시장 모두 양수여야 채택 |
+| **out-of-regime (bear)** | 약세장 붕괴 | vix lo/mid/hi 분해, hi(bear) 양수 |
+| **step 강건성 (21 vs 42)** | rebalance 주기 민감도 | 주기 바꿔도 안정해야 |
+| **OOS rank-IC** | 선택능력 (벤치수익 ≠ 알파) | IC>0, 팩터틸트 vs 진짜 알파 구분 |
+| **IC+% (양수 fold)** | 일관성 | 50%(동전) 초과, 높을수록 robust |
+| **conc5 (top5 fold 집중도)** | 소수 운fold artifact | ~100%↑면 몇 fold가 전부 = 가짜 |
+| **재선택 (reselect)** | test-period 선택편향 | 매 창 과거데이터로 피처선택 |
+| **메커니즘 진단** | leak / 수치붕괴 정체 | 지배피처 · 조건수(rcond) |
+| **비용 반영** | 거래비용 후 생존 | KR 30bps / US 10bps |
+
+## 2. 테스트 대상 용어
+
+| 대상 | 의미 |
+|---|---|
+| **mn** | 시장중립 잔차 라벨(수익−당일평균). 시장 추종분 빼고 종목 고유 초과수익 예측 |
+| **rs** | reselect — 매 rebalance 과거데이터로 피처 재선택(선택편향 제거) |
+| **norm** | per-date 횡단면 z-score 정규화 |
+| **ridge_raw** | 미정규화 raw 피처 + Ridge 선형 |
+| **ridge** | 정규화 + Ridge 선형 |
+| **vadj** | vol조정 라벨(Sharpe형) |
+| **mlp / wide / ens** | GPU 신경망(기본 / 넓은 / 3시드 앙상블) |
+| **xgb · cat · et** | XGBoost · CatBoost · ExtraTrees |
+| **rank / winsor** | 전처리 변형(순위변환 / z를 ±3 clip) |
+| **conv** | conviction 가중(점수비례 비중) |
+| **w3** | Wave3 잔차신호(idio-vol, residual momentum) 추가 |
+
+## 3. 시간순 랭킹 (검증 기준을 추가해가며)
+
+### 시점 0 — 세션 전 (기준: 수익만, KR step42)
+| 순위 | 대상 | KR alpha/yr |
+|---|---|---|
+| 1 | **mn_rs** ✅ 검증 승자 | 9.48±5.47 |
+| — | rank/ret 라벨 | ~0 (기각) |
+| — | regime/topk30/sn/ls/ensemble/gate | 전부 기각 |
+
+### 시점 1 — Wave1 (기준: 수익, KR step42) · 미테스트 레버 5종
+| 순위 | 대상 | KR alpha/yr | 비고 |
+|---|---|---|---|
+| 🥇 1 | **mn_ridge_raw** | **21.03** | ⚠️ 너무 화려 |
+| 2 | mn_rs | 9.48 | 기준 |
+| 3 | mn_norm | 8.79 | |
+| 4 | mn_ridge | 5.62 | |
+| 5 | vadj_rs | 4.97 | |
+> 수익만 보면 ridge_raw 압도적 1위. 여기서 멈췄으면 가짜 채택.
+
+### 시점 2 — Wave4 MLP 추가 (GPU)
+| 순위 | 대상 | KR alpha/yr |
+|---|---|---|
+| 1 | mn_ridge_raw | 21.03 |
+| 2 | mn_rs | 9.48 |
+| 3 | mn_norm / mlp_wide | 8.79 / 8.37 |
+| 하위 | mn_mlp 0.98, mlp_ens 0.56 | 딥 전부 하위 |
+
+### 시점 3 — US cross-market (기준: 수익, 양시장)
+| 순위 | 대상 | KR | US |
+|---|---|---|---|
+| 1 | mn_ridge_raw | 21.03 | 27.62 |
+| 2 | mn_ridge | 5.62 | 20.89 |
+| 3 | mn_norm | 8.79 | 15.43 |
+| 4 | mn_rs | 9.48 | 9.99 |
+> 양시장 모두 ridge류가 수익 1·2위. 의심 증폭.
+
+### 시점 4 — 🔑 OOS IC + 메커니즘 진단 도입 (랭킹 대격변)
+| 대상 | 수익(US) | **IC** | 판정 |
+|---|---|---|---|
+| mn_ridge_raw | 27.62 | — | ❌ rcond 1e-36 수치붕괴(스케일 artifact) |
+| mn_ridge | 20.89 | **−0.009**(step21) | ❌ IC음수 = 저변동 팩터틸트 |
+| **mn_norm** | 15.43 | **+0.0254** | ✅ IC양수 |
+| **mn_rs** | 9.41 | **+0.0236** | ✅ IC양수 |
+> IC를 넣자 수익 1·2위(ridge)가 추락. "수익 ≠ 알파" 적발. 지배피처=tracking_err/vol/beta/corr → 저변동 틸트.
+
+### 시점 5 — step강건성 + conc5 + bear 도입 (mn_norm 대관식)
+| 순위 | 대상 | step강건 | bear(US hi-vix) | MDD | 판정 |
+|---|---|---|---|---|---|
+| 🥇 1 | **mn_norm** | 8~15 안정 | **+0.80** | -22% | ✅ **채택(프로덕션 배선)** |
+| 2 | mn_rs | 1~9 취약(KR 9.48→1.11) | −0.94 | -34% | 유지(기준) |
+| 기각 | mn_ridge | step취약(US42 21→21서 9.1) | — | — | IC붕괴 |
+> mn_norm: IC 유지(저변동 틸트면 IC 떨어졌을 것) + bear 양수 + step 강건 + MDD 개선 = 진짜 안정화.
+
+### 시점 6 — Wave2 도전자 7종 (기준: IC + 분산 + 집중 + 시장일관)
+| 대상 | US수익 | US IC | 탈락 사유 |
+|---|---|---|---|
+| 🥇 **mn_norm** (방어) | 15.43 | 0.0254 | ✅ 유지 |
+| mn_et | **21.70** | 0.0077 | ❌ IC≈0, fold 46%(동전이하) = 선택능력 0 |
+| mn_rank | 20.51 | 0.0233 | ❌ IC<norm + 고분산 |
+| mn_winsor | 19.82 | **0.0287** | ❌ KR top-decile 수익↓ (rank-IC ≠ 실거래수익) |
+| mn_cat | 14.92 | **0.0297** | ❌ KR 분산 ±14.04 |
+| mn_xgb | 14.17 | 0.0193 | ❌ norm 미달 |
+| mn_conv | — | — | ❌ KR 집중 1136% |
+> 또 수익 1위(et 21.7)는 IC 0.008 함정. 도전자 전원 한 기준씩에서 탈락. mn_norm 방어 성공.
+
+### 시점 7 — Wave3 잔차신호 (진행 중)
+idio-vol + 다호라이즌 residual momentum를 mn_norm 위에 추가. *결과 입력 예정.*
+
+---
+
+## 4. 한 줄 결론
+매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7). IC·bear·집중도·step·cross-market을
+기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 + per-date 정규화** 두 레버만
+살아남아 프로덕션에 반영됨. *숫자 크기가 아니라 검증 기준의 두께가 승자를 결정한다.*
