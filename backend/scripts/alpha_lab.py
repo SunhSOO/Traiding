@@ -286,6 +286,10 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
     tot = cash - 1; btot = bench - 1
     eq = L["cash"].values
     mdd = float((eq/np.maximum.accumulate(eq) - 1).min())
+    # concentration: how much of total alpha comes from the best 5 rebalances?
+    # ~100%+ => a few lucky folds carry it (artifact/regime luck); ~30-50% => spread/robust.
+    fa = (L["port"] - L["bench"]).values
+    conc5 = float(np.sort(fa)[-5:].sum() / fa.sum()) if abs(fa.sum()) > 1e-9 else float("nan")
     vb = {}
     for nm, msk in [("lo", L.vix < 0.4), ("mid", (L.vix >= 0.4) & (L.vix < 0.7)), ("hi", L.vix >= 0.7)]:
         s = L[msk]
@@ -296,6 +300,7 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
             "mdd": round(mdd*100, 1), "win": round((L.port > L.bench).mean()*100),
             "ic": round(float(ic_arr.mean()), 4) if len(ic_arr) else None,
             "ic_pos": round(float((ic_arr > 0).mean())*100) if len(ic_arr) else None,
+            "conc5": round(conc5*100) if np.isfinite(conc5) else None,
             "vix_alpha": vb, "n": len(L)}
 
 
@@ -453,9 +458,9 @@ def main():
             print(f"{s:<10} {a.mean():>10.2f} ± {a.std():>5.2f}%/yr {a.min():>6.1f}..{a.max():<5.1f}{tag}")
         return
     if len(seeds) > 1:
-        print(f"{'config':<13} {'alpha/yr mean±std':>22} {'min..max':>14} {'MDD~':>7} {'IC':>8} {'IC+%':>5}")
+        print(f"{'config':<13} {'alpha/yr mean±std':>22} {'min..max':>14} {'MDD~':>7} {'IC':>8} {'IC+%':>5} {'conc5':>6}")
     else:
-        print(f"{'config':<13} {'alpha/yr':>9} {'alpha_tot':>9} {'MDD':>7} {'win%':>5} {'IC':>8} {'IC+%':>5}  vix(lo/mid/hi)")
+        print(f"{'config':<13} {'alpha/yr':>9} {'alpha_tot':>9} {'MDD':>7} {'win%':>5} {'IC':>8} {'IC+%':>5} {'conc5':>6}  vix(lo/mid/hi)")
     for name in args.configs.split(","):
         cfg = dict(CONFIGS[name.strip()]); cfg["step"] = args.step
         ays, mdds, iccs, last = [], [], [], None
@@ -468,13 +473,14 @@ def main():
         if not ays:
             continue
         ic_m = np.mean(iccs) if iccs else float("nan")
+        c5 = last.get("conc5") if last.get("conc5") is not None else 0
         if len(seeds) > 1:
             a = np.array(ays)
             print(f"{name:<13} {a.mean():>11.2f} ± {a.std():>5.2f}%/yr {a.min():>6.1f}..{a.max():<5.1f} "
-                  f"{np.mean(mdds):>6.1f}% {ic_m:>+8.4f} {last['ic_pos'] if last.get('ic_pos') is not None else 0:>4}%", flush=True)
+                  f"{np.mean(mdds):>6.1f}% {ic_m:>+8.4f} {last['ic_pos'] if last.get('ic_pos') is not None else 0:>4}% {c5:>5}%", flush=True)
         else:
             print(f"{name:<13} {last['alpha_yr']:>8.2f}% {last['alpha_total']:>8.1f}% {last['mdd']:>6.1f}% "
-                  f"{last['win']:>4}% {ic_m:>+8.4f} {last['ic_pos'] if last.get('ic_pos') is not None else 0:>4}%  {last['vix_alpha']}", flush=True)
+                  f"{last['win']:>4}% {ic_m:>+8.4f} {last['ic_pos'] if last.get('ic_pos') is not None else 0:>4}% {c5:>5}%  {last['vix_alpha']}", flush=True)
 
 
 if __name__ == "__main__":
