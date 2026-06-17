@@ -181,6 +181,7 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
 
     cash = bench = 1.0
     log = []
+    ics = []   # OOS rank-IC: does score actually rank realized fwd returns? (selection skill)
     for j, i in enumerate(rebal):
         R = dates[i]; E = dates[rebal[j+1]] if j+1 < len(rebal) else dates[-1]
         cut = dates[max(0, i-21)]
@@ -266,12 +267,21 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
         else:
             port = ret(longs) - cost
         allr = ret(list(px.columns))
+        # OOS rank-IC (demean is monotone => irrelevant for spearman ranks)
+        if R in px.index and E in px.index:
+            fr = (px.loc[E] / px.loc[R] - 1)
+            frv = pd.to_numeric(atR["ticker"].map(fr), errors="coerce").to_numpy(dtype=float)
+            scv = pd.to_numeric(atR["score"], errors="coerce").to_numpy(dtype=float)
+            mok = np.isfinite(frv) & np.isfinite(scv)
+            if mok.sum() > 10:
+                ics.append(spearmanr(scv[mok], frv[mok]).correlation)
         cash *= (1+port); bench *= (1+allr)
         log.append((port, allr, cash, vp))
 
     L = pd.DataFrame(log, columns=["port", "bench", "cash", "vix"])
     if L.empty:
         return {}
+    ic_arr = np.array([x for x in ics if np.isfinite(x)])
     n_years = (pd.Timestamp(dates[-1]) - pd.Timestamp(dates[start_idx])).days / 365.25
     tot = cash - 1; btot = bench - 1
     eq = L["cash"].values
@@ -284,6 +294,8 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
             "alpha_total": round((tot-btot)*100, 1),
             "alpha_yr": round((tot-btot)/n_years*100, 2),
             "mdd": round(mdd*100, 1), "win": round((L.port > L.bench).mean()*100),
+            "ic": round(float(ic_arr.mean()), 4) if len(ic_arr) else None,
+            "ic_pos": round(float((ic_arr > 0).mean())*100) if len(ic_arr) else None,
             "vix_alpha": vb, "n": len(L)}
 
 
@@ -441,25 +453,28 @@ def main():
             print(f"{s:<10} {a.mean():>10.2f} ± {a.std():>5.2f}%/yr {a.min():>6.1f}..{a.max():<5.1f}{tag}")
         return
     if len(seeds) > 1:
-        print(f"{'config':<13} {'alpha/yr mean±std':>22} {'min..max':>14} {'MDD~':>7}")
+        print(f"{'config':<13} {'alpha/yr mean±std':>22} {'min..max':>14} {'MDD~':>7} {'IC':>8} {'IC+%':>5}")
     else:
-        print(f"{'config':<13} {'alpha/yr':>9} {'alpha_tot':>9} {'MDD':>7} {'win%':>5}  vix(lo/mid/hi)")
+        print(f"{'config':<13} {'alpha/yr':>9} {'alpha_tot':>9} {'MDD':>7} {'win%':>5} {'IC':>8} {'IC+%':>5}  vix(lo/mid/hi)")
     for name in args.configs.split(","):
         cfg = dict(CONFIGS[name.strip()]); cfg["step"] = args.step
-        ays, mdds, last = [], [], None
+        ays, mdds, iccs, last = [], [], [], None
         for sd in seeds:
             m = run_experiment(df, args.market, seed=sd, **cfg)
             if m:
                 ays.append(m["alpha_yr"]); mdds.append(m["mdd"]); last = m
+                if m.get("ic") is not None:
+                    iccs.append(m["ic"])
         if not ays:
             continue
+        ic_m = np.mean(iccs) if iccs else float("nan")
         if len(seeds) > 1:
             a = np.array(ays)
             print(f"{name:<13} {a.mean():>11.2f} ± {a.std():>5.2f}%/yr {a.min():>6.1f}..{a.max():<5.1f} "
-                  f"{np.mean(mdds):>6.1f}%", flush=True)
+                  f"{np.mean(mdds):>6.1f}% {ic_m:>+8.4f} {last['ic_pos'] if last.get('ic_pos') is not None else 0:>4}%", flush=True)
         else:
             print(f"{name:<13} {last['alpha_yr']:>8.2f}% {last['alpha_total']:>8.1f}% {last['mdd']:>6.1f}% "
-                  f"{last['win']:>4}%  {last['vix_alpha']}", flush=True)
+                  f"{last['win']:>4}% {ic_m:>+8.4f} {last['ic_pos'] if last.get('ic_pos') is not None else 0:>4}%  {last['vix_alpha']}", flush=True)
 
 
 if __name__ == "__main__":

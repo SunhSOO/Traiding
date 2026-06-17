@@ -1590,3 +1590,11 @@ Sector 별로 다른 cross-asset 의존성:
 
 ### 기각 확정 (이유)
 regime-conditional / topk30 / 섹터중립 / 롱숏 / VIX게이팅 / 앙상블(LGBM+HGB) / regime-라우터·오버레이·소프트블렌딩·피처 — **전부 다중시드서 mn_long 미달**(노이즈 과적합/희석).
+
+**딥러닝(2026-06-17)**: mn_mlp(KR 0.98±4.27) / mn_mlp_wide(8.37±5.80) / mn_mlp_ens(0.56±1.40) — GPU MLP 3변형 전부 GBDT(9.48) 미달. 횡단면 tabular는 GBDT 우위(문헌 일치). LSTM/TFT 시퀀스는 미테스트(잔존).
+
+**Ridge 선형(2026-06-17) — 가짜 승리 적발, 방법론 교훈**:
+- `mn_ridge_raw`: KR +21 / US +27%/yr로 화려했으나 **rcond≈1e-36 ill-conditioned** — raw 피처 스케일 차로 선형계가 수치 특이. 정규화하면 붕괴 → **스케일 artifact**. 기각.
+- `mn_ridge`(정규화): US +20.9±0.74로 GBDT 2배. 하지만 진단 결과 **OOS IC 음수(US −0.017, KR +0.015)**, top5 fold가 총합 84~160% 집중. 정체 = **저변동성/저베타 팩터 틸트**(지배피처 tracking_err/vol/beta/corr_spy)가 2018-2024 메가캡 지배기에 **등가중 벤치마크를 이긴 것**, 종목선택 알파 아님. 기각.
+- **교훈(영구)**: alpha_lab가 *등가중 벤치 대비 수익*으로만 평가 → 팩터틸트=알파 혼동. **하니스에 OOS rank-IC 추가**(2026-06-17). 이제 모든 config는 IC(선택능력)와 벤치-상대 수익 둘 다로 판정. IC≈0인데 alpha 큰 건 팩터 베타지 알파 아님. **검증 승자 mn_rs는 IC 양수(+0.023~0.040, 83% 양수fold)로 진짜 선택 알파임이 재확인됨.**
+- ⬜ 후속 lead: 저변동성은 실재 팩터 → 깨끗한 vol-factor를 *명시 피처/오버레이*로 mn_rs에 추가하면 보탬 되는지(IC 중립적으로) 테스트 — 단 IC 음수라 dollar-neutral 알파로는 회의적.

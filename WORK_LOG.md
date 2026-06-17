@@ -1004,6 +1004,19 @@ user 지적: "수렴" 성급했다 — 라벨/전처리/모델클래스/신규�
 
 **원칙(영구 기록 [[feedback-no-complacency]])**: 미테스트 0이 돼도 새 기법·아이디어 떠오르면 즉시 복귀. "끝" 선언 금지.
 
+## 2026-06-17 — Wave1/4 결과 + 가짜 승리 적발(ridge) + 하니스 IC 업그레이드
+
+**Wave1(CPU)**: mn_norm(8.79±7.84)/mn_ridge(5.62)/vadj(4.97±9.91) 전부 mn_rs(9.48) 미달 기각.
+**Wave4 MLP(GPU)**: mn_mlp(0.98)/wide(8.37)/ens(0.56) 전부 GBDT 미달 — 횡단면 tabular는 GBDT 우위. RAM 128GB/77GB여유, GPU 28%로 Wave1 CPU와 무충돌 병행 확인.
+
+**가짜 승리 적발 — 규율이 막음**:
+- `mn_ridge_raw` KR+21/US+27%/yr → `rcond≈1e-36` ill-conditioned 스케일 artifact(정규화하면 붕괴). 기각.
+- `mn_ridge`(정규화) US+20.9±0.74 (GBDT 2배!) → `ridge_diag.py` 진단: **OOS IC 음수(US−0.017/KR+0.015), top5 fold 84~160% 집중**. 정체 = 저변동성/저베타 팩터 틸트(지배피처 tracking_err/vol/beta/corr_spy)가 메가캡 지배기에 등가중 벤치를 이긴 것. **종목선택 알파 아님**. 기각.
+
+**방법론 업그레이드(열린루프 복귀)**: alpha_lab가 등가중-벤치 대비 수익으로만 평가 → 팩터틸트=알파 혼동했음. `run_experiment`에 **OOS rank-IC + 양수fold% 컬럼 추가**. 이제 모든 config는 IC(선택능력)로도 판정. **mn_rs는 IC 양수로 진짜 알파 재확인**. (`ridge_diag.py` 신규, alpha_lab IC 컬럼)
+
+> 교훈 [[feedback-no-complacency]]: *벤치-상대 수익 ≠ 알파*. IC≈0인데 수익 큰 건 팩터 베타. 화려한 숫자일수록 IC·집중도·메커니즘 먼저 본다.
+
 ---
 
 ## 보류 결정 (status=proposed)
