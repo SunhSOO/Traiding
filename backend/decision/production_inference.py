@@ -55,7 +55,13 @@ class ProductionRecommender:
         cfg: SizingConfig = SizingConfig(),
     ) -> pd.DataFrame:
         """feat_df: one latest row per ticker (must contain 'ticker' + features)."""
-        X = feat_df[self.feature_cols].astype(float)
+        # Reproduce training-time per-date normalization across TODAY's cross-section
+        # (point-in-time safe: uses only the universe being scored now).
+        if self.bundle.get("normalize") == "cross_section_zscore":
+            sub = feat_df[self.feature_cols].astype(float)
+            X = (sub - sub.mean()) / (sub.std() + 1e-9)
+        else:
+            X = feat_df[self.feature_cols].astype(float)
         q = self.bundle["quantile_models"]
         lo_q, hi_q = self.alpha / 2, 1 - self.alpha / 2
         pred_mid = q[0.5].predict(X)

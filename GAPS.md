@@ -1567,7 +1567,7 @@ Sector 별로 다른 cross-asset 의존성:
 - ⬜ triple-barrier(López), meta-labeling, 베타중립 잔차(beta 회귀), 다호라이즌 블렌드, winsorized 타깃
 
 ### B. 피처 전처리 (거의 미탐색)
-- 🟦 횡단면 z-score(normalize) — Wave1
+- ✅ **횡단면 per-date z-score(mn_norm) — 채택(2026-06-17)**. mn_rs 대비 4컷중 3컷 우세, step강건(8~15 vs mn_rs 1~9), **bear 양수**(US hi-vix +0.80 vs mn_rs −0.94), MDD −22 vs −34%, **IC 유지(0.025)=안정화지 팩터틸트 아님**. train_production/production_inference 양쪽 배선.
 - ⬜ rank-transform(구현됨, Wave2), winsorize(구현됨, Wave2), 팩터중립화(beta/size/sector 잔차), PCA, 분위 binning
 
 ### C. 모델 클래스 (트리만 썼었음)
@@ -1595,6 +1595,6 @@ regime-conditional / topk30 / 섹터중립 / 롱숏 / VIX게이팅 / 앙상블(L
 
 **Ridge 선형(2026-06-17) — 가짜 승리 적발, 방법론 교훈**:
 - `mn_ridge_raw`: KR +21 / US +27%/yr로 화려했으나 **rcond≈1e-36 ill-conditioned** — raw 피처 스케일 차로 선형계가 수치 특이. 정규화하면 붕괴 → **스케일 artifact**. 기각.
-- `mn_ridge`(정규화): US +20.9±0.74로 GBDT 2배. 하지만 진단 결과 **OOS IC 음수(US −0.017, KR +0.015)**, top5 fold가 총합 84~160% 집중. 정체 = **저변동성/저베타 팩터 틸트**(지배피처 tracking_err/vol/beta/corr_spy)가 2018-2024 메가캡 지배기에 **등가중 벤치마크를 이긴 것**, 종목선택 알파 아님. 기각.
+- `mn_ridge`(정규화 선형): US +20.9(step42)로 GBDT 2배였으나 **호라이즌-일치(step21)서 +9.1로 추락 + OOS IC 음수(−0.009)**. 세 모델 IC가 똑같이 ~0.02인데 ridge만 step42 수익 2배 + top5 fold 84% 집중 → **저변동성/저베타 팩터 틸트**(지배피처 tracking_err/vol/beta/corr_spy)가 메가캡 지배기에 등가중 벤치 이긴 것, 종목선택 알파 아님. **mn_norm과의 차이**: mn_norm은 IC 유지+bear양수+step강건(진짜 안정화), ridge는 IC붕괴+step취약(가짜). 기각.
 - **교훈(영구)**: alpha_lab가 *등가중 벤치 대비 수익*으로만 평가 → 팩터틸트=알파 혼동. **하니스에 OOS rank-IC 추가**(2026-06-17). 이제 모든 config는 IC(선택능력)와 벤치-상대 수익 둘 다로 판정. IC≈0인데 alpha 큰 건 팩터 베타지 알파 아님. **검증 승자 mn_rs는 IC 양수(+0.023~0.040, 83% 양수fold)로 진짜 선택 알파임이 재확인됨.**
 - ⬜ 후속 lead: 저변동성은 실재 팩터 → 깨끗한 vol-factor를 *명시 피처/오버레이*로 mn_rs에 추가하면 보탬 되는지(IC 중립적으로) 테스트 — 단 IC 음수라 dollar-neutral 알파로는 회의적.

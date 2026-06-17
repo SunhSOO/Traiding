@@ -1017,6 +1017,17 @@ user 지적: "수렴" 성급했다 — 라벨/전처리/모델클래스/신규�
 
 > 교훈 [[feedback-no-complacency]]: *벤치-상대 수익 ≠ 알파*. IC≈0인데 수익 큰 건 팩터 베타. 화려한 숫자일수록 IC·집중도·메커니즘 먼저 본다.
 
+### mn_norm(per-date 정규화) — 캠페인 첫 검증된 개선, 채택
+
+ridge와 달리 mn_norm은 성급 기각 안 하고 4컷×bear까지 검증 → **진짜 안정화 확인, 프로덕션 채택**:
+- 4컷(KR/US × step21/42): mn_rs 대비 3/4 우세. mn_rs는 step취약(KR 9.48→1.11), mn_norm은 8~15 안정.
+- **bear(hi-vix)**: US mn_norm +0.80 vs mn_rs −0.94 / KR +0.61 vs +0.04. 3 regime 전부 양수(US).
+- MDD −22~27 vs mn_rs −34~42%. conc5 94%(최저).
+- **IC 유지(0.025 vs 0.030)** → 저변동 틸트면 IC 떨어졌을 것. 같은 선택능력 = 같은 신호를 더 안정 추출.
+- 배선: `train_production.py`(per-date z-score in-place, `--no-normalize`로 끌 수 있음, bundle에 `normalize` 플래그) + `production_inference.py`(당일 횡단면 z-score 재현, PIT 안전). KR/US 번들 재학습.
+
+> ridge vs mn_norm 대조가 규율의 핵심: 둘 다 정규화인데 ridge(선형)는 IC붕괴+step취약+84%집중=가짜, mn_norm(트리)은 IC유지+bear양수+step강건=진짜. **숫자 크기 아니라 IC·집중도·regime·step강건성으로 판별.**
+
 ---
 
 ## 보류 결정 (status=proposed)
