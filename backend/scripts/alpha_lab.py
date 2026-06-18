@@ -115,6 +115,21 @@ def _add_residual_feats(df, which="all"):
                 mkt_mom = df.groupby("date")[r].transform("mean")
                 df[f"resid_mom_{h}d"] = df[r] - beta * mkt_mom
                 new.append(f"resid_mom_{h}d")
+    if which == "blitz":
+        # PROPER Blitz(2011) residual momentum: daily CAPM residual, accumulated
+        # over 12-1m (skip last month), STANDARDIZED by residual vol (t-stat-like).
+        # Documented to be more robust than price momentum. Needs ret_1d + beta.
+        d = df.sort_values(["ticker", "date"])
+        beta = d["beta_252d"] if "beta_252d" in d.columns else 1.0
+        mkt1 = d.groupby("date")["ret_1d"].transform("mean")
+        d["_resid"] = d["ret_1d"] - beta * mkt1
+        g = d.groupby("ticker")["_resid"]
+        for win, tag in ((231, "12m"), (105, "6m")):
+            s = g.transform(lambda x: x.shift(21).rolling(win, min_periods=win // 2).sum())
+            v = g.transform(lambda x: x.shift(21).rolling(win, min_periods=win // 2).std())
+            d[f"resid_mom_blitz_{tag}"] = s / (v * np.sqrt(win) + 1e-9)
+            new.append(f"resid_mom_blitz_{tag}")
+        df = d.drop(columns=["_resid"])
     return df, new
 
 
@@ -457,6 +472,7 @@ CONFIGS = {
     "mn_w3_raw":  dict(label="mn", reselect=True, wave3=True),
     "mn_w3_rm":   dict(label="mn", reselect=True, normalize=True, wave3="rm"),  # resid-mom only
     "mn_w3_iv":   dict(label="mn", reselect=True, normalize=True, wave3="iv"),  # idio-vol only
+    "mn_blitz":   dict(label="mn", reselect=True, normalize=True, wave3="blitz"),  # proper Blitz resid-mom
     # Wave 4 — GPU deep learning (same cache/walk-forward/eval bar)
     "mn_mlp":     dict(label="mn", reselect=True, model="mlp"),
     "mn_mlp_wide":dict(label="mn", reselect=True, model="mlp_wide"),
