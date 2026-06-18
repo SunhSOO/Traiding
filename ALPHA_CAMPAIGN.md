@@ -145,8 +145,15 @@ per-date 정규화** 두 레버만 살아남아 프로덕션에 반영됨. *숫�
 |---|---|
 | **mn (시장중립 잔차 라벨)** | ✅ 프로덕션 |
 | **per-date 횡단면 정규화** | ✅ 프로덕션 |
-| **Blitz residual momentum (신규 피처)** | ✅ 검증 완료 (배선 예정) |
+| **Blitz residual momentum (신규 피처)** | ✅ **활성화 완료 (2026-06-18)** |
 | 그 외 전부(ridge/MLP/LSTM/xgb/cat/et/rank/winsor/conv/regime류/조잡 Wave3 잔차) | ❌ 기각 |
 
 > 3개 채택, 나머지 전부 기각 — 깨끗한 승리만 채택하는 규율의 정상 작동. 잔존 미테스트:
 > 팩터중립화, 샘플 uniqueness 가중, Optuna OOF-IC, TFT — [GAPS.md](GAPS.md) §X.
+
+### Blitz 활성화 기록 (2026-06-18)
+- 배선: `features_advanced.compute_stat_features`에 resid_mom_blitz_12m/6m 추가 + ALL_FEATURE_COLS 등록(추론 자동 보유). 15h 전체 재빌드 대신 `augment_blitz.py`로 **동일 함수·동일 SPY 프록시** 사용해 캐시에 blitz만 병합(train/infer 일관).
+- 재검증(파이프라인판): mn_norm IC **US 0.0249→0.0278, KR 0.0049→0.0071**(둘 다↑), 집중↓.
+- 번들 재학습: blitz가 importance로 top-50 선택(KR 33/34위, US 26위). **KR WF IC 0.0387→0.0412(↑)**.
+  ⚠️ 정직히: **US 번들 WF IC 0.0289→0.0242(↓, 단 std 0.026 내 노이즈)** — 지표 간 엇갈림. KR 명확↑/US 중립.
+- 추론 smoke: 양시장 blitz 피처 존재+예측 정상(US BUY52/KR BUY32, NaN 0). 활성화 확인.
