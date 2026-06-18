@@ -123,6 +123,18 @@ idio-vol + 다호라이즌 residual momentum를 mn_norm 위에 추가. 2-seed/�
 
 ---
 
+### 시점 8 — Wave4 GPU 시퀀스 + 정식 Blitz · 2026-06-18
+**LSTM 기각 / Blitz residual momentum 채택.**
+| 3-seed | 대상 | KR alpha | KR IC | US alpha | US IC | US conc5 |
+|---|---|---|---|---|---|---|
+| 기준 | mn_norm | 8.79 | 0.0049 | 13.73 | 0.0249 | 101% |
+| ❌ | LSTM(시퀀스) | +1.15±10.79 | 0.0028 | +18.30±1.09 | **0.0003** | — |
+| ✅ | **mn_blitz** | 9.19±4.78 | **0.0060** | **22.83** | **0.0286** | **69%** |
+> **LSTM**: US +18%/KR ±11%의 화려/불안정 수익이 **IC≈0**(US 0.0003 = norm의 1/80) + regime(bear) 틸트.
+> ridge_raw·et와 동일 가짜. 딥러닝(MLP+LSTM) 트랙 소진 — 신경망은 횡단면 알파서 GBDT 불가.
+> **Blitz**(일별 잔차 12-1m 누적/잔차vol 표준화, 정식): IC 양시장↑ + 집중↓(US 69) + MDD↓ + bear(US 전regime↑).
+> 조잡근사(시점7)는 US IC↓로 실패했으나 정식 구성이 해결 → **채택**(캠페인 첫 검증된 신규 피처).
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +
@@ -133,7 +145,8 @@ per-date 정규화** 두 레버만 살아남아 프로덕션에 반영됨. *숫�
 |---|---|
 | **mn (시장중립 잔차 라벨)** | ✅ 프로덕션 |
 | **per-date 횡단면 정규화** | ✅ 프로덕션 |
-| 그 외 전부(ridge/MLP/xgb/cat/et/rank/winsor/conv/regime류/Wave3 잔차) | ❌ 기각 |
+| **Blitz residual momentum (신규 피처)** | ✅ 검증 완료 (배선 예정) |
+| 그 외 전부(ridge/MLP/LSTM/xgb/cat/et/rank/winsor/conv/regime류/조잡 Wave3 잔차) | ❌ 기각 |
 
-> Wave2·Wave3은 신규 채택 0 — 깨끗한 승리만 채택하는 규율의 정상 작동. 잔존 미테스트: 정식 Blitz
-> residual momentum, 팩터중립화, 샘플 uniqueness 가중, LSTM/TFT 시퀀스(GPU), Optuna — [GAPS.md](GAPS.md) §X.
+> 3개 채택, 나머지 전부 기각 — 깨끗한 승리만 채택하는 규율의 정상 작동. 잔존 미테스트:
+> 팩터중립화, 샘플 uniqueness 가중, Optuna OOF-IC, TFT — [GAPS.md](GAPS.md) §X.

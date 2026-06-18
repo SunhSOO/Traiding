@@ -332,6 +332,15 @@ def compute_stat_features(
     feat["beta_252d"] = cov_252 / var_252.replace(0, np.nan)
     # Alpha = mean(ret) - beta × mean(mkt)
     feat["alpha_63d"] = ret.rolling(63).mean() - feat["beta_63d"] * mkt_ret.rolling(63).mean()
+    # Blitz(2011) residual momentum: daily CAPM residual accumulated over 12-1m /
+    # 6-1m (skip last month), standardized by residual vol (t-stat-like). A/B
+    # (2026-06-18) raised OOS rank-IC on BOTH KR & US over the base set with lower
+    # concentration & drawdown — the campaign's first validated new signal.
+    resid = ret - feat["beta_252d"] * mkt_ret
+    for win, tag in ((231, "12m"), (105, "6m")):
+        s = resid.shift(21).rolling(win, min_periods=win // 2).sum()
+        v = resid.shift(21).rolling(win, min_periods=win // 2).std()
+        feat[f"resid_mom_blitz_{tag}"] = s / (v * np.sqrt(win) + 1e-9)
     # Tracking error
     feat["tracking_err_63d"] = (ret - mkt_ret).rolling(63).std() * np.sqrt(252)
     # Information ratio

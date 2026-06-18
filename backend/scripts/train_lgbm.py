@@ -146,6 +146,7 @@ FEATURE_COLS_STAT = [
     "corr_mkt_21d", "corr_mkt_63d", "corr_mkt_252d",
     "beta_21d", "beta_63d", "beta_252d",
     "alpha_63d",
+    "resid_mom_blitz_12m", "resid_mom_blitz_6m",
     "tracking_err_63d", "info_ratio_63d", "sortino_63d",
     "ret_skew_63d", "ret_kurt_63d", "ret_skew_252d",
     "autocorr_1", "autocorr_5", "autocorr_21",

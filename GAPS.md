@@ -1579,7 +1579,7 @@ Sector 별로 다른 cross-asset 의존성:
 
 ### D. 신규 피처/신호
 - ⏭️ **Wave3 기각(2026-06-17)**: idio-vol(틸트, KR 집중↑·수익↓ 해로움) / 조잡 residual momentum(ret−β·시장; KR 우세하나 US IC↓). **ablation이 시장모순 폭로** — 어느 구성도 양시장 미승. 미채택.
-- ⬜ **정식 Blitz residual momentum**(잔차수익경로/잔차vol; 조잡근사 아닌 제대로) — 재시도 후보
+- ✅ **정식 Blitz residual momentum 채택(2026-06-18)**: 일별 잔차 12-1m 누적/잔차vol 표준화. 양시장 IC↑(KR 0.0060/US 0.0286) + 집중↓(US 69) + MDD↓ + US 전regime↑. 조잡근사(시점7)의 US 실패를 정식구성이 해결. *배선: 피처파이프라인에 추가 필요(일별 잔차 history 의존).*
 - ⬜ Wave-4 상호작용(regime×feat, yield 3-factor, sector×cross-asset, lead-lag — 미구현), 계절성 상호작용
 
 ### E. 샘플 처리
