@@ -91,6 +91,33 @@ def _mlp_predict(Xtr, ytr, Xte, seed, *, epochs=40, batch=4096,
         return net(torch.tensor(xte, device=dev)).cpu().numpy().ravel()
 
 
+def _add_residual_feats(df, which="all"):
+    """Wave-3 explicit residual/idiosyncratic signals derived from existing
+    trailing columns (point-in-time safe; cross-sectional mean is same-date).
+      idio_vol      = total vol * sqrt(1 - corr_mkt^2)   (low-idio-vol anomaly)
+      resid_mom     = ret_Nd - beta * market_ret_Nd      (market-adjusted momentum)
+    which: 'all' | 'iv' (idio_vol only) | 'rm' (resid_mom only) — for ablation
+    (idio_vol is a vol factor => tilt-prone; resid_mom is a documented robust
+    factor). Isolate which one actually adds selection skill before adopting."""
+    df = df.copy()
+    new = []
+    if which in ("all", "iv"):
+        for h in (63, 252):
+            v, c = f"vol_{h}d", f"corr_mkt_{h}d"
+            if v in df.columns and c in df.columns:
+                df[f"idio_vol_{h}d"] = df[v] * np.sqrt(np.clip(1 - df[c] ** 2, 0, 1))
+                new.append(f"idio_vol_{h}d")
+    if which in ("all", "rm"):
+        beta = df["beta_252d"] if "beta_252d" in df.columns else 1.0
+        for h in (63, 126, 252):
+            r = f"ret_{h}d"
+            if r in df.columns:
+                mkt_mom = df.groupby("date")[r].transform("mean")
+                df[f"resid_mom_{h}d"] = df[r] - beta * mkt_mom
+                new.append(f"resid_mom_{h}d")
+    return df, new
+
+
 def _close_panel(market, lo, hi):
     with session_scope() as s:
         rows = s.execute(text(
@@ -108,9 +135,13 @@ def _vix_bucket(v):
 
 def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                    portfolio="long", vix_gate=None, decile=0.1, step=21, cost=None,
-                   reselect=False, seed=42, model="lgbm", regfeat=False, normalize=False):
+                   reselect=False, seed=42, model="lgbm", regfeat=False, normalize=False,
+                   wave3=False):
     cost = cost if cost is not None else (0.003 if market == "KR" else 0.001)
     feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
+    if wave3:
+        df, _extra = _add_residual_feats(df, which=(wave3 if isinstance(wave3, str) else "all"))
+        feats = feats + _extra
     dates = np.sort(df["date"].unique())
     px = _close_panel(market, pd.Timestamp(dates[0]).date(), pd.Timestamp(dates[-1]).date())
 
@@ -421,6 +452,11 @@ CONFIGS = {
     "mn_cat":     dict(label="mn", reselect=True, normalize=True, model="cat"),
     "mn_et":      dict(label="mn", reselect=True, normalize=True, model="et"),
     "mn_conv":    dict(label="mn", reselect=True, normalize=True, portfolio="conv"),
+    # Wave 3 — explicit residual/idiosyncratic signals on top of mn_norm
+    "mn_w3":      dict(label="mn", reselect=True, normalize=True, wave3=True),
+    "mn_w3_raw":  dict(label="mn", reselect=True, wave3=True),
+    "mn_w3_rm":   dict(label="mn", reselect=True, normalize=True, wave3="rm"),  # resid-mom only
+    "mn_w3_iv":   dict(label="mn", reselect=True, normalize=True, wave3="iv"),  # idio-vol only
     # Wave 4 — GPU deep learning (same cache/walk-forward/eval bar)
     "mn_mlp":     dict(label="mn", reselect=True, model="mlp"),
     "mn_mlp_wide":dict(label="mn", reselect=True, model="mlp_wide"),

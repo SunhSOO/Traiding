@@ -1578,7 +1578,9 @@ Sector 별로 다른 cross-asset 의존성:
 - ⬜ LSTM/TFT/PatchTST 시퀀스(models_v3 보유) — Wave4 잔존(GPU)
 
 ### D. 신규 피처/신호
-- ⬜ Wave-4 상호작용(regime×feat, yield 3-factor, sector×cross-asset, lead-lag — 계획만, 미구현), residual momentum, idio-vol, 계절성 상호작용 — Wave3
+- ⏭️ **Wave3 기각(2026-06-17)**: idio-vol(틸트, KR 집중↑·수익↓ 해로움) / 조잡 residual momentum(ret−β·시장; KR 우세하나 US IC↓). **ablation이 시장모순 폭로** — 어느 구성도 양시장 미승. 미채택.
+- ⬜ **정식 Blitz residual momentum**(잔차수익경로/잔차vol; 조잡근사 아닌 제대로) — 재시도 후보
+- ⬜ Wave-4 상호작용(regime×feat, yield 3-factor, sector×cross-asset, lead-lag — 미구현), 계절성 상호작용
 
 ### E. 샘플 처리
 - ⬜ uniqueness 가중(중첩라벨), recency/vol 가중, purged/combinatorial CV — Wave3
