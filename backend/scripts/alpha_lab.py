@@ -175,7 +175,8 @@ def _vix_bucket(v):
 def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                    portfolio="long", vix_gate=None, decile=0.1, step=21, cost=None,
                    reselect=False, seed=42, model="lgbm", regfeat=False, normalize=False,
-                   wave3=False, wave5=False, sample_weight=None, model_params=None):
+                   wave3=False, wave5=False, sample_weight=None, model_params=None,
+                   embargo=21):
     cost = cost if cost is not None else (0.003 if market == "KR" else 0.001)
     feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
     if wave3:
@@ -207,6 +208,16 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
         df = df.copy()
         df["mn_fwd_21d"] = df["ret_fwd_21d"] - df.groupby("date")["ret_fwd_21d"].transform("mean")
         tgt = "mn_fwd_21d"
+    elif label == "mnmh":  # multi-horizon mn: blend per-date-standardized residuals @5/21/63d
+        df = df.copy()
+        parts = []
+        for h in (5, 21, 63):
+            c = f"ret_fwd_{h}d"
+            if c in df.columns:
+                r = df[c] - df.groupby("date")[c].transform("mean")
+                parts.append(r / (r.groupby(df["date"]).transform("std") + 1e-9))
+        df["mnmh"] = sum(parts) / len(parts)
+        tgt = "mnmh"
     elif label == "sn":   # sector-neutral residual (subtract date-sector mean)
         df = df.copy()
         with session_scope() as s:
@@ -236,6 +247,15 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
             z = (df[feats] - g[feats].transform("mean")) / (g[feats].transform("std") + 1e-9)
             if method == "winsor":
                 z = z.clip(-3, 3)
+            if method == "neutral" and "beta_252d" in df.columns:
+                # factor-neutralize: residualize every z-feature vs (z-scored) beta
+                # per date — removes unintended market-beta exposure from features.
+                b = ((df["beta_252d"] - g["beta_252d"].transform("mean"))
+                     / (g["beta_252d"].transform("std") + 1e-9)).fillna(0.0)
+                date_idx = df["date"]
+                zb = z.mul(b, axis=0).groupby(date_idx).transform("sum")
+                bb = (b * b).groupby(date_idx).transform("sum") + 1e-9
+                z = z - zb.div(bb, axis=0).mul(b, axis=0)
         z.columns = [c + "_z" for c in feats]
         df = pd.concat([df, z], axis=1)
         feats = list(z.columns)
@@ -257,7 +277,7 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
     ics = []   # OOS rank-IC: does score actually rank realized fwd returns? (selection skill)
     for j, i in enumerate(rebal):
         R = dates[i]; E = dates[rebal[j+1]] if j+1 < len(rebal) else dates[-1]
-        cut = dates[max(0, i-21)]
+        cut = dates[max(0, i-embargo)]
         tr = df[df["date"] <= cut].dropna(subset=[tgt])
         atR = df[df["date"] == R].copy()
         if len(tr) < 500 or atR.empty:
@@ -514,6 +534,14 @@ CONFIGS = {
     "mn_swabs":    dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel"),
     "mn_dec05":    dict(label="mn", reselect=True, normalize=True, decile=0.05),
     "mn_dec20":    dict(label="mn", reselect=True, normalize=True, decile=0.20),
+    # Wave 6 — factor-neutralization, and the Wave5 winner stacked
+    "mn_neutral":  dict(label="mn", reselect=True, normalize="neutral"),
+    "mn_swabs_neu":dict(label="mn", reselect=True, normalize="neutral", sample_weight="abslabel"),
+    # Wave 7 — multi-horizon label. 63d horizon needs a 63d embargo or it LEAKS
+    # (21d embargo => 245%/yr, IC 0.13 artifact). Fair test uses embargo=63 for
+    # BOTH the candidate and the baseline.
+    "mn_mh_emb":   dict(label="mnmh", reselect=True, normalize=True, sample_weight="abslabel", embargo=63),
+    "mn_swabs_emb":dict(label="mn",   reselect=True, normalize=True, sample_weight="abslabel", embargo=63),
     # Wave 4 — GPU deep learning (same cache/walk-forward/eval bar)
     "mn_mlp":     dict(label="mn", reselect=True, model="mlp"),
     "mn_mlp_wide":dict(label="mn", reselect=True, model="mlp_wide"),
