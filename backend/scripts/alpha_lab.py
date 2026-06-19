@@ -133,6 +133,30 @@ def _add_residual_feats(df, which="all"):
     return df, new
 
 
+def _add_wave5_feats(df):
+    """Wave-5 orthogonal signals: short-term residual REVERSAL (mean-reversion,
+    opposite of Blitz momentum), seasonality (month/turn-of-month), and pairwise
+    interactions (vol×mom, beta×mom) the tree can't form as a single split."""
+    df = df.copy(); new = []
+    beta = df["beta_252d"] if "beta_252d" in df.columns else 1.0
+    for h in (5, 10, 21):
+        r = f"ret_{h}d"
+        if r in df.columns:
+            mkt = df.groupby("date")[r].transform("mean")
+            df[f"resid_rev_{h}d"] = df[r] - beta * mkt
+            new.append(f"resid_rev_{h}d")
+    mo = df["date"].dt.month
+    df["seas_month_sin"] = np.sin(2 * np.pi * mo / 12)
+    df["seas_month_cos"] = np.cos(2 * np.pi * mo / 12)
+    dom = df["date"].dt.day
+    df["seas_turn_of_month"] = ((dom <= 3) | (dom >= 26)).astype(float)
+    new += ["seas_month_sin", "seas_month_cos", "seas_turn_of_month"]
+    for a, b in [("vol_252d", "ret_252d"), ("beta_252d", "ret_252d"), ("vol_21d", "ret_21d")]:
+        if a in df.columns and b in df.columns:
+            df[f"inter_{a}_x_{b}"] = df[a] * df[b]; new.append(f"inter_{a}_x_{b}")
+    return df, new
+
+
 def _close_panel(market, lo, hi):
     with session_scope() as s:
         rows = s.execute(text(
@@ -151,12 +175,15 @@ def _vix_bucket(v):
 def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                    portfolio="long", vix_gate=None, decile=0.1, step=21, cost=None,
                    reselect=False, seed=42, model="lgbm", regfeat=False, normalize=False,
-                   wave3=False):
+                   wave3=False, wave5=False, sample_weight=None, model_params=None):
     cost = cost if cost is not None else (0.003 if market == "KR" else 0.001)
     feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
     if wave3:
         df, _extra = _add_residual_feats(df, which=(wave3 if isinstance(wave3, str) else "all"))
         feats = feats + _extra
+    if wave5:
+        df, _extra5 = _add_wave5_feats(df)
+        feats = feats + _extra5
     dates = np.sort(df["date"].unique())
     px = _close_panel(market, pd.Timestamp(dates[0]).date(), pd.Timestamp(dates[-1]).date())
 
@@ -285,7 +312,15 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
             atR["score"] = (pd.Series(m.predict(Xte)).rank(pct=True).values
                             + pd.Series(h.predict(Xte)).rank(pct=True).values) / 2.0
         else:
-            m = lgb.LGBMRegressor(**_base(seed)).fit(Xtr, ytr)
+            sw = None
+            if sample_weight == "recency":      # up-weight recent rows (linear by date rank)
+                sw = 0.5 + tr_use["date"].rank(pct=True).values
+            elif sample_weight == "abslabel":   # focus on big movers (|residual return|)
+                sw = np.abs(ytr.values) + 1e-6
+            mp = _base(seed)
+            if model_params:
+                mp.update(model_params)
+            m = lgb.LGBMRegressor(**mp).fit(Xtr, ytr, sample_weight=sw)
             atR["score"] = m.predict(Xte)
         atR["pct"] = atR["score"].rank(pct=True)
 
@@ -473,6 +508,12 @@ CONFIGS = {
     "mn_w3_rm":   dict(label="mn", reselect=True, normalize=True, wave3="rm"),  # resid-mom only
     "mn_w3_iv":   dict(label="mn", reselect=True, normalize=True, wave3="iv"),  # idio-vol only
     "mn_blitz":   dict(label="mn", reselect=True, normalize=True, wave3="blitz"),  # proper Blitz resid-mom
+    # Wave 5 — orthogonal features, sample weighting, portfolio variants (on mn_norm+Blitz base)
+    "mn_w5":       dict(label="mn", reselect=True, normalize=True, wave5=True),
+    "mn_swrec":    dict(label="mn", reselect=True, normalize=True, sample_weight="recency"),
+    "mn_swabs":    dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel"),
+    "mn_dec05":    dict(label="mn", reselect=True, normalize=True, decile=0.05),
+    "mn_dec20":    dict(label="mn", reselect=True, normalize=True, decile=0.20),
     # Wave 4 — GPU deep learning (same cache/walk-forward/eval bar)
     "mn_mlp":     dict(label="mn", reselect=True, model="mlp"),
     "mn_mlp_wide":dict(label="mn", reselect=True, model="mlp_wide"),

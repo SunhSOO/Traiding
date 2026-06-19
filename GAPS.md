@@ -1580,17 +1580,19 @@ Sector 별로 다른 cross-asset 의존성:
 ### D. 신규 피처/신호
 - ⏭️ **Wave3 기각(2026-06-17)**: idio-vol(틸트, KR 집중↑·수익↓ 해로움) / 조잡 residual momentum(ret−β·시장; KR 우세하나 US IC↓). **ablation이 시장모순 폭로** — 어느 구성도 양시장 미승. 미채택.
 - ✅ **정식 Blitz residual momentum 채택·활성화(2026-06-18)**: 일별 잔차 12-1m 누적/잔차vol 표준화. 양시장 IC↑(KR 0.0060/US 0.0286) + 집중↓(US 69) + MDD↓ + US 전regime↑. `features_advanced`+ALL_FEATURE_COLS 배선, `augment_blitz.py`로 캐시 병합(추론과 동일 SPY 프록시), 번들 재학습(blitz top-50 선택 KR33/US26위). KR WF IC 0.0387→0.0412↑, US 0.0289→0.0242(노이즈 범위) — KR명확/US중립.
-- ⬜ Wave-4 상호작용(regime×feat, yield 3-factor, sector×cross-asset, lead-lag — 미구현), 계절성 상호작용
+- 🟦 **Wave5 진행(2026-06-18)**: 단기 잔차리버설(resid_rev 5/10/21d), 계절성(월 sin/cos, 월말), 상호작용(vol×mom, beta×mom) = mn_w5 — 테스트중
+- ⬜ Wave-4 상호작용(regime×feat, yield 3-factor, sector×cross-asset, lead-lag — 미구현), 52주 고점근접, amihud 유동성
 
 ### E. 샘플 처리
-- ⬜ uniqueness 가중(중첩라벨), recency/vol 가중, purged/combinatorial CV — Wave3
+- 🟦 **Wave5 진행(2026-06-18)**: recency 가중(mn_swrec), |label| 가중(mn_swabs) — 테스트중
+- ⬜ uniqueness 가중(중첩라벨 López), vol/regime 가중, purged/combinatorial CV
 
 ### F. 포트폴리오/사이징
 - ✅ 균등 top-decile | ⏭️ 롱숏(죽임), **conviction 가중 기각**(Wave2: KR conc5 1136% 극단집중)
 - ⬜ vol-타게팅, decile 변형(5%/20%) — 잔존
 
 ### G. 튜닝
-- ⬜ Optuna OOF-IC — Wave4
+- 🟦 **Optuna OOF-IC (opt_lab.py 구현, 2026-06-18)**: 수익 아닌 OOS-IC 목적으로 LGBM 하이퍼 탐색, 양시장 IC 개선 시만 채택 — 실행 예정
 
 ### 기각 확정 (이유)
 regime-conditional / topk30 / 섹터중립 / 롱숏 / VIX게이팅 / 앙상블(LGBM+HGB) / regime-라우터·오버레이·소프트블렌딩·피처 — **전부 다중시드서 mn_long 미달**(노이즈 과적합/희석).
