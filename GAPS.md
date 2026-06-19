@@ -1591,8 +1591,11 @@ Sector 별로 다른 cross-asset 의존성:
 - ✅ 균등 top-decile | ⏭️ 롱숏(죽임), **conviction 가중 기각**(Wave2: KR conc5 1136% 극단집중)
 - ⬜ vol-타게팅, decile 변형(5%/20%) — 잔존
 
+### A 추가. 다호라이즌 라벨 — 기각(2026-06-19)
+- ⏭️ **mnmh(5/21/63d mn 블렌드)**: 1차 245%/yr·IC 0.13 = **누수**(21d 임베고 < 63d 라벨). embargo=63 교정 후 **시장갈림**(US IC 0.0396→0.0242↓, KR 0.0146→0.0185↑) → 기각. 교훈: 임베고 ≥ 최대 라벨 호라이즌.
+
 ### G. 튜닝
-- 🟦 **Optuna OOF-IC (opt_lab.py 구현, 2026-06-18)**: 수익 아닌 OOS-IC 목적으로 LGBM 하이퍼 탐색, 양시장 IC 개선 시만 채택 — 실행 예정
+- 🟦 **Optuna OOF-IC (opt_lab.py 구현, 2026-06-18)**: 수익 아닌 OOS-IC 목적으로 LGBM 하이퍼 탐색, 양시장 IC 개선 시만 채택 — 실행 예정(reselect=False 빠른 탐색)
 
 ### 기각 확정 (이유)
 regime-conditional / topk30 / 섹터중립 / 롱숏 / VIX게이팅 / 앙상블(LGBM+HGB) / regime-라우터·오버레이·소프트블렌딩·피처 — **전부 다중시드서 mn_long 미달**(노이즈 과적합/희석).

@@ -24,10 +24,12 @@ def main():
     ap.add_argument("--market", default="US")
     ap.add_argument("--trials", type=int, default=40)
     ap.add_argument("--step", type=int, default=42)
+    ap.add_argument("--fast", action="store_true", help="reselect=False during search (~5x faster)")
     a = ap.parse_args()
     df = pd.read_parquet(Path(f"var/_bt_period_{a.market}_{PERIOD}.parquet"))
     df["date"] = pd.to_datetime(df["date"])
-    base_cfg = dict(label="mn", reselect=True, normalize=True, step=a.step)
+    base_cfg = dict(label="mn", reselect=not a.fast, normalize=True,
+                    sample_weight="abslabel", step=a.step)
 
     def ic_of(model_params, seed):
         m = run_experiment(df, a.market, seed=seed, model_params=model_params, **base_cfg)
