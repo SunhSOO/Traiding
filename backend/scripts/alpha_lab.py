@@ -166,6 +166,30 @@ def _close_panel(market, lo, hi):
     return p.pivot_table(index="date", columns="ticker", values="close", aggfunc="first")
 
 
+def _tb_label(df, px, H=21, k=1.5):
+    """Triple-barrier (López) path-aware label: scan the next H days; the return
+    is taken at the FIRST touch of ±k·vol_21d·sqrt(H) (profit-take / stop), else
+    the H-day return (time barrier). Then market-neutralized. Captures the return
+    a stop/target trade would actually realize, vs the fixed-horizon return."""
+    P = px.sort_index().astype(float)
+    vol = df.pivot_table(index="date", columns="ticker", values="vol_21d").reindex(
+        index=P.index, columns=P.columns)
+    bar = k * vol * np.sqrt(H)
+    touched = pd.DataFrame(False, index=P.index, columns=P.columns)
+    tb = pd.DataFrame(np.nan, index=P.index, columns=P.columns)
+    for h in range(1, H + 1):
+        cr = P.shift(-h) / P - 1.0
+        hu = (cr >= bar) & (~touched)
+        hd = (cr <= -bar) & (~touched)
+        tb = tb.mask(hu, cr).mask(hd, cr)
+        touched = touched | hu | hd
+    tb = tb.mask(~touched, P.shift(-H) / P - 1.0)
+    m = tb.stack().rename("_tb"); m.index.names = ["date", "ticker"]
+    d2 = df.merge(m.reset_index(), on=["date", "ticker"], how="left")
+    d2["_tbmn"] = d2["_tb"] - d2.groupby("date")["_tb"].transform("mean")
+    return d2["_tbmn"].values
+
+
 def _vix_bucket(v):
     if not np.isfinite(v):
         return 1
@@ -218,6 +242,10 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                 parts.append(r / (r.groupby(df["date"]).transform("std") + 1e-9))
         df["mnmh"] = sum(parts) / len(parts)
         tgt = "mnmh"
+    elif label == "tb":   # triple-barrier (path-aware, market-neutralized) label
+        df = df.copy()
+        df["tbmn"] = _tb_label(df, px)
+        tgt = "tbmn"
     elif label == "sn":   # sector-neutral residual (subtract date-sector mean)
         df = df.copy()
         with session_scope() as s:
@@ -542,6 +570,13 @@ CONFIGS = {
     # BOTH the candidate and the baseline.
     "mn_mh_emb":   dict(label="mnmh", reselect=True, normalize=True, sample_weight="abslabel", embargo=63),
     "mn_swabs_emb":dict(label="mn",   reselect=True, normalize=True, sample_weight="abslabel", embargo=63),
+    # triple-barrier (path-aware) label, on the mn_norm+swabs base
+    "mn_tb":       dict(label="tb", reselect=True, normalize=True, sample_weight="abslabel"),
+    # Optuna-tuned LGBM hyperparams (US OOS-IC search) — validate cross-market
+    "mn_swabs_tuned": dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel",
+                           model_params=dict(num_leaves=26, learning_rate=0.0345, n_estimators=550,
+                                             min_child_samples=195, subsample=0.72,
+                                             colsample_bytree=0.60, reg_lambda=9.37)),
     # Wave 4 — GPU deep learning (same cache/walk-forward/eval bar)
     "mn_mlp":     dict(label="mn", reselect=True, model="mlp"),
     "mn_mlp_wide":dict(label="mn", reselect=True, model="mlp_wide"),
