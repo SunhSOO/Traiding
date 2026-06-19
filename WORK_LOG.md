@@ -1039,6 +1039,23 @@ ridge와 달리 mn_norm은 성급 기각 안 하고 4컷×bear까지 검증 → 
 
 **결론: GBDT+per-date정규화(mn_norm)가 모델/전처리 최적 확정.** Wave2는 신규 채택 0 — 깨끗한 승리만 채택하는 규율의 정상 작동. (mn_conv Decimal 버그 수정)
 
+> 전 과정 시간순 랭킹은 [ALPHA_CAMPAIGN.md](ALPHA_CAMPAIGN.md), 미테스트 battery는 [GAPS.md](GAPS.md) §X.
+
+## 2026-06-18 — Wave3 기각 / Wave4(LSTM 기각·Blitz 채택·활성화)
+
+- **Wave3 잔차신호(idio-vol+resid-mom)**: 단일 config은 양시장 IC↑로 보였으나 **3-seed ablation이 시장모순 폭로**(KR은 resid_mom 단독 최고/idio_vol 해로움, US는 resid_mom 단독 IC↓). 미채택.
+- **Wave4 GPU 시퀀스(LSTM, seq_lab.py)**: US +18%/KR ±11%의 화려/불안정 수익이 **전부 IC≈0**(US 0.0003) regime 틸트 → 기각. **딥러닝(MLP+LSTM) 트랙 소진** — 신경망은 횡단면 알파서 GBDT 불가.
+- **✅ Blitz residual momentum 채택·활성화**: 정식 구성(일별 잔차 12-1m/잔차vol 표준화). 양시장 IC↑(KR 0.0060/US 0.0286)+집중↓+MDD↓+US 전regime↑. 배선: `features_advanced.compute_stat_features`+ALL_FEATURE_COLS, `augment_blitz.py`로 캐시 병합(추론과 동일 SPY 프록시), 번들 재학습(blitz top-50 선택). **KR WF IC 0.0387→0.0412**(US는 노이즈 범위).
+
+## 2026-06-19 — Wave5/6(swabs 채택) / Wave7(다호라이즌 누수→기각)
+
+- **✅ |label| 샘플가중(mn_swabs) 채택·활성화**: 큰 변동 종목에 학습 가중 → 선택능력 sharpen. **양시장 IC↑(US 0.0278→0.0356, KR 0.0071→0.0109)**, bear 통과. 배선: `train_production` sample_weight=|mn label|. **번들 WF IC 양시장 최고: KR 0.0440, US 0.0313**(blitz US 하락분 상쇄+개선). 추론 smoke 정상.
+- **Wave5/6 나머지 기각**: w5(리버설/계절성/상호작용 — KR IC붕괴), recency가중, decile변형(IC불변), 팩터중립화(시장갈림 KR↑/US↓).
+- **Wave7 다호라이즌 라벨 — 누수 적발**: 1차 KR 245%/yr·IC 0.13 = 임팩트 불가능 → **21d 임베고 < 63d 라벨** look-ahead 누수 규명. embargo=63 교정 후 시장갈림(US IC↓) 기각. 교훈 [[feedback-no-complacency]]: 임베고≥최대 라벨 호라이즌.
+- 진행중: Optuna OOF-IC 튜닝(opt_lab.py, reselect=False 빠른 탐색), triple-barrier 라벨(_tb_label).
+
+**채택 레버 4개**: mn 라벨 + per-date 정규화 + Blitz resid-mom + |label| 샘플가중. 누적 번들 WF IC: KR 0.0387→**0.0440**, US 0.0289→**0.0313**.
+
 ---
 
 ## 보류 결정 (status=proposed)
