@@ -135,6 +135,22 @@ idio-vol + 다호라이즌 residual momentum를 mn_norm 위에 추가. 2-seed/�
 > **Blitz**(일별 잔차 12-1m 누적/잔차vol 표준화, 정식): IC 양시장↑ + 집중↓(US 69) + MDD↓ + bear(US 전regime↑).
 > 조잡근사(시점7)는 US IC↓로 실패했으나 정식 구성이 해결 → **채택**(캠페인 첫 검증된 신규 피처).
 
+### 시점 9 — Wave5/6 (샘플가중·신규피처·전처리·튜닝) · 2026-06-18~19
+**mn_swabs(|label| 샘플가중) 채택 / 나머지 기각.**
+| 3-seed | 대상 | US IC | KR IC | 판정 |
+|---|---|---|---|---|
+| 기준 | mn_norm(+blitz) | 0.0278 | 0.0071 | — |
+| ✅ | **mn_swabs** (\|label\| 가중) | **0.0356** | **0.0109** | 양시장 IC↑, bear통과 → **채택** |
+| ❌ | mn_w5(리버설+계절성+상호작용) | 0.0281 | 0.0022 | KR IC 붕괴 |
+| ❌ | mn_swrec(recency 가중) | 0.0202 | 0.0054 | 양시장 IC↓ |
+| ❌ | mn_dec05/20(decile 변형) | 0.0278 | 0.0071 | IC 불변(포트 집중일 뿐) |
+| ❌ | mn_neutral(팩터중립화) | 0.0176 | 0.0057 | 단독 IC↓ |
+| ❌ | mn_swabs_neu(중립+가중) | 0.0266 | 0.0158 | **시장갈림**(US↓/KR↑) |
+> **mn_swabs**: 큰 변동 종목(|잔차수익|)에 학습 가중 → 선택능력 sharpen. mn_norm 이후 최대 IC 레버(US +0.0078).
+> 배선: train_production sample_weight=|mn label|(피처/캐시 변경 불필요). **번들 WF IC 양시장 최고치 갱신**: KR
+> 0.0412→0.0440, **US 0.0242→0.0313**(blitz 하락분 상쇄+개선). 추론 smoke 정상.
+> 팩터중립화는 ridge·winsor처럼 시장갈림으로 기각.
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +
@@ -146,10 +162,11 @@ per-date 정규화** 두 레버만 살아남아 프로덕션에 반영됨. *숫�
 | **mn (시장중립 잔차 라벨)** | ✅ 프로덕션 |
 | **per-date 횡단면 정규화** | ✅ 프로덕션 |
 | **Blitz residual momentum (신규 피처)** | ✅ **활성화 완료 (2026-06-18)** |
-| 그 외 전부(ridge/MLP/LSTM/xgb/cat/et/rank/winsor/conv/regime류/조잡 Wave3 잔차) | ❌ 기각 |
+| **\|label\| 샘플가중 (mn_swabs)** | ✅ **활성화 완료 (2026-06-19)** |
+| 그 외 전부(ridge/MLP/LSTM/xgb/cat/et/rank/winsor/conv/regime류/조잡잔차/w5/recency/decile/팩터중립화) | ❌ 기각 |
 
-> 3개 채택, 나머지 전부 기각 — 깨끗한 승리만 채택하는 규율의 정상 작동. 잔존 미테스트:
-> 팩터중립화, 샘플 uniqueness 가중, Optuna OOF-IC, TFT — [GAPS.md](GAPS.md) §X.
+> **4개 채택**, 나머지 전부 기각. 누적 효과 — 번들 WF IC: KR 0.0387→**0.0440**, US 0.0289→**0.0313**.
+> 잔존 미테스트: triple-barrier, meta-labeling, 다호라이즌 블렌드, uniqueness 가중, Optuna(진행중) — [GAPS.md](GAPS.md) §X.
 
 ### Blitz 활성화 기록 (2026-06-18)
 - 배선: `features_advanced.compute_stat_features`에 resid_mom_blitz_12m/6m 추가 + ALL_FEATURE_COLS 등록(추론 자동 보유). 15h 전체 재빌드 대신 `augment_blitz.py`로 **동일 함수·동일 SPY 프록시** 사용해 캐시에 blitz만 병합(train/infer 일관).

@@ -70,6 +70,8 @@ def main() -> None:
                     help="explicit feature-matrix parquet (e.g. multi-regime 2018-2024)")
     ap.add_argument("--no-normalize", action="store_true",
                     help="disable per-date cross-sectional z-score (validated ON by default)")
+    ap.add_argument("--no-sample-weight", action="store_true",
+                    help="disable |mn-label| sample weighting (validated ON by default)")
     args = ap.parse_args()
 
     if args.cache:
@@ -109,9 +111,16 @@ def main() -> None:
                 min_child_samples=100, subsample=0.7, colsample_bytree=0.6,
                 reg_lambda=5.0, verbose=-1)
 
+    # VALIDATED sample weighting: weight by |mn label| (focus on big movers).
+    # A/B (2026-06-19): raised OOS rank-IC on BOTH markets (US 0.0278->0.0356,
+    # KR 0.0071->0.0109) with better US IC+%/concentration & bear behaviour.
+    sw_on = not args.no_sample_weight
+    sw_all = np.abs(tr[target].values) if sw_on else None
+    sw_full = np.abs(df[target].values) if sw_on else None
+
     # 1) Feature selection: fit a rank model on the train slice, take top-K.
     sel = lgb.LGBMRegressor(**base)
-    sel.fit(tr[feats_all].astype(float), tr[target].astype(float))
+    sel.fit(tr[feats_all].astype(float), tr[target].astype(float), sample_weight=sw_all)
     imp = pd.Series(sel.feature_importances_, index=feats_all).sort_values(ascending=False)
     topk = imp.head(args.topk).index.tolist()
 
@@ -129,7 +138,8 @@ def main() -> None:
         if len(wte) < 200:
             continue
         m = lgb.LGBMRegressor(**base)
-        m.fit(wtr[topk].astype(float), wtr[target].astype(float))
+        m.fit(wtr[topk].astype(float), wtr[target].astype(float),
+              sample_weight=np.abs(wtr[target].values) if sw_on else None)
         p = m.predict(wte[topk].astype(float))
         wf_ics.append(spearmanr(p, wte[target].values).correlation)
         yr = wte[RET_TARGET].values; o = np.argsort(p); d = max(len(o)//10, 1)
@@ -141,7 +151,7 @@ def main() -> None:
 
     # 3) Final deployable rank model on ALL data (latest info included).
     rank_model = lgb.LGBMRegressor(**base)
-    rank_model.fit(df[topk].astype(float), df[target].astype(float))
+    rank_model.fit(df[topk].astype(float), df[target].astype(float), sample_weight=sw_full)
 
     # 4) Quantile models for target price + CQR conformal Q.
     qmodels = {}
@@ -164,6 +174,7 @@ def main() -> None:
     bundle = {
         "market": args.market, "target": target,
         "normalize": "cross_section_zscore" if normalize else None,
+        "sample_weight": "abs_mn_label" if sw_on else None,
         "feature_cols": topk, "rank_model": rank_model,
         "quantile_models": qmodels, "conformal_Q": Q, "alpha": args.alpha,
         "metrics": {"rank_ic_walkfwd_mean": rank_ic, "rank_ic_walkfwd_std": rank_ic_std,
