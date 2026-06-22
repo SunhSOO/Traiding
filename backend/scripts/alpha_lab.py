@@ -411,6 +411,14 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                   if t in px.columns and R in px.index and E in px.index
                   and pd.notna(px.at[R, t]) and pd.notna(px.at[E, t]) and px.at[R, t] > 0]
             port = (sum(r*wi for r, wi in rr)/sum(wi for _, wi in rr) if rr else 0.0) - cost
+        elif portfolio == "meta":     # meta-labeling: 2nd classifier sizes longs by P(mn>0)
+            cm = lgb.LGBMClassifier(**_base(seed)).fit(Xtr, (ytr > 0).astype(int))
+            pup = cm.predict_proba(longset[top_r].astype(float))[:, 1]
+            w = np.clip(pup - 0.5, 0, None); w = w / (w.sum() + 1e-9)
+            rr = [(float(px.at[E, t])/float(px.at[R, t])-1, wi) for t, wi in zip(longs, w)
+                  if t in px.columns and R in px.index and E in px.index
+                  and pd.notna(px.at[R, t]) and pd.notna(px.at[E, t]) and px.at[R, t] > 0]
+            port = (sum(r*wi for r, wi in rr)/sum(wi for _, wi in rr) if rr else 0.0) - cost
         else:
             port = ret(longs) - cost
         allr = ret(list(px.columns))
@@ -594,6 +602,7 @@ CONFIGS = {
     # sample-treatment battery (vs mn_swabs baseline)
     "mn_uniq":      dict(label="mn", reselect=True, normalize=True, sample_weight="uniq"),
     "mn_uniqabs":   dict(label="mn", reselect=True, normalize=True, sample_weight="uniqabs"),
+    "mn_meta":      dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", portfolio="meta"),
     "mn_disp":      dict(label="mn", reselect=True, normalize=True, sample_weight="disp"),
     "mn_dispabs":   dict(label="mn", reselect=True, normalize=True, sample_weight="dispabs"),
     "mn_swabs_tuned": dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel",

@@ -165,6 +165,12 @@ idio-vol + 다호라이즌 residual momentum를 mn_norm 위에 추가. 2-seed/�
 - ⚠️ **하니스 함정 적발+수정**: 번들 WF IC가 `pred vs 학습라벨`을 재서 라벨 바꾸면 비교 불가였음 → **라벨무관 기준(실현 mn수익)으로 고정**. 이 수정이 tb의 거품을 드러냄(alpha_lab↑ vs 번들↓).
 - ✅/❌ **triple-barrier = per-market 채택**: 라벨무관 번들 WF IC로 보면 **US tb 0.0313→0.0407(100% 양수fold, 채택)** / **KR tb 0.0325 < mn 0.0440(기각, mn 유지)**. 시장갈림이나 번들이 시장별 분리라 per-market 라벨 네이티브 지원. US만 경로인지 라벨 채택.
 
+### 시점 12 — 샘플처리 + meta-labeling · 2026-06-20 (전부 기각, battery 소진)
+- ⏭️ **uniqueness 가중**: 단독≈무효(균일호라이즌 횡단면=concurrency 상수). uniqabs(×abslabel)는 5seed IC↑(US 0.0389/KR 0.0171)이나 **conc5 양시장 악화+비원칙 메커니즘**(2018-Q1 지속 up-weight) 기각.
+- ⏭️ **dispersion 가중**: conc5 270~308% 망가짐.
+- ⏭️ **meta-labeling**: 2차분류기로 롱 사이징 → US 수익 21.9→11.6 반토막+conc5 116, IC동일(선택불변). conviction과 동일 실패. **등가중 top-decile 최적 확정.**
+> 이로써 라벨/전처리/모델/포트/신규피처/샘플처리/튜닝 전 카테고리 소진. 열린루프: 새 기법 발상 시 복귀.
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +

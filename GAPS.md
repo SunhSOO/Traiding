@@ -1584,12 +1584,13 @@ Sector 별로 다른 cross-asset 의존성:
 - ⬜ Wave-4 상호작용(regime×feat, yield 3-factor, sector×cross-asset, lead-lag — 미구현), 52주 고점근접, amihud 유동성
 
 ### E. 샘플 처리
-- 🟦 **Wave5 진행(2026-06-18)**: recency 가중(mn_swrec), |label| 가중(mn_swabs) — 테스트중
-- ⬜ uniqueness 가중(중첩라벨 López), vol/regime 가중, purged/combinatorial CV
+- ✅ **|label| 가중(mn_swabs) 채택**(Wave5). ⏭️ recency 가중 기각(양시장 IC↓).
+- ⏭️ **uniqueness/dispersion 기각(2026-06-20)**: uniq 단독≈무효(균일호라이즌 횡단면이라 concurrency 상수). uniqabs(uniq×abslabel)는 5seed서 IC↑(US 0.0389/KR 0.0171)이나 **conc5 양시장 악화(US65→79,KR93→119)+비원칙 메커니즘**(조잡구현이 2018-Q1 지속 up-weight) 기각. disp(날짜분산)=conc5 270~308% 망가짐.
+- ⬜ 정식 regime-다양성 가중(제대로 구현), purged/combinatorial CV
 
 ### F. 포트폴리오/사이징
-- ✅ 균등 top-decile | ⏭️ 롱숏(죽임), **conviction 가중 기각**(Wave2: KR conc5 1136% 극단집중)
-- ⬜ vol-타게팅, decile 변형(5%/20%) — 잔존
+- ✅ 균등 top-decile | ⏭️ 롱숏(죽임), conviction 가중(KR conc5 1136%), **decile 5/20%(IC불변)**, **meta-labeling 기각(2026-06-20: 2차분류기 사이징 — US 수익 21.9→11.6 반토막+conc5 116, IC동일. conviction과 동일 실패)**. **등가중이 최적 확정.**
+- vol-타게팅: 미테스트(저우선 — 사이징류 전부 실패).
 
 ### A 추가. 다호라이즌 라벨 — 기각(2026-06-19)
 - ⏭️ **mnmh(5/21/63d mn 블렌드)**: 1차 245%/yr·IC 0.13 = **누수**(21d 임베고 < 63d 라벨). embargo=63 교정 후 **시장갈림**(US IC 0.0396→0.0242↓, KR 0.0146→0.0185↑) → 기각. 교훈: 임베고 ≥ 최대 라벨 호라이즌.
