@@ -1056,6 +1056,14 @@ ridge와 달리 mn_norm은 성급 기각 안 하고 4컷×bear까지 검증 → 
 
 **채택 레버 4개**: mn 라벨 + per-date 정규화 + Blitz resid-mom + |label| 샘플가중. 누적 번들 WF IC: KR 0.0387→**0.0440**, US 0.0289→**0.0313**.
 
+## 2026-06-20 — 잔존(triple-barrier/Optuna) + 하니스 함정 수정
+
+- **하니스 함정 적발·수정**: 번들 WF IC가 `pred vs 학습라벨`을 재서 라벨을 바꾸면 비교 불가였음 → **라벨무관 기준(실현 mn수익)으로 고정**(train_production). 라벨 비교가 정직해짐.
+- ❌ **Optuna 튜닝 기각**: US OOS-IC BEATS(0.0379→0.0403)였으나 **KR 분산 폭발(±1.32→±8.13)**·IC 개선0 = US 과적합. cross-market 일반화 실패. ([[feedback-no-complacency]] 튜닝은 단일시장 IC에 과적합).
+- ✅/❌ **triple-barrier 라벨 = US만 채택(per-market)**: 경로인지 라벨(±k·vol·sqrt(H) 첫터치 수익). 라벨무관 번들 WF IC로 **US 0.0313→0.0407(100% 양수fold, 채택)** / **KR 0.0325<mn 0.0440(기각, mn유지)**. 시장갈림이나 번들이 시장별 분리라 per-market 라벨 네이티브. `train_production --label`(기본 US=tb/KR=mn), `_tb_label` 재사용, **추론 불변**. 양 번들 재학습+smoke 정상.
+
+**최종 채택: 공통 4개(mn족 라벨+정규화+Blitz+swabs) + US 전용 1개(tb).** 번들 WF IC: KR **0.0440**, US **0.0407**(시작 0.0387/0.0289 대비). 잔존: meta-labeling(사이징), uniqueness 가중.
+
 ---
 
 ## 보류 결정 (status=proposed)

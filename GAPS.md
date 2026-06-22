@@ -1594,8 +1594,12 @@ Sector 별로 다른 cross-asset 의존성:
 ### A 추가. 다호라이즌 라벨 — 기각(2026-06-19)
 - ⏭️ **mnmh(5/21/63d mn 블렌드)**: 1차 245%/yr·IC 0.13 = **누수**(21d 임베고 < 63d 라벨). embargo=63 교정 후 **시장갈림**(US IC 0.0396→0.0242↓, KR 0.0146→0.0185↑) → 기각. 교훈: 임베고 ≥ 최대 라벨 호라이즌.
 
+### A 추가2. triple-barrier 라벨 — US만 채택(2026-06-20)
+- ✅/❌ **tb(경로인지 ±k·vol·sqrt(H) 첫터치 수익, mn중립)**: 라벨무관 번들 WF IC로 **US 0.0313→0.0407(100% 양수, 채택)** / **KR 0.0325<mn 0.0440(기각)**. per-market 라벨(번들 분리라 네이티브). train_production `--label`(기본 US=tb/KR=mn), `_tb_label`+`_close_panel` 재사용. **추론 불변**(라벨은 학습 타겟).
+- 🔧 **방법론 수정**: 번들 WF IC 기준을 학습라벨→**라벨무관 실현 mn수익**으로 고정(라벨 바꿔도 비교가능). 이 수정이 tb의 alpha_lab↑/번들↓ 불일치를 드러냄.
+
 ### G. 튜닝
-- 🟦 **Optuna OOF-IC (opt_lab.py 구현, 2026-06-18)**: 수익 아닌 OOS-IC 목적으로 LGBM 하이퍼 탐색, 양시장 IC 개선 시만 채택 — 실행 예정(reselect=False 빠른 탐색)
+- ⏭️ **Optuna OOF-IC 기각(2026-06-20)**: US OOS-IC BEATS(0.0379→0.0403)였으나 **KR 분산 폭발(±8.13)·IC 개선0** = US 과적합, cross-market 일반화 실패. (opt_lab.py, --fast)
 
 ### 기각 확정 (이유)
 regime-conditional / topk30 / 섹터중립 / 롱숏 / VIX게이팅 / 앙상블(LGBM+HGB) / regime-라우터·오버레이·소프트블렌딩·피처 — **전부 다중시드서 mn_long 미달**(노이즈 과적합/희석).

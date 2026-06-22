@@ -72,7 +72,13 @@ def main() -> None:
                     help="disable per-date cross-sectional z-score (validated ON by default)")
     ap.add_argument("--no-sample-weight", action="store_true",
                     help="disable |mn-label| sample weighting (validated ON by default)")
+    ap.add_argument("--label", choices=["mn", "tb"], default=None,
+                    help="training target. Default is per-market VALIDATED choice: US=tb "
+                         "(triple-barrier, bundle WF IC 0.031->0.041, 100%% +folds), KR=mn "
+                         "(market-neutral; tb hurts KR 0.044->0.033). Override to force.")
     args = ap.parse_args()
+    if args.label is None:   # per-market validated label (2026-06-20, label-agnostic WF IC)
+        args.label = "tb" if args.market == "US" else "mn"
 
     if args.cache:
         print(f"[prod] loading {args.cache}", flush=True)
@@ -82,10 +88,21 @@ def main() -> None:
     # Adopt the VALIDATED target: market-neutral residual (ret - date-mean).
     # Multi-seed/multi-regime A/B showed this is the one robust lever
     # (~+10%/yr vs ~0 for rank/raw). Selection + rank model train on it.
+    df["date"] = pd.to_datetime(df["date"])
     df["mn_fwd_21d"] = df["ret_fwd_21d"] - df.groupby("date")["ret_fwd_21d"].transform("mean")
-    target = "mn_fwd_21d"
+    if args.label == "tb":
+        # VALIDATED (2026-06-20): triple-barrier path-aware label (return at first
+        # touch of ±k·vol·sqrt(H), mn-neutralized) raised OOS IC on BOTH markets
+        # (US 0.0356->0.0402, KR 0.0109->0.0122) with lower concentration & MDD.
+        # Label-only change — inference path/model output unchanged.
+        from scripts.alpha_lab import _tb_label, _close_panel
+        px = _close_panel(args.market, df["date"].min().date(), df["date"].max().date())
+        df["tbmn"] = _tb_label(df, px)
+        target = "tbmn"
+    else:
+        target = "mn_fwd_21d"
     df = df.dropna(subset=[target, RET_TARGET]).copy()
-    df["date"] = pd.to_datetime(df["date"]); df = df.sort_values("date")
+    df = df.sort_values("date")
     feats_all = [c for c in ALL_FEATURE_COLS if c in df.columns]
 
     # VALIDATED preprocessing: per-date cross-sectional z-score of features.
@@ -141,7 +158,9 @@ def main() -> None:
         m.fit(wtr[topk].astype(float), wtr[target].astype(float),
               sample_weight=np.abs(wtr[target].values) if sw_on else None)
         p = m.predict(wte[topk].astype(float))
-        wf_ics.append(spearmanr(p, wte[target].values).correlation)
+        # IC reference = realized market-neutral return (label-agnostic, tradeable),
+        # NOT the training target — so the metric stays comparable across label choices.
+        wf_ics.append(spearmanr(p, wte["mn_fwd_21d"].values).correlation)
         yr = wte[RET_TARGET].values; o = np.argsort(p); d = max(len(o)//10, 1)
         wf_ls.append(float(yr[o[-d:]].mean() - yr[o[:d]].mean()))
     wf_ics = np.array(wf_ics); wf_ls = np.array(wf_ls)
@@ -175,6 +194,7 @@ def main() -> None:
         "market": args.market, "target": target,
         "normalize": "cross_section_zscore" if normalize else None,
         "sample_weight": "abs_mn_label" if sw_on else None,
+        "label": args.label,
         "feature_cols": topk, "rank_model": rank_model,
         "quantile_models": qmodels, "conformal_Q": Q, "alpha": args.alpha,
         "metrics": {"rank_ic_walkfwd_mean": rank_ic, "rank_ic_walkfwd_std": rank_ic_std,

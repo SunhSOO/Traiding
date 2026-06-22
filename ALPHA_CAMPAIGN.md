@@ -160,6 +160,11 @@ idio-vol + 다호라이즌 residual momentum를 mn_norm 위에 추가. 2-seed/�
 | mn_mh_emb | 0.0242↓ | 0.0185↑ | ❌ 시장갈림(US↓), 기각 |
 > 교훈(영구): **임베고 ≥ 최대 라벨 호라이즌**. 화려한 숫자(245%)는 IC로 즉시 검증→누수 규명→교정.
 
+### 시점 11 — 잔존(triple-barrier / Optuna) · 2026-06-20
+- ❌ **Optuna 튜닝 기각**: US OOS-IC 탐색서 BEATS(0.0379→0.0403)였으나 **KR 분산 폭발(±1.32→±8.13)**·IC 개선 없음 = US 과적합, cross-market 일반화 실패.
+- ⚠️ **하니스 함정 적발+수정**: 번들 WF IC가 `pred vs 학습라벨`을 재서 라벨 바꾸면 비교 불가였음 → **라벨무관 기준(실현 mn수익)으로 고정**. 이 수정이 tb의 거품을 드러냄(alpha_lab↑ vs 번들↓).
+- ✅/❌ **triple-barrier = per-market 채택**: 라벨무관 번들 WF IC로 보면 **US tb 0.0313→0.0407(100% 양수fold, 채택)** / **KR tb 0.0325 < mn 0.0440(기각, mn 유지)**. 시장갈림이나 번들이 시장별 분리라 per-market 라벨 네이티브 지원. US만 경로인지 라벨 채택.
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +
@@ -172,10 +177,12 @@ per-date 정규화** 두 레버만 살아남아 프로덕션에 반영됨. *숫�
 | **per-date 횡단면 정규화** | ✅ 프로덕션 |
 | **Blitz residual momentum (신규 피처)** | ✅ **활성화 완료 (2026-06-18)** |
 | **\|label\| 샘플가중 (mn_swabs)** | ✅ **활성화 완료 (2026-06-19)** |
-| 그 외 전부(ridge/MLP/LSTM/xgb/cat/et/rank/winsor/conv/regime류/조잡잔차/w5/recency/decile/팩터중립화) | ❌ 기각 |
+| **triple-barrier 라벨** | ✅ **US만 활성화 (per-market, 2026-06-20)** |
+| 그 외 전부(ridge/MLP/LSTM/xgb/cat/et/rank/winsor/conv/regime류/조잡잔차/w5/recency/decile/팩터중립화/다호라이즌/Optuna튜닝) | ❌ 기각 |
 
-> **4개 채택**, 나머지 전부 기각. 누적 효과 — 번들 WF IC: KR 0.0387→**0.0440**, US 0.0289→**0.0313**.
-> 잔존 미테스트: triple-barrier, meta-labeling, 다호라이즌 블렌드, uniqueness 가중, Optuna(진행중) — [GAPS.md](GAPS.md) §X.
+> **공통 4개 + US 전용 1개(tb)** 채택, 나머지 전부 기각. 번들 WF IC(라벨무관 실현수익 기준):
+> KR 0.0387→**0.0440**, US 0.0289→**0.0407**(100% 양수fold). 잔존 미테스트: meta-labeling(사이징,
+> IC외 eval), uniqueness 가중 — [GAPS.md](GAPS.md) §X.
 
 ### Blitz 활성화 기록 (2026-06-18)
 - 배선: `features_advanced.compute_stat_features`에 resid_mom_blitz_12m/6m 추가 + ALL_FEATURE_COLS 등록(추론 자동 보유). 15h 전체 재빌드 대신 `augment_blitz.py`로 **동일 함수·동일 SPY 프록시** 사용해 캐시에 blitz만 병합(train/infer 일관).
