@@ -365,6 +365,24 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                 sw = 0.5 + tr_use["date"].rank(pct=True).values
             elif sample_weight == "abslabel":   # focus on big movers (|residual return|)
                 sw = np.abs(ytr.values) + 1e-6
+            elif sample_weight in ("uniq", "uniqabs"):
+                # López avg-uniqueness ~ 1/concurrency of overlapping 21d labels.
+                # (cross-sectional uniform-horizon => ~constant in interior; tests
+                # whether overlap down-weighting helps at all.)
+                ud = np.sort(tr_use["date"].unique())
+                idx = pd.Series(np.arange(len(ud)), index=ud)
+                di = tr_use["date"].map(idx).values
+                conc = np.clip(np.minimum(di + 1, 21), 1, None)  # # of overlapping label-starts
+                sw = 1.0 / conc
+                if sample_weight == "uniqabs":
+                    sw = sw * (np.abs(ytr.values) + 1e-6)
+            elif sample_weight in ("disp", "dispabs"):
+                # per-date dispersion weighting: up-weight dates with high cross-
+                # sectional label spread (more learnable signal that day).
+                dsp = tr_use.assign(_y=ytr.values).groupby("date")["_y"].transform("std")
+                sw = (dsp.values + 1e-6)
+                if sample_weight == "dispabs":
+                    sw = sw * (np.abs(ytr.values) + 1e-6)
             mp = _base(seed)
             if model_params:
                 mp.update(model_params)
@@ -573,6 +591,11 @@ CONFIGS = {
     # triple-barrier (path-aware) label, on the mn_norm+swabs base
     "mn_tb":       dict(label="tb", reselect=True, normalize=True, sample_weight="abslabel"),
     # Optuna-tuned LGBM hyperparams (US OOS-IC search) — validate cross-market
+    # sample-treatment battery (vs mn_swabs baseline)
+    "mn_uniq":      dict(label="mn", reselect=True, normalize=True, sample_weight="uniq"),
+    "mn_uniqabs":   dict(label="mn", reselect=True, normalize=True, sample_weight="uniqabs"),
+    "mn_disp":      dict(label="mn", reselect=True, normalize=True, sample_weight="disp"),
+    "mn_dispabs":   dict(label="mn", reselect=True, normalize=True, sample_weight="dispabs"),
     "mn_swabs_tuned": dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel",
                            model_params=dict(num_leaves=26, learning_rate=0.0345, n_estimators=550,
                                              min_child_samples=195, subsample=0.72,
