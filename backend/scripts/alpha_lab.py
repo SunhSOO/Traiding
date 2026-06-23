@@ -157,6 +157,36 @@ def _add_wave5_feats(df):
     return df, new
 
 
+def _add_macrodeep_feats(df, which="all"):
+    """Wave-4 macro-deep: explicit factor×regime/macro interactions (factor-timing).
+    which: 'all' | 'vix'(defensive×vix-state) | 'reg'(×regime) | 'macro'(yield/credit).
+    All point-in-time safe (backward cols; cross-sec dispersion is same-date)."""
+    df = df.copy(); new = []
+    has = lambda *cs: all(c in df.columns for c in cs)
+    rs = (df["regime_risk_on"].fillna(0) - df["regime_crisis"].fillna(0)
+          if has("regime_risk_on", "regime_crisis") else None)
+    vixp = df["vix_pctile_252d"] if "vix_pctile_252d" in df.columns else None
+    for m in ("ret_21d", "ret_63d", "ret_252d", "resid_mom_blitz_12m"):
+        if m in df.columns and rs is not None and which in ("all", "reg"):
+            df[f"md_{m}_x_reg"] = df[m] * rs; new.append(f"md_{m}_x_reg")
+        if m in df.columns and vixp is not None and which in ("all", "vix"):
+            df[f"md_{m}_x_vixp"] = df[m] * vixp; new.append(f"md_{m}_x_vixp")
+    if which in ("all", "vix"):
+        for v in ("vol_252d", "beta_252d"):
+            if v in df.columns and vixp is not None:
+                df[f"md_{v}_x_vixp"] = df[v] * vixp; new.append(f"md_{v}_x_vixp")
+    if which in ("all", "macro"):
+        if has("earnings_yield", "yield_curve_2_10"):
+            df["md_ey_x_yc"] = df["earnings_yield"] * df["yield_curve_2_10"]; new.append("md_ey_x_yc")
+        if has("beta_252d", "hy_credit_spread"):
+            df["md_beta_x_credit"] = df["beta_252d"] * df["hy_credit_spread"]; new.append("md_beta_x_credit")
+        if has("beta_252d", "real_yield_21d_chg"):
+            df["md_beta_x_ryld"] = df["beta_252d"] * df["real_yield_21d_chg"]; new.append("md_beta_x_ryld")
+    if which in ("all", "reg") and "ret_21d" in df.columns:
+        df["md_xs_disp_21d"] = df.groupby("date")["ret_21d"].transform("std"); new.append("md_xs_disp_21d")
+    return df, new
+
+
 def _close_panel(market, lo, hi):
     with session_scope() as s:
         rows = s.execute(text(
@@ -200,7 +230,7 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                    portfolio="long", vix_gate=None, decile=0.1, step=21, cost=None,
                    reselect=False, seed=42, model="lgbm", regfeat=False, normalize=False,
                    wave3=False, wave5=False, sample_weight=None, model_params=None,
-                   embargo=21):
+                   embargo=21, macrodeep=False):
     cost = cost if cost is not None else (0.003 if market == "KR" else 0.001)
     feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
     if wave3:
@@ -209,6 +239,9 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
     if wave5:
         df, _extra5 = _add_wave5_feats(df)
         feats = feats + _extra5
+    if macrodeep:
+        df, _extramd = _add_macrodeep_feats(df, which=(macrodeep if isinstance(macrodeep, str) else "all"))
+        feats = feats + _extramd
     dates = np.sort(df["date"].unique())
     px = _close_panel(market, pd.Timestamp(dates[0]).date(), pd.Timestamp(dates[-1]).date())
 
@@ -602,6 +635,11 @@ CONFIGS = {
     # sample-treatment battery (vs mn_swabs baseline)
     "mn_uniq":      dict(label="mn", reselect=True, normalize=True, sample_weight="uniq"),
     "mn_uniqabs":   dict(label="mn", reselect=True, normalize=True, sample_weight="uniqabs"),
+    # Wave-4 macro-deep interaction features (on mn_norm+blitz+swabs base)
+    "mn_md":        dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", macrodeep=True),
+    "mn_md_vix":    dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", macrodeep="vix"),
+    "mn_md_reg":    dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", macrodeep="reg"),
+    "mn_md_macro":  dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", macrodeep="macro"),
     "mn_meta":      dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", portfolio="meta"),
     "mn_disp":      dict(label="mn", reselect=True, normalize=True, sample_weight="disp"),
     "mn_dispabs":   dict(label="mn", reselect=True, normalize=True, sample_weight="dispabs"),

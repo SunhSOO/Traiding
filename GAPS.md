@@ -1580,8 +1580,9 @@ Sector 별로 다른 cross-asset 의존성:
 ### D. 신규 피처/신호 ★★★ 최대 미답 영역 (알파의 원천, 2026-06-23 점검)
 > **진단**: I축 뉴스 피처 40개 + macro/cross-asset 35개가 캐시에 있으나 **번들 top-50 선택 거의 0**. 모델·전처리는 소진했어도 *피처 공간은 거의 안 건드림.*
 - 🔴 **Information(I)축 죽음**: 뉴스/센티먼트 40개 top-50 선택 0개(양시장). 2018-2024 뉴스 historical 거의 없음(~7개월) → **10년 백필(저장공간 대기) 후 테스트 가능**.
-- ⬜ **Wave-4 macro-deep 상호작용**(regime×feat, yield-curve 3-factor, sector×cross-asset, lead-lag): 메모리 추정 +15-25%, **최고 우선순위**, 본격 미구현.
-- ⬜ **학습 데이터 10년 확장**(현재 2018-2024 6년 → 2016-2026): 더 많은 데이터=최대 레버 후보.
+- ⏭️ **Wave-4 macro-deep 상호작용 기각(2026-06-23)**: factor×regime/vix/yield/credit 13종+subset ablation 전부 US IC 미달(swabs 0.0356 → md 0.0246, vix 0.0308, reg 0.0347, macro 0.0166). **명시 상호작용 3번째 실패**(regfeat·Wave5·macro-deep) — GBDT가 이미 regime split으로 포착, 수작업 상호작용은 과적합만 추가. "+15-25%" 추정 근거없음.
+- ⬜ **학습 데이터 10년 확장**(현재 2018-2024 6년 → 2016-2026): 더 많은 데이터=진짜 미답 레버. ★최고우선(상호작용 죽었으니).
+- ⬜ **seed-ensemble**(N시드 평균): ±5-9% 시드분산 제거, 싸다.
 - ⬜ seed-ensemble(±5-9% 시드분산 제거), adopted 레버 스태킹(mn+tb).
 - ⏭️ **Wave3 기각(2026-06-17)**: idio-vol(틸트, KR 집중↑·수익↓ 해로움) / 조잡 residual momentum(ret−β·시장; KR 우세하나 US IC↓). **ablation이 시장모순 폭로** — 어느 구성도 양시장 미승. 미채택.
 - ✅ **정식 Blitz residual momentum 채택·활성화(2026-06-18)**: 일별 잔차 12-1m 누적/잔차vol 표준화. 양시장 IC↑(KR 0.0060/US 0.0286) + 집중↓(US 69) + MDD↓ + US 전regime↑. `features_advanced`+ALL_FEATURE_COLS 배선, `augment_blitz.py`로 캐시 병합(추론과 동일 SPY 프록시), 번들 재학습(blitz top-50 선택 KR33/US26위). KR WF IC 0.0387→0.0412↑, US 0.0289→0.0242(노이즈 범위) — KR명확/US중립.
