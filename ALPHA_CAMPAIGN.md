@@ -169,7 +169,16 @@ idio-vol + 다호라이즌 residual momentum를 mn_norm 위에 추가. 2-seed/�
 - ⏭️ **uniqueness 가중**: 단독≈무효(균일호라이즌 횡단면=concurrency 상수). uniqabs(×abslabel)는 5seed IC↑(US 0.0389/KR 0.0171)이나 **conc5 양시장 악화+비원칙 메커니즘**(2018-Q1 지속 up-weight) 기각.
 - ⏭️ **dispersion 가중**: conc5 270~308% 망가짐.
 - ⏭️ **meta-labeling**: 2차분류기로 롱 사이징 → US 수익 21.9→11.6 반토막+conc5 116, IC동일(선택불변). conviction과 동일 실패. **등가중 top-decile 최적 확정.**
-> 이로써 라벨/전처리/모델/포트/신규피처/샘플처리/튜닝 전 카테고리 소진. 열린루프: 새 기법 발상 시 복귀.
+> ⚠️ **소진된 건 얕은 레버(모델·전처리·사이징·샘플가중·튜닝)뿐.** 알파의 원천인 **신규 신호(피처) 공간은 거의 미답** — §6 참고.
+
+## 6. 미답 영역 — 피처/신호 frontier (2026-06-23 점검)
+모델·전처리·사이징은 소진했으나 **피처는 거의 안 건드렸다.** 진단 결과:
+- 🔴 **Information(I)축 죽어있음**: 뉴스/센티먼트 피처 40개가 캐시에 있으나 **번들 top-50 선택 0개**(양시장). 원인=2018-2024 학습기간 뉴스 historical 거의 없음(~7개월치뿐). → **10년 뉴스 백필(저장공간 대기) 후에야 테스트 가능** [[News history plan]].
+- 🟡 **macro/cross-asset 35개도 거의 미선택**(top-50에 2~7개): vix·yield-curve raw는 **상호작용 엔지니어링 없이 무용**.
+- ⬜ **Wave-4 macro-deep 상호작용피처**(regime×feat, yield-curve 3-factor, sector×cross-asset, lead-lag) — 메모리 추정 **+15-25% 알파**, 조잡 idio-vol/resid-mom만 했고 **본격 미구현**. **최고 우선순위.**
+- ⬜ **학습 데이터 10년 확장**(현재 2018-2024 6년 → F/T 10년 보유, 2016-2026 풀캐시): 더 많은 데이터=종종 최대 레버. 미테스트.
+- ⬜ **seed-ensemble**(N시드 평균 → 측정된 ±5-9% 시드분산 제거): 싸고 안정성 확정 개선. ⬜ **adopted 레버 스태킹**(mn+tb 블렌드).
+- ⬜ TFT/PatchTST(저우선, 딥 실패).
 
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
