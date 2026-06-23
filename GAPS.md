@@ -1575,7 +1575,16 @@ Sector 별로 다른 cross-asset 의존성:
 ### C. 모델 클래스 (트리만 썼었음)
 - ✅ **LGBM 유지 (최적)** | ⏭️ 앙상블(±15)/Ridge(기각)/MLP·wide·ens(기각)
 - ⏭️ **Wave2 기각(2026-06-17)**: XGBoost(US IC 0.019<mn_norm), CatBoost(US IC 0.030 좋으나 KR 분산±14 불안정), ExtraTrees(수익 21.7이나 IC 0.008/46%=선택능력0 함정), ENet/Lasso(선형 열세). GBDT+정규화가 모델클래스 최적 확정.
-- ⬜ LSTM/TFT/PatchTST 시퀀스(models_v3 보유) — Wave4 잔존(GPU)
+- 🟡 **Learning-to-rank(lambdarank) — 검증중(2026-06-23)**: 그동안 **L2 회귀만** 썼으나 과제가 랭킹이라 목적함수 불일치였음(간과). model=ltr(당일=group, mn 30분위=relevance). smoke US IC 0.041>swabs. **목적함수=평가지표 정합** 가설, 양시장 3-seed 진행중.
+- ⏭️ LSTM/TFT 기각/저우선(딥 실패)
+
+### C2. 재점검서 발굴한 미테스트 (2026-06-23, "다 찾았나?" 2차 push)
+> 두 번 "소진" 과장했음. 세게 보니 *미사용 데이터 + 간과한 기법*이 더 나옴:
+- 🟡 **Learning-to-rank** — §C, 검증중 (가장 근본적, 목적함수 정합)
+- ⬜ **Cross-market pooled 학습**(US+KR 합쳐 학습) — 공짜 데이터 2배+교차정규화, 특히 작은 KR
+- ⬜ **Short-volume/공매도 피처** — DB 17.9M행 있으나 **피처화 0**(숏스퀴즈·과열=직교신호)
+- ⬜ **PEAD/어닝서프라이즈** — 가장 강한 이상현상인데 **피처 0개**
+- ⬜ **turnover/거래비용 인지 선택**(net수익), beta-neutral 라벨, CPCV(IC 정직도)
 
 ### D. 신규 피처/신호 ★★★ 최대 미답 영역 (알파의 원천, 2026-06-23 점검)
 > **진단**: I축 뉴스 피처 40개 + macro/cross-asset 35개가 캐시에 있으나 **번들 top-50 선택 거의 0**. 모델·전처리는 소진했어도 *피처 공간은 거의 안 건드림.*

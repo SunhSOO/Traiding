@@ -180,6 +180,10 @@ idio-vol + 다호라이즌 residual momentum를 mn_norm 위에 추가. 2-seed/�
 - ⬜ **seed-ensemble**(N시드 평균 → 측정된 ±5-9% 시드분산 제거): 싸고 안정성 확정 개선. ⬜ **adopted 레버 스태킹**(mn+tb 블렌드).
 - ⬜ TFT/PatchTST(저우선, 딥 실패).
 
+**갱신(2026-06-23)**:
+- ❌ **macro-deep 상호작용 기각** — factor×regime/vix/yield/credit 전부 IC 미달(명시 상호작용 3연속 실패, 트리가 이미 포착). "기존 데이터 재가공" 길 막힘.
+- 🔍 **"다 찾았나?" 재점검 발굴**: 🟡learning-to-rank(L2회귀만→랭킹 목적함수 정합, 검증중 smoke US IC 0.041) / ⬜cross-market pooled / ⬜short-volume 피처(미사용 데이터) / ⬜PEAD. → 진짜 미답은 *새 데이터+목적함수*, 상호작용 아님.
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +

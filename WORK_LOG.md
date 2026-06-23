@@ -1064,6 +1064,14 @@ ridge와 달리 mn_norm은 성급 기각 안 하고 4컷×bear까지 검증 → 
 
 **최종 채택: 공통 4개(mn족 라벨+정규화+Blitz+swabs) + US 전용 1개(tb).** 번들 WF IC: KR **0.0440**, US **0.0407**(시작 0.0387/0.0289 대비). 잔존: meta-labeling(사이징), uniqueness 가중.
 
+## 2026-06-23 — 피처 frontier 점검 + macro-deep 기각 + 재점검 발굴
+
+- **"전 카테고리 소진"은 과장 정정**: 진단상 I축 뉴스 40피처가 번들 top-50 선택 0개(2018-2024 뉴스 historical 없음), macro 35개도 거의 미선택. 모델·전처리는 소진했어도 **피처 공간 미답**.
+- ❌ **Wave-4 macro-deep 상호작용 기각**: factor×regime/vix/yield/credit 13종+subset(vix/reg/macro) ablation 전부 US IC 미달(swabs 0.0356 > md 0.0246/vix 0.0308/reg 0.0347/macro 0.0166). **명시 상호작용 3연속 실패**(regfeat·Wave5·macro-deep) — GBDT가 이미 regime split으로 포착. 메모리 "+15-25%" 추정 근거없음 정정.
+- 🔍 **"다 찾았나?" 2차 push → 간과 발굴**: ①**learning-to-rank**(L2회귀만 썼음, 과제=랭킹 불일치 — 구현·검증중, smoke US IC 0.041) ②cross-market pooled 학습 ③short-volume 피처(DB 17.9M행 미사용) ④PEAD/어닝서프라이즈(피처 0). → GAPS §C2.
+
+> 교훈 [[feedback-no-complacency]]: "소진" 두 번 과장. 세게 보면 *미사용 데이터+간과 기법*이 계속 나온다. 특히 목적함수(회귀 vs 랭킹)를 평가지표와 맞추는 근본 레버를 놓쳤음.
+
 ---
 
 ## 보류 결정 (status=proposed)
