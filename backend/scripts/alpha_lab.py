@@ -230,7 +230,7 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                    portfolio="long", vix_gate=None, decile=0.1, step=21, cost=None,
                    reselect=False, seed=42, model="lgbm", regfeat=False, normalize=False,
                    wave3=False, wave5=False, sample_weight=None, model_params=None,
-                   embargo=21, macrodeep=False):
+                   embargo=21, macrodeep=False, shortvol=False):
     cost = cost if cost is not None else (0.003 if market == "KR" else 0.001)
     feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
     if wave3:
@@ -242,6 +242,8 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
     if macrodeep:
         df, _extramd = _add_macrodeep_feats(df, which=(macrodeep if isinstance(macrodeep, str) else "all"))
         feats = feats + _extramd
+    if shortvol:   # short-volume features (augment_shortvol.py adds sv_* cols)
+        feats = feats + [c for c in df.columns if c.startswith("sv_") and c not in feats]
     dates = np.sort(df["date"].unique())
     px = _close_panel(market, pd.Timestamp(dates[0]).date(), pd.Timestamp(dates[-1]).date())
 
@@ -649,6 +651,7 @@ CONFIGS = {
     "mn_uniqabs":   dict(label="mn", reselect=True, normalize=True, sample_weight="uniqabs"),
     # Wave-4 macro-deep interaction features (on mn_norm+blitz+swabs base)
     "mn_ltr":       dict(label="mn", reselect=True, normalize=True, model="ltr"),
+    "mn_sv":        dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", shortvol=True),
     "mn_md":        dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", macrodeep=True),
     "mn_md_vix":    dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", macrodeep="vix"),
     "mn_md_reg":    dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", macrodeep="reg"),
