@@ -378,6 +378,18 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
             em = ExtraTreesRegressor(n_estimators=300, max_features=0.5, min_samples_leaf=50,
                                      random_state=seed, n_jobs=-1)
             em.fit(Xtr.fillna(0.0), ytr); atR["score"] = em.predict(Xte.fillna(0.0))
+        elif model == "ltr":
+            # learning-to-rank (LambdaMART): optimize per-date RANKING directly
+            # (objective matches the eval = rank-IC), vs L2 regression of the value.
+            tr_s = tr_use.sort_values("date")
+            rel = tr_s.groupby("date")[tgt].rank(pct=True).mul(30).round().astype(int).values
+            grp = tr_s.groupby("date").size().values
+            rk = lgb.LGBMRanker(objective="lambdarank", n_estimators=300, num_leaves=31,
+                                learning_rate=0.04, min_child_samples=100, subsample=0.7,
+                                colsample_bytree=0.6, reg_lambda=5.0, random_state=seed,
+                                n_jobs=-1, verbose=-1)
+            rk.fit(tr_s[top_r].astype(float), rel, group=grp)
+            atR["score"] = rk.predict(Xte)
         elif model == "mlp":
             atR["score"] = _mlp_predict(Xtr, ytr, Xte, seed)
         elif model == "mlp_wide":
@@ -636,6 +648,7 @@ CONFIGS = {
     "mn_uniq":      dict(label="mn", reselect=True, normalize=True, sample_weight="uniq"),
     "mn_uniqabs":   dict(label="mn", reselect=True, normalize=True, sample_weight="uniqabs"),
     # Wave-4 macro-deep interaction features (on mn_norm+blitz+swabs base)
+    "mn_ltr":       dict(label="mn", reselect=True, normalize=True, model="ltr"),
     "mn_md":        dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", macrodeep=True),
     "mn_md_vix":    dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", macrodeep="vix"),
     "mn_md_reg":    dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", macrodeep="reg"),
