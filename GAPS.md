@@ -1575,7 +1575,7 @@ Sector 별로 다른 cross-asset 의존성:
 ### C. 모델 클래스 (트리만 썼었음)
 - ✅ **LGBM 유지 (최적)** | ⏭️ 앙상블(±15)/Ridge(기각)/MLP·wide·ens(기각)
 - ⏭️ **Wave2 기각(2026-06-17)**: XGBoost(US IC 0.019<mn_norm), CatBoost(US IC 0.030 좋으나 KR 분산±14 불안정), ExtraTrees(수익 21.7이나 IC 0.008/46%=선택능력0 함정), ENet/Lasso(선형 열세). GBDT+정규화가 모델클래스 최적 확정.
-- 🟡 **Learning-to-rank(lambdarank) — 검증중(2026-06-23)**: 그동안 **L2 회귀만** 썼으나 과제가 랭킹이라 목적함수 불일치였음(간과). model=ltr(당일=group, mn 30분위=relevance). smoke US IC 0.041>swabs. **목적함수=평가지표 정합** 가설, 양시장 3-seed 진행중.
+- ⏭️ **Learning-to-rank(lambdarank) 기각(2026-06-23)**: 목적함수 정합(랭킹) 가설로 시도. US 평균 IC↑(0.0339→0.0442, 수익 45%/저분산)지만 **위험지표 전부 악화**(IC+% 49%<동전, conc5 85↑, MDD -31.8↓) + **KR IC 음수(-0.0248)/분산±11.75 파탄**. NDCG가 top-rank 공격적 베팅 → 소수fold 의존+작은 noisy KR서 anti-skill. IC+%·conc5(few-fold artifact 탐지기)가 적발. 회귀+abslabel(swabs)이 robust. *좋은 발굴이었으나 경험적 기각.*
 - ⏭️ LSTM/TFT 기각/저우선(딥 실패)
 
 ### C2. 재점검서 발굴한 미테스트 (2026-06-23, "다 찾았나?" 2차 push)
