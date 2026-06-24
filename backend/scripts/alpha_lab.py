@@ -230,7 +230,7 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                    portfolio="long", vix_gate=None, decile=0.1, step=21, cost=None,
                    reselect=False, seed=42, model="lgbm", regfeat=False, normalize=False,
                    wave3=False, wave5=False, sample_weight=None, model_params=None,
-                   embargo=21, macrodeep=False, shortvol=False, drop_prefix=None):
+                   embargo=21, macrodeep=False, shortvol=False, drop_prefix=None, tb_k=1.5):
     cost = cost if cost is not None else (0.003 if market == "KR" else 0.001)
     feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
     if wave3:
@@ -281,7 +281,7 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
         tgt = "mnmh"
     elif label == "tb":   # triple-barrier (path-aware, market-neutralized) label
         df = df.copy()
-        df["tbmn"] = _tb_label(df, px)
+        df["tbmn"] = _tb_label(df, px, k=tb_k)
         tgt = "tbmn"
     elif label == "sn":   # sector-neutral residual (subtract date-sector mean)
         df = df.copy()
@@ -711,6 +711,8 @@ def main():
     ap.add_argument("--seeds", default="42", help="comma-separated seeds; >1 => mean±std")
     ap.add_argument("--step", type=int, default=21)
     ap.add_argument("--router", action="store_true", help="run the online regime router")
+    ap.add_argument("--topk", type=int, default=None, help="override topk for all configs (hyperparam sweep)")
+    ap.add_argument("--tbk", type=float, default=None, help="override triple-barrier k (barrier width sweep)")
     args = ap.parse_args()
     seeds = [int(s) for s in args.seeds.split(",")]
     cache = Path(f"var/_bt_period_{args.market}_{PERIOD}.parquet")
@@ -739,6 +741,10 @@ def main():
         print(f"{'config':<13} {'alpha/yr':>9} {'alpha_tot':>9} {'MDD':>7} {'win%':>5} {'IC':>8} {'IC+%':>5} {'conc5':>6}  vix(lo/mid/hi)")
     for name in args.configs.split(","):
         cfg = dict(CONFIGS[name.strip()]); cfg["step"] = args.step
+        if args.topk is not None:
+            cfg["topk"] = args.topk
+        if args.tbk is not None:
+            cfg["tb_k"] = args.tbk
         ays, mdds, iccs, last = [], [], [], None
         for sd in seeds:
             m = run_experiment(df, args.market, seed=sd, **cfg)
