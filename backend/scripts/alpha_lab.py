@@ -230,7 +230,8 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                    portfolio="long", vix_gate=None, decile=0.1, step=21, cost=None,
                    reselect=False, seed=42, model="lgbm", regfeat=False, normalize=False,
                    wave3=False, wave5=False, sample_weight=None, model_params=None,
-                   embargo=21, macrodeep=False, shortvol=False, drop_prefix=None, tb_k=1.5):
+                   embargo=21, macrodeep=False, shortvol=False, drop_prefix=None, tb_k=1.5,
+                   eval_start=None):
     cost = cost if cost is not None else (0.003 if market == "KR" else 0.001)
     feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
     if wave3:
@@ -327,6 +328,9 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
 
     start_idx = 63
     rebal = list(range(start_idx, len(dates) - 1, step))
+    if eval_start is not None:   # train on all past, but only EVALUATE from this date
+        es = pd.Timestamp(eval_start)
+        rebal = [i for i in rebal if pd.Timestamp(dates[i]) >= es] or rebal
     # Feature selection ONCE on the initial training window (past data only;
     # importance is stable enough that per-rebalance reselection isn't worth
     # the 5x cost). 'top' is reused for every rebalance.
@@ -498,7 +502,7 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
     if L.empty:
         return {}
     ic_arr = np.array([x for x in ics if np.isfinite(x)])
-    n_years = (pd.Timestamp(dates[-1]) - pd.Timestamp(dates[start_idx])).days / 365.25
+    n_years = (pd.Timestamp(dates[-1]) - pd.Timestamp(dates[rebal[0]])).days / 365.25
     tot = cash - 1; btot = bench - 1
     eq = L["cash"].values
     mdd = float((eq/np.maximum.accumulate(eq) - 1).min())
@@ -713,9 +717,11 @@ def main():
     ap.add_argument("--router", action="store_true", help="run the online regime router")
     ap.add_argument("--topk", type=int, default=None, help="override topk for all configs (hyperparam sweep)")
     ap.add_argument("--tbk", type=float, default=None, help="override triple-barrier k (barrier width sweep)")
+    ap.add_argument("--period", default=PERIOD, help="cache period (e.g. 2016-01-01_2024-01-01 for 10yr)")
+    ap.add_argument("--eval-start", default=None, help="train on all past but only evaluate from this date (fair more-data test)")
     args = ap.parse_args()
     seeds = [int(s) for s in args.seeds.split(",")]
-    cache = Path(f"var/_bt_period_{args.market}_{PERIOD}.parquet")
+    cache = Path(f"var/_bt_period_{args.market}_{args.period}.parquet")
     df = pd.read_parquet(cache); df["date"] = pd.to_datetime(df["date"])
     print(f"[lab] {args.market} rows={len(df):,} seeds={seeds} step={args.step}", flush=True)
 
@@ -745,6 +751,8 @@ def main():
             cfg["topk"] = args.topk
         if args.tbk is not None:
             cfg["tb_k"] = args.tbk
+        if args.eval_start is not None:
+            cfg["eval_start"] = args.eval_start
         ays, mdds, iccs, last = [], [], [], None
         for sd in seeds:
             m = run_experiment(df, args.market, seed=sd, **cfg)

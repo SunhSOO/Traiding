@@ -1590,8 +1590,8 @@ Sector 별로 다른 cross-asset 의존성:
 > **진단**: I축 뉴스 피처 40개 + macro/cross-asset 35개가 캐시에 있으나 **번들 top-50 선택 거의 0**. 모델·전처리는 소진했어도 *피처 공간은 거의 안 건드림.*
 - 🔴 **Information(I)축 죽음**: 뉴스/센티먼트 40개 top-50 선택 0개(양시장). 2018-2024 뉴스 historical 거의 없음(~7개월) → **10년 백필(저장공간 대기) 후 테스트 가능**.
 - ⏭️ **Wave-4 macro-deep 상호작용 기각(2026-06-23)**: factor×regime/vix/yield/credit 13종+subset ablation 전부 US IC 미달(swabs 0.0356 → md 0.0246, vix 0.0308, reg 0.0347, macro 0.0166). **명시 상호작용 3번째 실패**(regfeat·Wave5·macro-deep) — GBDT가 이미 regime split으로 포착, 수작업 상호작용은 과적합만 추가. "+15-25%" 추정 근거없음.
-- ⬜ **학습 데이터 10년 확장**(현재 2018-2024 6년 → 2016-2026): 더 많은 데이터=진짜 미답 레버. ★최고우선(상호작용 죽었으니).
-- ⬜ **seed-ensemble**(N시드 평균): ±5-9% 시드분산 제거, 싸다.
+- ⏭️ **학습 데이터 10년 확장 기각(2026-06-24)**: 2016-2024 캐시 빌드 후 공정테스트(동일 2018+ 평가, 학습만 2016부터) → **US IC 0.0396→0.0227, KR 0.0118→0.0056 둘 다 큰폭↓**. 2016-2018 다른regime(저변동 그라인드업)이 stale-noise로 희석. **데이터-양 가설 falsified**(pooling+10년 삼중확인). 최근 regime 데이터로 충분.
+- 🟡 **seed-ensemble**(3시드 rank-평균): 양시장 IC↑(+0.003)+US분산↓. 알파보다 **시드-강건성**(배포모델이 단일시드 인질 회피). **production-hardening 레버**(실배포 시 적용). alpha_lab 이득은 bundle전이 불확실(tb/winsor 패턴).
 - ⬜ seed-ensemble(±5-9% 시드분산 제거), adopted 레버 스태킹(mn+tb).
 - ⏭️ **Wave3 기각(2026-06-17)**: idio-vol(틸트, KR 집중↑·수익↓ 해로움) / 조잡 residual momentum(ret−β·시장; KR 우세하나 US IC↓). **ablation이 시장모순 폭로** — 어느 구성도 양시장 미승. 미채택.
 - ✅ **정식 Blitz residual momentum 채택·활성화(2026-06-18)**: 일별 잔차 12-1m 누적/잔차vol 표준화. 양시장 IC↑(KR 0.0060/US 0.0286) + 집중↓(US 69) + MDD↓ + US 전regime↑. `features_advanced`+ALL_FEATURE_COLS 배선, `augment_blitz.py`로 캐시 병합(추론과 동일 SPY 프록시), 번들 재학습(blitz top-50 선택 KR33/US26위). KR WF IC 0.0387→0.0412↑, US 0.0289→0.0242(노이즈 범위) — KR명확/US중립.
