@@ -57,9 +57,12 @@ class ProductionRecommender:
         """feat_df: one latest row per ticker (must contain 'ticker' + features)."""
         # Reproduce training-time per-date normalization across TODAY's cross-section
         # (point-in-time safe: uses only the universe being scored now).
-        if self.bundle.get("normalize") == "cross_section_zscore":
+        norm = self.bundle.get("normalize") or ""
+        if norm.startswith("cross_section_zscore"):
             sub = feat_df[self.feature_cols].astype(float)
             X = (sub - sub.mean()) / (sub.std() + 1e-9)
+            if norm.endswith("_winsor"):   # KR: clip ±3 (validated to raise IC)
+                X = X.clip(-3, 3)
         else:
             X = feat_df[self.feature_cols].astype(float)
         q = self.bundle["quantile_models"]

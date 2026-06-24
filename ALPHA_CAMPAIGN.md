@@ -184,6 +184,13 @@ idio-vol + 다호라이즌 residual momentum를 mn_norm 위에 추가. 2-seed/�
 - ❌ **macro-deep 상호작용 기각** — factor×regime/vix/yield/credit 전부 IC 미달(명시 상호작용 3연속 실패, 트리가 이미 포착). "기존 데이터 재가공" 길 막힘.
 - 🔍 **"다 찾았나?" 재점검 발굴**: 🟡learning-to-rank(L2회귀만→랭킹 목적함수 정합, 검증중 smoke US IC 0.041) / ⬜cross-market pooled / ⬜short-volume 피처(미사용 데이터) / ⬜PEAD. → 진짜 미답은 *새 데이터+목적함수*, 상호작용 아님.
 
+### 시점 13 — 조합 검증 A/B/C · 2026-06-24 ("모든 조합 다 봤나?" push)
+탐욕적 단일레버 검증의 빈틈(시너지·순서·하이퍼) 점검:
+- **A) drop-one-out**: 최종 스택서 각 레버 제거 → **모두 기여 확인**(잉여 없음). 단 **normalize는 양시장 평균IC 미세음수, 순수 안정화 레버**(MDD/분산/집중 대폭↓). blitz도 KR선 안정화. → 스택 국소최적.
+- **B) 기각레버를 최종 스택 위에서 재시험(시너지)**: **순서-의존성 실재** — winsor/macrodeep이 초기 baseline선 기각이나 **KR 최종 스택 위선 IC↑**(US선 여전히↓, 시장분리). KR winsor alpha_lab IC 0.011→0.023(2배). **단 bundle WF IC는 wash(0.0405<0.0440) — harness특정, 미채택**(tb교훈 재현). macrodeep은 5seed서 이득 증발(기각).
+- ⇒ **시너지 후보를 발굴·엄밀검증했으나 bundle서 다 탈락 = 현 스택이 명백한 조합이득을 놓치지 않음 확인.** "전수는 불가하나 충분검증" 도달.
+- C) 하이퍼파라미터 스윕: 진행 예정(topk/tb배리어/blitz윈도우).
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +

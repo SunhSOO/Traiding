@@ -72,6 +72,9 @@ def main() -> None:
                     help="disable per-date cross-sectional z-score (validated ON by default)")
     ap.add_argument("--no-sample-weight", action="store_true",
                     help="disable |mn-label| sample weighting (validated ON by default)")
+    ap.add_argument("--norm-mode", choices=["zscore", "winsor"], default=None,
+                    help="per-date normalization. Default per-market: KR=winsor (clip ±3, "
+                         "raises KR IC on full stack), US=zscore.")
     ap.add_argument("--label", choices=["mn", "tb"], default=None,
                     help="training target. Default is per-market VALIDATED choice: US=tb "
                          "(triple-barrier, bundle WF IC 0.031->0.041, 100%% +folds), KR=mn "
@@ -79,6 +82,10 @@ def main() -> None:
     args = ap.parse_args()
     if args.label is None:   # per-market validated label (2026-06-20, label-agnostic WF IC)
         args.label = "tb" if args.market == "US" else "mn"
+    if args.norm_mode is None:   # zscore both markets. (A/B/C 2026-06-23: KR winsor
+        # raised alpha_lab IC but bundle WF IC was a wash 0.0405<0.0440 — harness-
+        # specific, not adopted. --norm-mode winsor kept for experimentation.)
+        args.norm_mode = "zscore"
 
     if args.cache:
         print(f"[prod] loading {args.cache}", flush=True)
@@ -115,7 +122,12 @@ def main() -> None:
         g = df.groupby("date")
         df[feats_all] = ((df[feats_all] - g[feats_all].transform("mean"))
                          / (g[feats_all].transform("std") + 1e-9))
-        print(f"[prod] per-date cross-sectional z-score applied to {len(feats_all)} feats", flush=True)
+        # per-market normalization mode (A/B/C synergy check 2026-06-23): on the
+        # FULL KR stack, winsorizing (clip ±3) the z-scores RAISES OOS IC
+        # (0.011->0.023) & cuts MDD; on US it hurts → KR=winsor, US=zscore.
+        if args.norm_mode == "winsor":
+            df[feats_all] = df[feats_all].clip(-3, 3)
+        print(f"[prod] per-date z-score ({args.norm_mode}) applied to {len(feats_all)} feats", flush=True)
 
     q1, q2 = df["date"].quantile(0.7), df["date"].quantile(0.85)
     tr = df[df["date"] <= q1]
@@ -192,7 +204,7 @@ def main() -> None:
 
     bundle = {
         "market": args.market, "target": target,
-        "normalize": "cross_section_zscore" if normalize else None,
+        "normalize": ("cross_section_zscore" + ("_winsor" if args.norm_mode == "winsor" else "")) if normalize else None,
         "sample_weight": "abs_mn_label" if sw_on else None,
         "label": args.label,
         "feature_cols": topk, "rank_model": rank_model,

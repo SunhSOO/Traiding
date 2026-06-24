@@ -230,7 +230,7 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
                    portfolio="long", vix_gate=None, decile=0.1, step=21, cost=None,
                    reselect=False, seed=42, model="lgbm", regfeat=False, normalize=False,
                    wave3=False, wave5=False, sample_weight=None, model_params=None,
-                   embargo=21, macrodeep=False, shortvol=False):
+                   embargo=21, macrodeep=False, shortvol=False, drop_prefix=None):
     cost = cost if cost is not None else (0.003 if market == "KR" else 0.001)
     feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
     if wave3:
@@ -244,6 +244,8 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
         feats = feats + _extramd
     if shortvol:   # short-volume features (augment_shortvol.py adds sv_* cols)
         feats = feats + [c for c in df.columns if c.startswith("sv_") and c not in feats]
+    if drop_prefix:   # ablation: remove feature columns by prefix (e.g. drop Blitz)
+        feats = [c for c in feats if not c.startswith(drop_prefix)]
     dates = np.sort(df["date"].unique())
     px = _close_panel(market, pd.Timestamp(dates[0]).date(), pd.Timestamp(dates[-1]).date())
 
@@ -380,6 +382,18 @@ def run_experiment(df, market, *, label="rank", topk=50, regime_cond=False,
             em = ExtraTreesRegressor(n_estimators=300, max_features=0.5, min_samples_leaf=50,
                                      random_state=seed, n_jobs=-1)
             em.fit(Xtr.fillna(0.0), ytr); atR["score"] = em.predict(Xte.fillna(0.0))
+        elif model == "ens3":
+            # seed-ensemble: 3 LGBM seeds, rank-averaged — cuts the ±5-9%/yr seed
+            # variance we measured. Same |label| weighting if requested.
+            swe = (np.abs(ytr.values) + 1e-6) if sample_weight == "abslabel" else None
+            ps = []
+            for k in range(3):
+                b = _base(seed * 7 + k * 101)
+                if model_params:
+                    b.update(model_params)
+                mm = lgb.LGBMRegressor(**b).fit(Xtr, ytr, sample_weight=swe)
+                ps.append(pd.Series(mm.predict(Xte)).rank(pct=True).values)
+            atR["score"] = np.mean(ps, axis=0)
         elif model == "ltr":
             # learning-to-rank (LambdaMART): optimize per-date RANKING directly
             # (objective matches the eval = rank-IC), vs L2 regression of the value.
@@ -652,6 +666,26 @@ CONFIGS = {
     # Wave-4 macro-deep interaction features (on mn_norm+blitz+swabs base)
     "mn_ltr":       dict(label="mn", reselect=True, normalize=True, model="ltr"),
     "mn_sv":        dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", shortvol=True),
+    "mn_ens3":      dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", model="ens3"),
+    # === A) drop-one-out ablation of the final stack ===
+    # KR final = mn_swabs (mn+norm+abslabel+blitz). US final = mn_tb (tb+norm+abslabel+blitz).
+    "kr_full":      dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel"),
+    "kr_drop_norm": dict(label="mn", reselect=True, normalize=False, sample_weight="abslabel"),
+    "kr_drop_sw":   dict(label="mn", reselect=True, normalize=True, sample_weight=None),
+    "kr_drop_blitz":dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", drop_prefix="resid_mom_blitz"),
+    "kr_drop_mn":   dict(label="rank", reselect=True, normalize=True, sample_weight="abslabel"),
+    "us_full":      dict(label="tb", reselect=True, normalize=True, sample_weight="abslabel"),
+    "us_drop_norm": dict(label="tb", reselect=True, normalize=False, sample_weight="abslabel"),
+    "us_drop_sw":   dict(label="tb", reselect=True, normalize=True, sample_weight=None),
+    "us_drop_blitz":dict(label="tb", reselect=True, normalize=True, sample_weight="abslabel", drop_prefix="resid_mom_blitz"),
+    "us_drop_tb":   dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel"),
+    # === B) re-test rejected levers ON TOP OF the full stack (synergy check) ===
+    "kr_b_winsor":  dict(label="mn", reselect=True, normalize="winsor", sample_weight="abslabel"),
+    "kr_b_md":      dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", macrodeep=True),
+    "kr_b_cat":     dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", model="cat"),
+    "us_b_winsor":  dict(label="tb", reselect=True, normalize="winsor", sample_weight="abslabel"),
+    "us_b_md":      dict(label="tb", reselect=True, normalize=True, sample_weight="abslabel", macrodeep=True),
+    "us_b_cat":     dict(label="tb", reselect=True, normalize=True, sample_weight="abslabel", model="cat"),
     "mn_md":        dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", macrodeep=True),
     "mn_md_vix":    dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", macrodeep="vix"),
     "mn_md_reg":    dict(label="mn", reselect=True, normalize=True, sample_weight="abslabel", macrodeep="reg"),
