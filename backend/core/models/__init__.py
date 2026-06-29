@@ -36,6 +36,7 @@ from core.models.backfill import BackfillProgress
 from core.models.overrides import ClusterWeightOverride
 from core.models.backtest import BacktestRunRow
 from core.models.regime import MarketRegime
+from core.models.integrated import MarketRead, SelectionBasket
 
 __all__ = [
     "Base",
@@ -68,6 +69,9 @@ __all__ = [
     "BacktestRunRow",
     # regime
     "MarketRegime",
+    # integrated strategy (selection→execution)
+    "MarketRead",
+    "SelectionBasket",
     # audit / meta
     "DecisionAudit",
     "RiskSnapshot",
