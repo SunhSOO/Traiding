@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="css/pages/analytics.css">
   <link rel="stylesheet" href="css/pages/settings.css">
   <link rel="stylesheet" href="css/pages/woonam.css">
+  <link rel="stylesheet" href="css/pages/integrated.css">
 
   <!-- Favicon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
@@ -62,6 +63,29 @@
               <svg viewBox="0 0 24 24"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
             </span>
             성과 분석
+          </a>
+        </div>
+
+        <!-- 통합 전략 (선정→실행) -->
+        <div class="nav-section">
+          <div class="nav-section-label">통합 전략</div>
+          <a class="nav-item" data-route="/market" href="#/market" id="nav-market">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+            </span>
+            시황 읽기
+          </a>
+          <a class="nav-item" data-route="/basket" href="#/basket" id="nav-basket">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M5 7h14l-1.5 12a2 2 0 0 1-2 1.8H8.5a2 2 0 0 1-2-1.8z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg>
+            </span>
+            선정 바스켓
+          </a>
+          <a class="nav-item" data-route="/execution" href="#/execution" id="nav-execution">
+            <span class="nav-item-icon">
+              <svg viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
+            </span>
+            실행 타이밍
           </a>
         </div>
 
@@ -240,6 +264,9 @@
   <script src="js/pages/backtest.js"></script>
   <script src="js/pages/news.js"></script>
   <script src="js/pages/macro.js"></script>
+  <script src="js/pages/market_view.js"></script>
+  <script src="js/pages/basket.js"></script>
+  <script src="js/pages/execution.js"></script>
   <script src="js/pages/scan.js"></script>
   <script src="js/pages/llm.js"></script>
   <script src="js/pages/config.js"></script>

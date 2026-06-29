@@ -171,6 +171,11 @@ const Api = {
     });
   },
 
+  // ── Integrated strategy (selection→execution) ──
+  marketRead() { return this.get('/api/integrated/market-read'); },
+  basket({ market = 'KR' } = {}) { return this.get('/api/integrated/basket', { query: { market } }); },
+  execution({ market = 'KR' } = {}) { return this.get('/api/integrated/execution', { query: { market } }); },
+
   // ── System health summary ──
   healthSummary() { return this.get('/api/health/summary'); },
 

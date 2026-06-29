@@ -21,6 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
     .register('/backtest', renderBacktest)
     .register('/news', renderNews)
     .register('/macro', renderMacro)
+    .register('/market', renderMarketView)
+    .register('/basket', renderBasket)
+    .register('/execution', renderExecution)
     .register('/scan', renderScan)
     .register('/llm', renderLLM)
     .register('/config', renderConfig);

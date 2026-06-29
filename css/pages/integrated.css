@@ -1,0 +1,35 @@
+/* Integrated strategy pages (시황 / 선정 / 실행) — new-direction UX. */
+
+/* 시황 card row */
+.ix-card-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 16px; }
+
+.ix-expo { text-align: center; padding: 12px 0 18px; }
+.ix-expo-num { font-size: 3rem; font-weight: 700; line-height: 1; }
+
+.ix-gauge { height: 8px; border-radius: 6px; background: var(--surface-2, #1c2230); overflow: hidden; margin: 8px 0 4px; }
+.ix-gauge-fill { height: 100%; border-radius: 6px; transition: width .4s ease; background: var(--accent, #4f86f7); }
+.ix-fill-green { background: #22c55e; }
+.ix-fill-amber { background: #f59e0b; }
+.ix-fill-red   { background: #ef4444; }
+.ix-fill-blue  { background: #4f86f7; }
+
+.ix-metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+.ix-metric-label { font-size: .75rem; color: var(--text-muted, #8b94a7); margin-bottom: 2px; }
+.ix-metric-val { font-size: .85rem; margin-top: 2px; }
+.ix-foot { padding-top: 10px; border-top: 1px solid var(--border, #232a3a); }
+.ix-rule { line-height: 1.6; }
+
+/* 선정/실행 summary strip */
+.ix-summary { display: flex; gap: 24px; margin-bottom: 16px; flex-wrap: wrap; }
+.ix-summary-item { background: var(--surface, #141925); border: 1px solid var(--border, #232a3a); border-radius: 10px; padding: 10px 18px; min-width: 110px; }
+.ix-summary-label { font-size: .72rem; color: var(--text-muted, #8b94a7); }
+.ix-summary-val { font-size: 1.35rem; font-weight: 600; }
+
+/* chips (dropped names / legend) */
+.ix-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ix-chip { background: var(--surface-2, #1c2230); border: 1px solid var(--border, #232a3a); border-radius: 6px; padding: 3px 10px; font-size: .8rem; }
+.ix-legend { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.ix-legend .badge { margin-left: 6px; }
+
+.badge-muted { background: var(--surface-2, #1c2230); color: var(--text-muted, #8b94a7); }
+.badge-warning { background: rgba(245, 158, 11, .15); color: #f59e0b; }

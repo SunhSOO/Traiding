@@ -48,6 +48,7 @@ from routes.news import router as news_router
 from routes.overrides import router as overrides_router
 from routes.paper import router as paper_router
 from routes.regime import router as regime_router
+from routes.integrated import router as integrated_router
 from routes.risk import router as risk_router
 from routes.scan import router as scan_router
 from routes.strategy import router as strategy_router
@@ -195,6 +196,7 @@ app.include_router(llm_router, prefix="/api/llm", tags=["LLM"])
 app.include_router(config_router, prefix="/api/config", tags=["Config"])
 app.include_router(health_summary_router, prefix="/api/health/summary", tags=["Health Summary"])
 app.include_router(regime_router, prefix="/api/regime", tags=["Regime"])
+app.include_router(integrated_router, prefix="/api/integrated", tags=["Integrated"])
 
 
 # ── WebSocket tick stream (legacy frontend) ──
