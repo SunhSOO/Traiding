@@ -845,6 +845,85 @@ async def _job_ml_decisions_daily() -> None:
             log.exception("job.ml_decisions.failed", market=market.value, error=str(e))
 
 
+async def _job_features_rebuild_daily() -> None:
+    """Rebuild the LIVE feature cache (var/_fs_ab_{market}_365.parquet) with the
+    current pipeline (incl. Blitz residual-momentum) so the integrated/ML jobs
+    infer on fresh, complete features. Closes the offline-cache staleness gap.
+    Runs with lead time before the decision jobs."""
+    from datetime import date, timedelta
+    from pathlib import Path
+    from core.db import session_scope
+    from training.features import build_feature_matrix
+    from training.labels_multi import attach_labels, load_close_panel
+    from training.features_cross_section import apply_cross_section_features
+
+    for market in ("KR", "US"):
+        try:
+            end = date.today(); start = end - timedelta(days=365)
+            with session_scope() as s:
+                feat_df, _ = build_feature_matrix(s, market=market, start=start, end=end)
+            with session_scope() as s:
+                close_panel = load_close_panel(s, market=market,
+                                               start=start - timedelta(days=10), end=end)
+            feat_df = attach_labels(feat_df, close_panel)
+            feat_df = apply_cross_section_features(feat_df)
+            feat_df.to_parquet(Path(f"var/_fs_ab_{market}_365.parquet"), index=False)
+            log.info("job.features_rebuild", market=market, rows=len(feat_df))
+        except Exception as e:
+            log.exception("job.features_rebuild.failed", market=market, error=str(e))
+
+
+async def _job_integrated_daily() -> None:
+    """INTEGRATED pipeline: alpha selection (basket + 시황 exposure) → per-stock
+    technical timing → risk/paper-broker/2-stage audit (core-* accounts).
+    Skips a market if its cache/bundle is missing (no-op, safe)."""
+    from datetime import UTC, datetime
+    from pathlib import Path
+    from core.db import session_scope
+    from core.risk import RiskEngine, RiskLimits
+    from core.types import Market
+    from brokers.db_price_oracle import DBPriceOracle
+    from brokers.paper import PaperBroker
+    from brokers.paper_persistence import load_or_create_account, rehydrate_logic
+    from decision.integrated_runner import run_integrated_decisions
+    from decision.production_inference import (
+        ProductionRecommender, latest_rows_from_cache, latest_close_map,
+    )
+
+    now = datetime.now(UTC)
+    risk_engine, risk_limits = RiskEngine(), RiskLimits()
+    oracle = DBPriceOracle(session_factory=session_scope)
+    accounts = [(Market.KR, "core-kr", "KRW", 1_000_000.0),
+                (Market.US, "core-us", "USD", 1_000.0)]
+    for market, acct, ccy, init_bal in accounts:
+        cache = Path(f"var/_fs_ab_{market.value}_365.parquet")
+        bundle = Path(f"var/models/production_{market.value}.joblib")
+        if not cache.exists() or not bundle.exists():
+            log.warning("job.integrated.skip", market=market.value, reason="missing cache or bundle")
+            continue
+        try:
+            rec = ProductionRecommender(market.value)
+            feat = latest_rows_from_cache(cache)
+            with session_scope() as s:
+                close_map = latest_close_map(s, market.value)
+                account = load_or_create_account(s, name=acct, base_currency=ccy,
+                                                 initial_balance=init_bal)
+                logic = rehydrate_logic(s, account)
+                account_id = account.id
+            broker = PaperBroker(logic, oracle, session_factory=session_scope, account_id=account_id)
+            with session_scope() as s:
+                rep = run_integrated_decisions(
+                    s, market=market, as_of=now, broker=broker,
+                    risk_engine=risk_engine, risk_limits=risk_limits,
+                    recommender=rec, feat_df=feat, close_map=close_map)
+            log.info("job.integrated", market=market.value, regime=rep.regime,
+                     exposure=float(rep.target_exposure), defensive=rep.defensive,
+                     basket=rep.basket_size, buys=rep.buys_executed, sells=rep.sells_executed,
+                     waiting=rep.waiting, rejected=rep.rejected)
+        except Exception as e:
+            log.exception("job.integrated.failed", market=market.value, error=str(e))
+
+
 async def _job_fundamental_score_weekly() -> None:
     """Weekly fundamental scoring — financials don't change daily, so
     weekly cadence keeps GPU/CPU free for the higher-frequency jobs."""
@@ -978,6 +1057,20 @@ DEFAULT_JOBS: list[JobSpec] = [
         func=_job_ml_decisions_daily,
         trigger="cron",
         cron_kwargs={"hour": 22, "minute": 45},   # after composite decisions
+        timezone="UTC",
+    ),
+    JobSpec(
+        id="features.rebuild.daily",
+        func=_job_features_rebuild_daily,
+        trigger="cron",
+        cron_kwargs={"hour": 20, "minute": 0},     # lead time before integrated.daily
+        timezone="UTC",
+    ),
+    JobSpec(
+        id="integrated.daily",
+        func=_job_integrated_daily,
+        trigger="cron",
+        cron_kwargs={"hour": 23, "minute": 0},     # after fresh features + regime + scores
         timezone="UTC",
     ),
     JobSpec(
