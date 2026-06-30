@@ -43,7 +43,15 @@ class DefaultJobsTest(unittest.TestCase):
                 "technical.score.daily",
                 "fundamental.score.weekly",
                 "decisions.daily",
+                "ml_decisions.daily",
+                "features.rebuild.daily",
+                "integrated.daily",
                 "training.weekly",
+                "regime.daily",
+                "backtest.walk_forward.weekly",
+                "mlops.retrain.weekly",
+                "mlops.drift_check.daily",
+                "news.backfill.nightly",
             },
         )
 
