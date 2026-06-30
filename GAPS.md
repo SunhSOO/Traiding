@@ -1627,3 +1627,15 @@ regime-conditional / topk30 / 섹터중립 / 롱숏 / VIX게이팅 / 앙상블(L
 - `mn_ridge`(정규화 선형): US +20.9(step42)로 GBDT 2배였으나 **호라이즌-일치(step21)서 +9.1로 추락 + OOS IC 음수(−0.009)**. 세 모델 IC가 똑같이 ~0.02인데 ridge만 step42 수익 2배 + top5 fold 84% 집중 → **저변동성/저베타 팩터 틸트**(지배피처 tracking_err/vol/beta/corr_spy)가 메가캡 지배기에 등가중 벤치 이긴 것, 종목선택 알파 아님. **mn_norm과의 차이**: mn_norm은 IC 유지+bear양수+step강건(진짜 안정화), ridge는 IC붕괴+step취약(가짜). 기각.
 - **교훈(영구)**: alpha_lab가 *등가중 벤치 대비 수익*으로만 평가 → 팩터틸트=알파 혼동. **하니스에 OOS rank-IC 추가**(2026-06-17). 이제 모든 config는 IC(선택능력)와 벤치-상대 수익 둘 다로 판정. IC≈0인데 alpha 큰 건 팩터 베타지 알파 아님. **검증 승자 mn_rs는 IC 양수(+0.023~0.040, 83% 양수fold)로 진짜 선택 알파임이 재확인됨.**
 - ⬜ 후속 lead: 저변동성은 실재 팩터 → 깨끗한 vol-factor를 *명시 피처/오버레이*로 mn_rs에 추가하면 보탬 되는지(IC 중립적으로) 테스트 — 단 IC 음수라 dollar-neutral 알파로는 회의적.
+
+---
+
+## 통합 파이프라인 잔여 (2026-06-29, 선정→실행)
+
+2계층 파이프라인 신설 후 남은 항목. 코드는 동작·검증 완료(P1~P4), 아래는 운영/정교화 lead.
+
+- 🔧 **노출 오버레이 breadth 보정 = v1 휴리스틱**: 시황 노출 = regime기준 × min(1, 0.4+breadth). breadth는 q50 raw 예측수익>0 비율. **regime 부분은 검증된 견고 신호**지만 breadth는 q50의 절대수준 캘리브레이션에 의존(KR 0.038로 극단 → 노출 0.31 자동축소; 의미는 타당하나 q50이 랭킹모델이라 절대값 신뢰도 미검증). 후속: breadth를 percentile/HMM 기반으로 교체하거나 paper로 캘리브레이션.
+- 🔧 **라이브 피처 캐시 freshness**: 일일 잡은 `_fs_ab_{m}_365.parquet`를 읽음. `features.rebuild.daily`(20:00 UTC)가 매일 blitz 포함 재빌드하나 **build_feature_matrix 소요시간이 길어**(per-ticker DB조회) 23:00 integrated.daily 전 완료 보장은 데이터/하드웨어 의존. 후속: 증분(오늘치만 append) 빌드로 단축.
+- ⏭️ **통합 포트폴리오 화면**: 시황/선정/실행 3페이지 신설. core-kr/us 합산 포트폴리오 뷰는 기존 `/portfolio`(account_name=core-* 지정)로 재사용 가능 — 전용 통합 대시보드는 후속.
+- ⏭️ **paper 드라이런 검증(P5)**: 라이브캐시 재빌드 완료 후 `run_integrated_job.py` 양시장 실행 → core-* 계정 수개월 누적 후 알파 실현 확인. (실행자체는 검증됨, 누적 성과는 시간 필요)
+- ⏭️ **레드/그린(단일종목 매매)와의 계정 분리 운용**: D3로 레거시 잔존. 레드/그린=단일종목 수동/반자동, integrated=바스켓 — 계정·UX 분리 확인됨. 통합 리포팅은 후속.

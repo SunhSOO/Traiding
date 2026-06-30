@@ -1074,6 +1074,18 @@ ridge와 달리 mn_norm은 성급 기각 안 하고 4컷×bear까지 검증 → 
 
 ---
 
+## 2026-06-29 — 통합 파이프라인 구축(선정→실행) + 새 UX
+
+원 제작자와 역할분담 확정 후 실제 개발 착수. **기존 기술적 요소(레드/그린 포함)=단일종목 매매 타이밍, 우리 횡단면 알파=지수투자·시황파악·종목선정**. 기존 코드 면밀 탐구 후 2계층 파이프라인 신설. 설계 확정: D1 타이밍만(veto 불가)·D2 신규 core-kr/us 계정·D3 레거시 잔존·D4 바스켓=능동지수+노출오버레이(ETF 미사용)·D5 균등비중. (설계: DESIGN_INTEGRATED.md)
+
+- **P1 선정·시황 백엔드**(cbe23b7): `MarketRead`/`SelectionBasket` 모델+마이그레이션(0012). `decision/selection.run_selection`: 추천→시황read(regime별 노출 위기0/회피0.4/중립0.7/선호1.0 ×breadth nudge)+바스켓 산출·영속. smoke: US 노출0.7/바스켓52, KR 노출0.31(breadth 0.038 낮아 자동 축소)/바스켓32.
+- **P2 실행 백엔드**(9519807): `integrated_runner` A+B(선정)→C(기술적 일봉 타이밍 게이트: 진입지연/약세청산, **D1 veto 불가**)→D(리스크/체결/2단계 감사). 사이즈=equity×목표노출×(1/n). `score_one_ticker` 재사용. smoke: KR 바스켓32→BUY15/WAIT17(기술 17종목 진입지연)·SELL0, US 바스켓52→BUY20/WAIT19/REJECTED13(리스크한도)·errors0 — 2단계 파이프라인 정합.
+- **P3 스케줄러+테스트**(e7ab04c): `integrated.daily`(23:00 UTC)+`features.rebuild.daily`(20:00 UTC, **라이브캐시 staleness 갭 해소**: blitz 포함 재빌드). 단위테스트 5종(노출매핑/breadth-exposure/바스켓비중/타이밍임계값) 통과.
+- **P4 새 UX**(2b7f349): 새 방향 전용 설계(기존 화면 복제 아님). `/api/integrated` 라우트(market-read/basket/execution) + 페이지 시황(노출게이지·breadth·확신도 2시장카드)/선정(바스켓 테이블·NEW/보유/제외 diff)/실행(BUY/WAIT/SELL/거절·기술점수·타이밍사유) + nav '통합 전략' 섹션. TestClient로 3엔드포인트 정상 검증(US 52종목 BUY20/WAIT19/REJECTED13, 샘플 SATS BUY tech=32.5).
+- **P2.5 라이브캐시 재빌드**: `build_live_cache.py`로 _fs_ab(최근 365일, blitz 포함) 재빌드 → 라이브 잡 동작화 (진행중).
+
+---
+
 ## 보류 결정 (status=proposed)
 
 - ⏸️ **10년치 뉴스 백필 — 저장공간 확보 후 진행**(user 2026-06-09 결정). 현황: 뉴스가 ~6~7개월치(GDELT 영어 141.8만 2025-12~2026-06, Naver 한국어 2.3만)뿐이라 I축 historical이 F/T(10년)에 비해 빈약.

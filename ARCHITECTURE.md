@@ -118,9 +118,28 @@ Providers -> Service -> Runtime -> UI
 - **모든 결정은 감사 로그로**: 입력 점수·가중치·LLM 원문 출력·실행 결과 모두 `decision_audit` 테이블에 영구 저장.
 - **페이퍼 → 실거래 단계 강제**: `RUNTIME_MODE=paper`가 기본. `live` 활성화는 두 단계 확인 + 결정 감사 로그 N건 이상 검증 후만.
 
+## 통합 파이프라인 — 선정→실행 (2026-06-29 신설)
+
+원 제작자와의 역할분담 확정: **횡단면 알파(우리 모델) = 지수투자·시황파악·종목선정(WHAT)**, **기존 기술적 요소(레드/그린 포함) = 단일종목 매매 타이밍(WHEN)**. 두 계층을 하나의 일일 파이프라인으로 결합합니다. (상세: `DESIGN_INTEGRATED.md`)
+
+```
+A. 시황 READ   regime + breadth + 확신도 → 목표 노출(target_exposure)   ┐ 선정 계층
+B. 선정        횡단면 알파 → 바스켓(top-decile, 균등비중)               ┘ decision/selection.py
+                                  ↓
+C. 실행 타이밍  바스켓 종목별 기술적 일봉 점수(추세·모멘텀·평균회귀·레드그린) ┐ 실행 계층
+               → 진입 지연(약세)/청산(붕괴·바스켓이탈). D1: 타이밍만, veto 불가  │ decision/integrated_runner.py
+D. 리스크·체결·감사  size=equity×노출×(1/n) → RiskEngine → PaperBroker → 2단계 감사 ┘
+```
+
+- **계정 분리(D2)**: integrated = `core-kr`/`core-us`(바스켓), 레거시 composite = `default-*`, ML = `ml-*`. 레드/그린 단일종목 매매와 계정·UX 분리.
+- **노출 오버레이(D4)**: 바스켓은 능동 인덱스. regime기준 노출(위기0·회피0.4·중립0.7·선호1.0)에 breadth로 추가 축소. ETF 미사용(v1).
+- **데이터 모델**: `market_read`(시황 일별), `selection_basket`(바스켓 일별). 감사는 기존 `decision_audit`에 `model_version=integrated_{m}_v1` + 2단계 snapshot(selection/timing).
+- **스케줄러**: `features.rebuild.daily`(20:00 UTC, 라이브캐시 재빌드) → `integrated.daily`(23:00 UTC).
+- **UX**: `통합 전략` 섹션 — 시황(`/market`)·선정(`/basket`)·실행(`/execution`). `/api/integrated/*`. 새 방향 전용 설계.
+
 ## 메인 전략 경계
 
-메인 시스템은 woonam 복합 결정 엔진이며, `Red-Green Signals + SL/TP v9 (Trail Fix)`는 그 안의 **기술적 분석 모듈의 한 시그널**입니다 (`backend/technical/signals/red_green.py`).
+메인 시스템은 woonam 복합 결정 엔진이며, `Red-Green Signals + SL/TP v9 (Trail Fix)`는 그 안의 **기술적 분석 모듈의 한 시그널**입니다 (`backend/technical/signals/red_green.py`). 통합 파이프라인에서 이 기술적 모듈은 **실행 타이밍 게이트(C)** 역할을 맡습니다(선정은 거부 못 함, D1).
 
 서버 구현은 Pine Script를 그대로 복사하는 것이 아니라, 같은 계산 순서와 상태 전이를 재현해야 합니다. 특히 다음 순서를 유지합니다.
 
