@@ -97,6 +97,10 @@ def main() -> None:
     ap.add_argument("--tech-only", action="store_true",
                     help="TECHNICAL-ONLY cell: no alpha selection — equal-weight the whole "
                          "universe's technical-timing passers (fills the 2×2 matrix)")
+    ap.add_argument("--production", action="store_true",
+                    help="use the PRODUCTION training recipe per fold (per-market label "
+                         "US=tb/KR=mn + per-date z-score + top-50 select + |label| weight) "
+                         "instead of the naive rank proxy")
     args = ap.parse_args()
 
     cache = args.cache or f"var/_bt_period_{args.market}_2018-01-01_2024-01-01.parquet"
@@ -105,9 +109,28 @@ def main() -> None:
     dates = np.sort(df["date"].unique())
     feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
     market = Market(args.market)
-    params = dict(n_estimators=150, num_leaves=31, learning_rate=0.05,
-                  min_child_samples=100, subsample=0.7, colsample_bytree=0.6,
-                  reg_lambda=5.0, verbose=-1, n_jobs=-1)
+
+    # ── PRODUCTION recipe setup (once, PIT-safe): per-market label + per-date
+    #    cross-section z-score. Feature selection + |label| weighting happen
+    #    per fold inside the loop. Blitz is already a feature column. ──
+    target_col, use_prod = RANK, args.production
+    if use_prod:
+        df["mn_fwd_21d"] = df[RET] - df.groupby("date")[RET].transform("mean")
+        if args.market == "US":
+            from scripts.alpha_lab import _tb_label, _close_panel
+            px = _close_panel(args.market, df["date"].min().date(), df["date"].max().date())
+            df["tbmn"] = _tb_label(df, px)
+            target_col = "tbmn"
+        else:
+            target_col = "mn_fwd_21d"
+        df = df.dropna(subset=[target_col]).copy()
+        g = df.groupby("date")
+        df[feats] = (df[feats] - g[feats].transform("mean")) / (g[feats].transform("std") + 1e-9)
+        print(f"[prod] label={target_col} + per-date z-score on {len(feats)} feats", flush=True)
+
+    params = dict(n_estimators=(300 if use_prod else 150), num_leaves=31,
+                  learning_rate=(0.03 if use_prod else 0.05), min_child_samples=100,
+                  subsample=0.7, colsample_bytree=0.6, reg_lambda=5.0, verbose=-1, n_jobs=-1)
 
     reb_idx = list(range(EMBARGO + 252, len(dates), args.step))  # need ≥1y history before first
 
@@ -151,12 +174,22 @@ def main() -> None:
         t = dates[i]
         train_cut = dates[i - EMBARGO]
         lo = dates[max(0, i - EMBARGO - args.train_window)] if args.train_window else dates[0]
-        tr = df[(df["date"] <= train_cut) & (df["date"] > lo)].dropna(subset=[RANK])
+        tr = df[(df["date"] <= train_cut) & (df["date"] > lo)].dropna(subset=[target_col])
         at_t = df[df["date"] == t].dropna(subset=[RET]).copy()
         if len(tr) < 5000 or len(at_t) < 30:
             continue
-        model = lgb.LGBMRegressor(**params).fit(tr[feats].astype(float), tr[RANK].astype(float))
-        at_t["score"] = model.predict(at_t[feats].astype(float))
+        if use_prod:
+            sw = np.abs(tr[target_col].values)                      # |label| weighting
+            sel = lgb.LGBMRegressor(**params).fit(
+                tr[feats].astype(float), tr[target_col].astype(float), sample_weight=sw)
+            cols = pd.Series(sel.feature_importances_, index=feats).sort_values(
+                ascending=False).head(50).index.tolist()            # top-50 select
+            model = lgb.LGBMRegressor(**params).fit(
+                tr[cols].astype(float), tr[target_col].astype(float), sample_weight=sw)
+        else:
+            cols = feats
+            model = lgb.LGBMRegressor(**params).fit(tr[cols].astype(float), tr[RANK].astype(float))
+        at_t["score"] = model.predict(at_t[cols].astype(float))
         at_t["rank_pct"] = at_t["score"].rank(pct=True)
         basket = at_t[at_t["rank_pct"] >= 1 - args.decile]
         if basket.empty:
