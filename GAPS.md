@@ -1646,3 +1646,8 @@ regime-conditional / topk30 / 섹터중립 / 롱숏 / VIX게이팅 / 앙상블(L
 - ⏭️ **selection_basket가 전체 유니버스 영속**: `_persist`는 바스켓뿐 아니라 전 종목 recs를 기록(US ~500행/일). 전체 랭킹 뷰엔 유용하나 저장 증가(≈125k행/년/시장). 인덱스로 쿼리는 무해, 필요시 in_basket만 저장으로 축소 가능.
 - ⏭️ **UX 리치니스(설계 목업 대비 v1 간소화)**: 시황=지수추세/VIX/노출추이차트/regime리본, 선정=conviction분포·클릭→선정사유(피처기여), 실행=클릭→기술적상세(trend/RSI/RedGreen) 미구현. 데이터 의존(노출추이=market_read 누적, 선정사유=SHAP류 인프라). P2에서 단계 구현.
 - ✅ **보안 점검 통과**: `decode_access_token`의 `verify_exp=False` 전환 후 비테스트 호출자는 `_resolve_user` 하나뿐이며 즉시 `is_token_expired`로 만료 강제 — 만료 우회 없음 확인.
+- ⚠️ **역사 PIT 기술 스코어링 불가(as_of_ts=일괄적재시각)**: `daily_prices.as_of_ts`가 봉의 실제 가용시각이 아니라 **벌크 적재 타임스탬프(~2026-06-02)**로 전 봉(2015~)에 동일하게 찍혀 있음. `_load_bars`의 PIT 가드 `as_of_ts <= as_of`가 과거 날짜엔 전부 미래→0봉→`score_one_ticker`=None. **라이브(as_of=now)는 정상**이나 **역사 백테스트에서 기술 타이밍 스코어를 못 냄**. `backtest_integrated.py`는 우회로 trade_date 기반 스코어러 사용. 근본해결: 적재 시 as_of_ts를 trade_date의 장마감 UTC로 채우기(또는 PIT 로더에 trade_date 폴백).
+
+### 통합 백테스트 결과 (walk-forward, 정직판정 2026-06-30)
+- 📉 **간이 알파(rank-LGBM 프록시) OOS ≈ 벤치(살짝 하회)**: US 2019-2023 분기 리밸런스 20회 walk-forward — 벤치(등가중) 총+36.7%/Sharpe0.59 vs 알파바스켓 총+30.8%/Sharpe0.43 → **-5.9%p**. **중요 단서**: 이 백테스트 알파는 프로덕션 5레버(mn/tb라벨·정규화·blitz·|label|가중)를 **미복제한 간이 프록시**라 프로덕션 알파를 과소평가. 그럼에도 "선정 엣지는 미묘"(작은 WF IC 0.041, 'IC≠top-decile수익')를 재확인. **진짜 검증은 프로덕션 번들로 P0 paper 누적.** 후속: 백테스트에 프로덕션 학습레시피 walk-forward 이식.
+- 🟢 **타이밍 게이트가 값을 더함(핵심 통합가설 지지)**: trade_date 스코어러로 재측정(invested 61%) — 알파단독 Sharpe0.43 → 타이밍(cash) 0.67 → 타이밍(집중) 0.72, 집중은 총+50.6%로 벤치(+36.7%)·알파(+30.8%) 모두 상회(+19.9%p vs 알파). "선정→실행"이 실제로 위험조정수익 개선. 단서: 간이 프록시·20회·단일시장이라 확정 아님, paper가 최종.

@@ -74,20 +74,34 @@ def run_selection(
     market: str,
     as_of: datetime,
     recs: pd.DataFrame,
+    feat_df: Optional[pd.DataFrame] = None,
     decile: float = 0.10,
     persist: bool = True,
 ) -> SelectionResult:
     """Compute the market read + selection basket from recommender output.
 
     `recs` columns expected: ticker, rank_pct, pred_ret, target_price,
-    band_low, band_high, action (BUY for top-decile).
+    band_low, band_high, action (BUY for top-decile). `feat_df` (optional) is
+    the underlying feature matrix; when it carries ``px_vs_sma200`` we blend a
+    calibration-free *price* breadth (fraction above the 200d SMA) with the
+    model's predicted breadth, so a mis-scaled q50 level can't swing exposure.
     """
     as_of_date = as_of.date() if isinstance(as_of, datetime) else as_of
     regime, regime_conf = _latest_regime(session, market)
 
     n = max(len(recs), 1)
-    # breadth: fraction of universe with a positive predicted forward return.
-    breadth = float((pd.to_numeric(recs["pred_ret"], errors="coerce") > 0).mean()) if len(recs) else 0.0
+    # breadth: blend model-predicted breadth (fraction with pred_ret>0) with a
+    # price-based breadth (fraction above 200d SMA) — the latter is standard and
+    # calibration-free, so it stabilises the exposure overlay.
+    pred_breadth = float((pd.to_numeric(recs["pred_ret"], errors="coerce") > 0).mean()) if len(recs) else 0.0
+    price_breadth = None
+    if feat_df is not None and "px_vs_sma200" in getattr(feat_df, "columns", []):
+        pv = pd.to_numeric(feat_df["px_vs_sma200"], errors="coerce").dropna()
+        if len(pv):
+            price_breadth = float((pv > 0).mean())     # px_vs_sma200 = price/SMA200 − 1
+    breadth = pred_breadth if price_breadth is None else 0.5 * (pred_breadth + price_breadth)
+    breadth_parts = {"pred_breadth": round(pred_breadth, 4),
+                     "price_breadth": (round(price_breadth, 4) if price_breadth is not None else None)}
     in_basket = recs[recs["action"] == "BUY"].copy()
     n_basket = max(len(in_basket), 1)
     # conviction: mean predicted 21d return of the chosen names. (Using
@@ -113,7 +127,8 @@ def run_selection(
         ))
 
     if persist:
-        _persist(session, market, as_of_date, regime, regime_conf, result, recs, target_weight)
+        _persist(session, market, as_of_date, regime, regime_conf, result, recs,
+                 target_weight, breadth_parts)
     return result
 
 
@@ -124,17 +139,21 @@ def _f(v) -> Optional[float]:
         return None
 
 
-def _persist(session, market, as_of_date, regime, regime_conf, result, recs, target_weight):
+def _persist(session, market, as_of_date, regime, regime_conf, result, recs,
+             target_weight, breadth_parts=None):
     # idempotent: clear today's rows then re-insert
     session.execute(text("DELETE FROM market_read WHERE market=:m AND as_of=:d"),
                     {"m": market, "d": as_of_date})
     session.execute(text("DELETE FROM selection_basket WHERE market=:m AND as_of=:d"),
                     {"m": market, "d": as_of_date})
+    inputs = {"n_universe": int(len(recs)), "n_basket": len(result.basket)}
+    if breadth_parts:
+        inputs.update(breadth_parts)   # pred_breadth / price_breadth for transparency
     session.add(MarketRead(
         market=market, as_of=as_of_date, regime=(regime or "neutral").upper(),
         regime_conf=regime_conf, breadth=result.breadth, avg_conviction=result.avg_conviction,
         target_exposure=result.target_exposure,
-        inputs={"n_universe": int(len(recs)), "n_basket": len(result.basket)},
+        inputs=inputs,
     ))
     for _, r in recs.iterrows():
         inb = bool(r["action"] == "BUY")

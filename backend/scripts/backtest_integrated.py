@@ -1,0 +1,168 @@
+"""Walk-forward backtest of the INTEGRATED pipeline over history.
+
+Answers the core integration question EARLY (instead of waiting months of
+paper): **does the technical timing gate add value on top of the alpha
+basket?**
+
+HONEST PROTOCOL (no look-ahead): at each rebalance date ``t`` a fresh rank
+model is trained ONLY on rows whose 21d label is fully realised by ``t``
+(``date <= t − 21 trading days`` embargo). The production bundle is trained on
+the WHOLE 2018-2024 span, so using it here would be in-sample — instead we
+walk-forward-retrain so every prediction at ``t`` is genuinely out-of-sample.
+
+Non-overlapping ``step``-day rebalances; four compounded series:
+  * benchmark       — equal-weight the whole tradeable universe
+  * alpha-only      — equal-weight the OOS top-decile basket, fully invested
+  * timing (cash)   — enter only basket names whose technical score ≥ ENTRY_MIN
+                      as-of ``t``; the rest stay CASH (honest integrated "wait")
+  * timing (conc.)  — concentrate equally into the names that passed timing
+
+Usage:
+    uv run python scripts/backtest_integrated.py --market US --step 42 --with-timing
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import numpy as np
+import pandas as pd
+import lightgbm as lgb
+
+from core.db import session_scope
+from core.types import Market
+from decision.integrated_runner import ENTRY_MIN
+from scripts.train_lgbm import ALL_FEATURE_COLS
+
+RANK = "rank_fwd_21d"     # training target (cross-sectional rank)
+RET = "ret_fwd_21d"       # realized forward return
+EMBARGO = 21              # trading days — must cover the label horizon
+
+
+def _tech_score_by_trade_date(session, market, ticker, as_of_date, lookback=300):
+    """Technical score using TRADE_DATE-based bar loading (bypasses `as_of_ts`).
+
+    In this DB every historical bar's ``as_of_ts`` is the bulk-load timestamp
+    (~2026-06), so the production PIT guard (``as_of_ts <= as_of``) rejects ALL
+    bars for historical dates → score_one_ticker returns None. For a backtest
+    the honest look-ahead guard is ``trade_date <= as_of``."""
+    from sqlalchemy import text
+    from technical.indicators import from_ohlcv
+    from technical.score import score_technical
+    rows = session.execute(text(
+        "SELECT open, high, low, close, volume FROM daily_prices "
+        "WHERE market=:m AND ticker=:t AND trade_date <= :d "
+        "ORDER BY trade_date DESC LIMIT :n"),
+        {"m": market.value, "t": ticker, "d": as_of_date, "n": lookback}).all()
+    if len(rows) < 30:
+        return None
+    rows = rows[::-1]
+    ctx = from_ohlcv(
+        opens=[float(r[0]) for r in rows], highs=[float(r[1]) for r in rows],
+        lows=[float(r[2]) for r in rows], closes=[float(r[3]) for r in rows],
+        volumes=[float(r[4]) for r in rows])
+    return score_technical(ctx).score
+
+
+def _compound(rets):
+    eq = 1.0
+    for r in rets:
+        eq *= (1.0 + r)
+    return eq - 1.0
+
+
+def _cagr(total_ret, n_windows, days_per_window):
+    years = max(n_windows * days_per_window / 252.0, 1e-9)
+    return (1.0 + total_ret) ** (1.0 / years) - 1.0
+
+
+def _sharpe_like(rets, windows_per_year):
+    a = np.asarray(rets, float)
+    if len(a) < 2 or a.std(ddof=1) == 0:
+        return 0.0
+    return float(a.mean() / a.std(ddof=1) * np.sqrt(windows_per_year))
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--market", default="US", choices=["KR", "US"])
+    ap.add_argument("--step", type=int, default=63, help="trading days between rebalances")
+    ap.add_argument("--train-window", type=int, default=756, help="rolling train window (trading days; 0=expanding)")
+    ap.add_argument("--decile", type=float, default=0.1)
+    ap.add_argument("--cache", default=None)
+    ap.add_argument("--with-timing", action="store_true", help="technical timing overlay (slower)")
+    args = ap.parse_args()
+
+    cache = args.cache or f"var/_bt_period_{args.market}_2018-01-01_2024-01-01.parquet"
+    df = pd.read_parquet(cache)
+    df["date"] = pd.to_datetime(df["date"])
+    dates = np.sort(df["date"].unique())
+    feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
+    market = Market(args.market)
+    params = dict(n_estimators=150, num_leaves=31, learning_rate=0.05,
+                  min_child_samples=100, subsample=0.7, colsample_bytree=0.6,
+                  reg_lambda=5.0, verbose=-1, n_jobs=-1)
+
+    reb_idx = list(range(EMBARGO + 252, len(dates), args.step))  # need ≥1y history before first
+    bench, alpha, tim_cash, tim_conc, invested = [], [], [], [], []
+    n_used = 0
+
+    for i in reb_idx:
+        t = dates[i]
+        train_cut = dates[i - EMBARGO]
+        lo = dates[max(0, i - EMBARGO - args.train_window)] if args.train_window else dates[0]
+        tr = df[(df["date"] <= train_cut) & (df["date"] > lo)].dropna(subset=[RANK])
+        at_t = df[df["date"] == t].dropna(subset=[RET]).copy()
+        if len(tr) < 5000 or len(at_t) < 30:
+            continue
+        model = lgb.LGBMRegressor(**params).fit(tr[feats].astype(float), tr[RANK].astype(float))
+        at_t["score"] = model.predict(at_t[feats].astype(float))
+        at_t["rank_pct"] = at_t["score"].rank(pct=True)
+        basket = at_t[at_t["rank_pct"] >= 1 - args.decile]
+        if basket.empty:
+            continue
+        n_used += 1
+        bench.append(float(at_t[RET].mean()))
+        alpha.append(float(basket[RET].mean()))
+
+        if args.with_timing:
+            td = pd.Timestamp(t).date()
+            passed = []
+            with session_scope() as s:
+                for tkr, r in zip(basket["ticker"], basket[RET]):
+                    score = _tech_score_by_trade_date(s, market, str(tkr), td)
+                    if score is not None and score >= ENTRY_MIN:
+                        passed.append(float(r))
+            n_b = len(basket)
+            invested.append(len(passed) / n_b)
+            tim_cash.append(sum(passed) / n_b)
+            tim_conc.append(float(np.mean(passed)) if passed else 0.0)
+        print(f"  [{n_used}] {pd.Timestamp(t).date()}  train<= {pd.Timestamp(train_cut).date()} "
+              f"(n_tr={len(tr)})  basket={len(basket)}  alpha/win={alpha[-1]*100:+.2f}%", flush=True)
+
+    wpy = 252.0 / args.step
+
+    def line(name, series):
+        tot = _compound(series)
+        print(f"  {name:<22} tot {tot*100:+7.1f}%  CAGR {_cagr(tot,len(series),args.step)*100:+6.1f}%  "
+              f"/win {np.mean(series)*100:+5.2f}%  Sharpe~{_sharpe_like(series,wpy):+.2f}  "
+              f"hit {np.mean([r>0 for r in series])*100:.0f}%")
+
+    print(f"\n===== integrated WALK-FORWARD backtest ({args.market}, {n_used} rebalances × {args.step}d) =====")
+    line("benchmark(EW univ)", bench)
+    line("alpha-only(basket)", alpha)
+    if args.with_timing:
+        line("timing(cash)", tim_cash)
+        line("timing(concentrated)", tim_conc)
+        a, tc, tk = _compound(alpha), _compound(tim_cash), _compound(tim_conc)
+        print(f"\n  avg invested fraction (timing): {np.mean(invested)*100:.0f}%")
+        print(f"  timing vs alpha-only  →  cash {(tc-a)*100:+.1f}%p, concentrated {(tk-a)*100:+.1f}%p (total)")
+        print(f"  → 판정: {'타이밍 게이트가 도움' if tk > a else '타이밍 게이트 무익/유해(알파 단독 우위)'}")
+    print(f"  alpha vs benchmark    →  {(_compound(alpha)-_compound(bench))*100:+.1f}%p total (선정 알파 초과수익)")
+
+
+if __name__ == "__main__":
+    main()

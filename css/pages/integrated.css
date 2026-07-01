@@ -27,7 +27,8 @@
 
 /* chips (dropped names / legend) */
 .ix-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.ix-chip { background: var(--surface-2, #1c2230); border: 1px solid var(--border, #232a3a); border-radius: 6px; padding: 3px 10px; font-size: .8rem; }
+.ix-chip { background: var(--surface-2, #1c2230); border: 1px solid var(--border, #232a3a); border-radius: 6px; padding: 3px 10px; font-size: .8rem; color: inherit; text-decoration: none; display: inline-block; }
+a.ix-chip:hover { border-color: var(--accent, #4f86f7); color: var(--accent, #4f86f7); }
 .ix-legend { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .ix-legend .badge { margin-left: 6px; }
 

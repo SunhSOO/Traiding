@@ -73,7 +73,8 @@ def run_integrated_decisions(
 
     # ── A+B: market read + selection basket (the WHAT) ──
     recs = recommender.recommend(feat_df, close_map, cfg=cfg)
-    sel: SelectionResult = run_selection(session, market=market.value, as_of=as_of, recs=recs, persist=True)
+    sel: SelectionResult = run_selection(session, market=market.value, as_of=as_of, recs=recs,
+                                         feat_df=feat_df, persist=True)
     rep.regime = sel.regime
     rep.target_exposure = sel.target_exposure
     rep.breadth = sel.breadth
