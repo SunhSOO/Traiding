@@ -118,7 +118,7 @@ class EquityCurveRouteTest(unittest.IsolatedAsyncioTestCase):
             price_rows=[],
         )
         out = await equity_curve(
-            user=None, db=session, account_name="default", days=30,
+            user=None, db=session, account_name="default", market=None, days=30,
         )
         self.assertEqual(out.account_name, "default")
         self.assertEqual(out.base_currency, "USD")

@@ -66,7 +66,10 @@ class TickerFilterTest(unittest.TestCase):
         self.assertEqual(set(out), {"005930", "AAPL", "BRK.B"})
 
     def test_drops_invalid_shapes(self):
-        out = _filter_tickers(["abc", "12345", "1234567", "", "@@@", None], whitelist=None)
+        # Wrong digit count (KR is exactly 6), empty, symbols, non-str — all
+        # syntactically invalid. (A 1–5 letter string like "ABC" is a VALID
+        # US ticker shape, so it belongs in the whitelist test, not here.)
+        out = _filter_tickers(["12345", "1234567", "", "@@@", "TOOLONGTICKER", None], whitelist=None)
         self.assertEqual(out, [])
 
     def test_whitelist_enforced(self):

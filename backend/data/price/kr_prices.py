@@ -106,7 +106,9 @@ def fetch_kr_daily(
 
 # ── helpers ──
 def _row_date(row: dict) -> Optional[DateType]:
-    raw = row.get("trade_date") or row.get("date") or row.get("Date") or row.get("일자")
+    # pykrx labels the date index "날짜"; "일자" appears in some KRX exports.
+    raw = (row.get("trade_date") or row.get("date") or row.get("Date")
+           or row.get("날짜") or row.get("일자"))
     if raw is None:
         return None
     if isinstance(raw, DateType) and not isinstance(raw, datetime):

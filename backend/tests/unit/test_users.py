@@ -140,7 +140,8 @@ class BootstrapTest(unittest.TestCase):
         reset_settings_cache()
         try:
             session = MagicMock()
-            session.scalars.return_value.__iter__.return_value = iter([])  # empty list
+            session.scalars.return_value.__iter__.return_value = iter([])  # list_users() → empty
+            session.scalars.return_value.first.return_value = None          # create_user's get_user() → no dup
             user = bootstrap_if_empty(session)
             self.assertIsNotNone(user)
             session.add.assert_called_once()
@@ -159,13 +160,19 @@ class BootstrapTest(unittest.TestCase):
         session.add.assert_not_called()
 
     def test_bootstrap_skipped_without_password(self):
-        os.environ.pop("BOOTSTRAP_PASSWORD", None)
+        # Force an empty password even though .env may define one: an
+        # explicit env var outranks the dotenv file in pydantic-settings.
+        os.environ["BOOTSTRAP_PASSWORD"] = ""
         reset_settings_cache()
-        session = MagicMock()
-        session.scalars.return_value.__iter__.return_value = iter([])
-        user = bootstrap_if_empty(session)
-        self.assertIsNone(user)
-        session.add.assert_not_called()
+        try:
+            session = MagicMock()
+            session.scalars.return_value.__iter__.return_value = iter([])
+            user = bootstrap_if_empty(session)
+            self.assertIsNone(user)
+            session.add.assert_not_called()
+        finally:
+            os.environ.pop("BOOTSTRAP_PASSWORD", None)
+            reset_settings_cache()
 
 
 if __name__ == "__main__":

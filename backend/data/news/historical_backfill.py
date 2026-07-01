@@ -148,10 +148,12 @@ def _months_in_range(start: date, end: date) -> Iterable[tuple[str, date, date]]
         else:
             next_month = date(cur.year, cur.month + 1, 1)
         month_end = next_month - timedelta(days=1)
-        # Clip to range
+        # Clip to range; skip inverted chunks so an end-before-start
+        # window (or any degenerate month) yields nothing.
         chunk_start = max(cur, start)
         chunk_end = min(month_end, end)
-        yield (cur.strftime("%Y-%m"), chunk_start, chunk_end)
+        if chunk_start <= chunk_end:
+            yield (cur.strftime("%Y-%m"), chunk_start, chunk_end)
         cur = next_month
 
 

@@ -218,9 +218,15 @@ def _contains_us(haystack: str, name: str) -> bool:
     """US names: case-insensitive substring, but with conservative
     short-name handling. Multi-word names (>=2 words) always match;
     single-word names need to be at least 4 chars to avoid 'AT' / 'IT'
-    style collisions."""
+    style collisions.
+
+    Korean-script aliases (e.g. "애플" → AAPL) are matched with the KR
+    rule instead: Hangul is dense, so a 2-char alias is a whole word and
+    the Latin short-name guard would wrongly reject it."""
     if not haystack or not name:
         return False
+    if any("가" <= ch <= "힣" for ch in name):  # Korean-script alias
+        return len(name) >= 2 and name in haystack
     if " " not in name and len(name) < 4:
         return False
     return name.lower() in haystack.lower()

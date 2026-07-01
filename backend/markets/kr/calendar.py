@@ -51,15 +51,30 @@ def is_trading_day(d: DateType) -> bool:
 
 
 def previous_trading_day(d: DateType) -> DateType:
+    """The latest trading day strictly before ``d``.
+
+    Robust to non-session inputs: ``d`` may be a weekend/holiday (e.g. the
+    KRX year-end closure), in which case we walk back to the nearest prior
+    session. ``exchange_calendars.previous_session`` itself requires ``d`` to
+    be a session, so we only take that fast path when it is one."""
     cal = _calendar()
-    ts = cal.previous_session(d.isoformat())
-    return ts.date()
+    if cal.is_session(d.isoformat()):
+        return cal.previous_session(d.isoformat()).date()
+    nd = d - timedelta(days=1)
+    while not cal.is_session(nd.isoformat()):
+        nd -= timedelta(days=1)
+    return nd
 
 
 def next_trading_day(d: DateType) -> DateType:
+    """The earliest trading day strictly after ``d`` (robust to non-sessions)."""
     cal = _calendar()
-    ts = cal.next_session(d.isoformat())
-    return ts.date()
+    if cal.is_session(d.isoformat()):
+        return cal.next_session(d.isoformat()).date()
+    nd = d + timedelta(days=1)
+    while not cal.is_session(nd.isoformat()):
+        nd += timedelta(days=1)
+    return nd
 
 
 def session_open_close_utc(d: DateType) -> tuple[datetime, datetime] | None:

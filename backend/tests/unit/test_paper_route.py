@@ -90,7 +90,7 @@ class AccountSnapshotTest(unittest.IsolatedAsyncioTestCase):
         session = _mock_session([
             lambda _: _scalars_first(None),     # PaperAccount lookup
         ])
-        out = await account_snapshot(user=None, db=session, name="default")
+        out = await account_snapshot(user=None, db=session, name="default", market=None)
         self.assertEqual(out.id, 0)
         self.assertEqual(out.current_balance, 0.0)
         self.assertEqual(out.open_positions, 0)
@@ -105,7 +105,7 @@ class AccountSnapshotTest(unittest.IsolatedAsyncioTestCase):
             lambda _: _scalar_value(1234.5),              # realised_total
             lambda _: _scalar_value(20.0),                # realised_today
         ])
-        out = await account_snapshot(user=None, db=session, name="default")
+        out = await account_snapshot(user=None, db=session, name="default", market=None)
         self.assertEqual(out.id, 7)
         self.assertEqual(out.open_positions, 5)
         self.assertEqual(out.open_positions_kr, 2)
@@ -146,11 +146,10 @@ class PositionsTest(unittest.IsolatedAsyncioTestCase):
                 return _scalars_first(acc)
             if "paper_positions" in s and "select " in s:
                 return _scalars_iter([pos])
-            if "daily_prices" in s and "max" in s:
-                # latest_dates subquery — irrelevant here, anything works
-                return MagicMock()
             if "daily_prices" in s:
-                # The "select market, ticker, close" final query
+                # `_latest_prices` now issues ONE statement whose SQL embeds
+                # the `max(trade_date)` subquery *and* selects the close, so
+                # match on daily_prices alone and return the price rows.
                 r = MagicMock()
                 r.__iter__ = lambda self_: iter([("US", "AAPL", 165.0)])
                 return r
@@ -162,7 +161,7 @@ class PositionsTest(unittest.IsolatedAsyncioTestCase):
 
         session = MagicMock()
         session.execute = AsyncMock(side_effect=_exec)
-        out = await positions(user=None, db=session, market="US")
+        out = await positions(user=None, db=session, market="US", account_name=None)
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0].ticker, "AAPL")
         # Long bought at 150, now 165 → +150 unrealised on 10 shares
@@ -195,7 +194,7 @@ class TradesTest(unittest.IsolatedAsyncioTestCase):
             return _scalars_iter([trade])
         session = MagicMock()
         session.execute = AsyncMock(side_effect=_exec)
-        out = await trades(user=None, db=session, market="KR")
+        out = await trades(user=None, db=session, market="KR", limit=100)
         self.assertEqual(len(out), 1)
         self.assertAlmostEqual(out[0].pnl, 20_000.0)
         # gross = 70000 * 10 = 700000 → pct = 20000 / 700000 * 100 ≈ 2.857

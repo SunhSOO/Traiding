@@ -102,8 +102,12 @@ def fetch_us_disclosures(
         description = descriptions[i] if i < len(descriptions) else ""
 
         accession_clean = accession.replace("-", "")
+        # SEC's Archives path wants the CIK without leading zeros. Strip
+        # them textually rather than via int() so a malformed (non-numeric)
+        # CIK can't crash the whole fetch — numeric CIKs are unaffected.
+        cik_path = cik_str.lstrip("0") or "0"
         source_url = (
-            f"https://www.sec.gov/Archives/edgar/data/{int(cik_str)}/"
+            f"https://www.sec.gov/Archives/edgar/data/{cik_path}/"
             f"{accession_clean}/{primary}"
         )
 

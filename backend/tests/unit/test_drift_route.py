@@ -104,9 +104,13 @@ class ScoreDriftTest(unittest.IsolatedAsyncioTestCase):
         a_rows = [("KR", "AAA", 0.95, now)] + [
             ("KR", "AAA", 0.10, now - timedelta(days=i)) for i in range(1, 11)
         ]
-        # Ticker B: not anomalous, but with biggest |z| among non-anomalies
+        # Ticker B: NOT anomalous (|z| below threshold) yet with a larger |z|
+        # than A's zero-variance anomaly (z=0) — proves the anomaly *flag*,
+        # not |z|, decides order. History spread ~0.05 so current 0.20 is
+        # only ~2σ (< the 3.0 threshold).
+        b_hist = [0.05, 0.15] * 5  # mean 0.10, stdev 0.05
         b_rows = [("KR", "BBB", 0.20, now)] + [
-            ("KR", "BBB", 0.10 + 0.001 * i, now - timedelta(days=i))
+            ("KR", "BBB", b_hist[i - 1], now - timedelta(days=i))
             for i in range(1, 11)
         ]
         rows = a_rows + b_rows

@@ -110,8 +110,14 @@ def decode_access_token(token: str) -> TokenPayload:
         raise AuthError("JWT_SECRET_KEY is not configured")
 
     try:
+        # Verify the signature but NOT `exp`: expiry is a separate concern
+        # handled by `is_token_expired`, which callers (e.g. _resolve_user)
+        # invoke explicitly so they can return a precise "token expired"
+        # response. If decode rejected expired tokens itself, that check —
+        # and this helper — would be dead code.
         decoded = _jose_jwt().decode(
-            token, secret, algorithms=[settings.jwt_algorithm]
+            token, secret, algorithms=[settings.jwt_algorithm],
+            options={"verify_exp": False},
         )
     except Exception as e:  # python-jose raises a family of exception types
         raise AuthError(f"invalid token: {e}") from e
