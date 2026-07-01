@@ -1,6 +1,6 @@
 # 통합 시스템 설계 — 선정·시황(알파) → 단일종목 실행(기술적)
 
-> 상태: **설계안 (리뷰 대기)** · 2026-06-29 · 구현 전 확정용
+> 상태: **구현 완료** (P1~P5) · 2026-06-29 착수 · D1~D5 확정 · 라이브 잡 검증됨
 > 원칙(원 제작자 합의): **기술적 요소(Red/Green 포함) = 단일 종목 매매(실행)** / **횡단면 알파 = 지수·시황 파악 + 투자할 종목 선정**
 
 ---
@@ -59,7 +59,7 @@
 | market, as_of_date (PK) | 시장·기준일 |
 | regime, regime_conf | regime 분류기 결과 |
 | breadth | 알파 예측 양(+) 종목 비율(시장 폭) |
-| avg_conviction | 바스켓 평균 \|rank_pct−0.5\| |
+| avg_conviction | 바스켓 평균 예측 21일 수익(기대수익 강도). *rank_pct 기반은 top-decile이라 상수 → 모델 출력 크기로 정의* |
 | target_exposure | 권고 시장 노출(0~1) |
 | inputs (JSONB) | VIX·yield·index trend 등 근거 |
 
@@ -153,11 +153,14 @@
 
 ## 10. 스케줄러/런타임 흐름 (일간)
 ```
-06:30 macro.daily → 06:45 regime.daily
-(장마감 후) prices → 21:30 technical.score → 신규 features.rebuild(라이브)
- → 22:30 integrated.daily: A 시황read → B 선정 → C 기술적타이밍 → D 체결/감사
+(구현된 실제 UTC 크론)
+regime.daily 06:45 KST · prices/technical.score(장마감 후)
+20:00 features.rebuild.daily (라이브 캐시 blitz 포함 재빌드)
+22:30 decisions.daily · 22:45 ml_decisions.daily (레거시·비교)
+23:00 integrated.daily: A 시황read → B 선정 → C 기술적타이밍 → D 체결/감사
 ```
 기존 ml_decisions.daily / decisions.daily는 비교·레거시로 잔존(또는 단계적 정리).
+> 주의: features.rebuild는 build_feature_matrix가 느려 23:00 전 완료가 데이터/하드웨어 의존 — 증분 빌드로 단축 예정(GAPS).
 
 ---
 

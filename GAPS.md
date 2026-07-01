@@ -1639,3 +1639,10 @@ regime-conditional / topk30 / 섹터중립 / 롱숏 / VIX게이팅 / 앙상블(L
 - ⏭️ **통합 포트폴리오 화면**: 시황/선정/실행 3페이지 신설. core-kr/us 합산 포트폴리오 뷰는 기존 `/portfolio`(account_name=core-* 지정)로 재사용 가능 — 전용 통합 대시보드는 후속.
 - ⏭️ **paper 드라이런 검증(P5)**: 라이브캐시 재빌드 완료 후 `run_integrated_job.py` 양시장 실행 → core-* 계정 수개월 누적 후 알파 실현 확인. (실행자체는 검증됨, 누적 성과는 시간 필요)
 - ⏭️ **레드/그린(단일종목 매매)와의 계정 분리 운용**: D3로 레거시 잔존. 레드/그린=단일종목 수동/반자동, integrated=바스켓 — 계정·UX 분리 확인됨. 통합 리포팅은 후속.
+
+### 전수감사(2026-06-30)에서 추가 식별
+- 🔧 **리밸런싱 없음(D5 균등비중은 진입시점만)**: `integrated_runner`는 진입/청산만 하고 보유분을 target_weight로 재조정하지 않음 → 승자가 시간이 지나며 과중. v1은 진입시 균등으로 시작(회전·비용 최소화)하고, 주기적 리밸런싱은 P1/P2 후보. paper 성과가 드리프트 민감도를 알려줄 것.
+- 🔧 **avg_conviction 재정의(감사 수정)**: 최초 `mean|rank_pct−0.5|`는 바스켓이 정의상 top-decile이라 ~0.45 상수(무의미)였음. **바스켓 평균 예측 21일 수익**(모델 출력 크기, 부호 포함)으로 교체 — 시장·일자별로 변동하는 유의미 지표. (selection.py / market_read.avg_conviction / 시황 UI 게이지 반영)
+- ⏭️ **selection_basket가 전체 유니버스 영속**: `_persist`는 바스켓뿐 아니라 전 종목 recs를 기록(US ~500행/일). 전체 랭킹 뷰엔 유용하나 저장 증가(≈125k행/년/시장). 인덱스로 쿼리는 무해, 필요시 in_basket만 저장으로 축소 가능.
+- ⏭️ **UX 리치니스(설계 목업 대비 v1 간소화)**: 시황=지수추세/VIX/노출추이차트/regime리본, 선정=conviction분포·클릭→선정사유(피처기여), 실행=클릭→기술적상세(trend/RSI/RedGreen) 미구현. 데이터 의존(노출추이=market_read 누적, 선정사유=SHAP류 인프라). P2에서 단계 구현.
+- ✅ **보안 점검 통과**: `decode_access_token`의 `verify_exp=False` 전환 후 비테스트 호출자는 `_resolve_user` 하나뿐이며 즉시 `is_token_expired`로 만료 강제 — 만료 우회 없음 확인.

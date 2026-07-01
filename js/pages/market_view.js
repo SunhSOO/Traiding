@@ -22,7 +22,8 @@ function _gauge(pct, cls) {
 function _marketCard(m) {
   const expoPct = Math.round((m.target_exposure || 0) * 100);
   const breadthPct = Math.round((m.breadth || 0) * 100);
-  const convPct = Math.round((m.avg_conviction || 0) * 200);   // 0..0.5 → 0..100
+  const conv = m.avg_conviction || 0;                          // mean predicted 21d return of basket
+  const convPct = Math.max(0, Math.min(100, Math.round(conv / 0.10 * 100)));  // 10% → full bar
   const expoCls = expoPct >= 70 ? 'ix-fill-green' : expoPct >= 40 ? 'ix-fill-amber' : 'ix-fill-red';
   return `
     <div class="card animate-fade-in-up">
@@ -47,9 +48,9 @@ function _marketCard(m) {
           <div class="ix-metric-val">${breadthPct}% <span class="text-xs text-muted">상승 예상 종목</span></div>
         </div>
         <div class="ix-metric">
-          <div class="ix-metric-label">선정 확신도</div>
+          <div class="ix-metric-label">선정 확신도 (평균 기대수익)</div>
           ${_gauge(convPct, 'ix-fill-blue')}
-          <div class="ix-metric-val">${convPct}<span class="text-xs text-muted">/100</span></div>
+          <div class="ix-metric-val">${(conv * 100).toFixed(1)}% <span class="text-xs text-muted">21일 기대</span></div>
         </div>
       </div>
       <div class="ix-foot text-xs text-muted">

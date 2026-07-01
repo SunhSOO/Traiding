@@ -90,8 +90,10 @@ def run_selection(
     breadth = float((pd.to_numeric(recs["pred_ret"], errors="coerce") > 0).mean()) if len(recs) else 0.0
     in_basket = recs[recs["action"] == "BUY"].copy()
     n_basket = max(len(in_basket), 1)
-    # conviction: mean distance-from-median of the chosen names (0..0.5).
-    avg_conv = float((pd.to_numeric(in_basket["rank_pct"], errors="coerce") - 0.5).abs().mean()) if len(in_basket) else 0.0
+    # conviction: mean predicted 21d return of the chosen names. (Using
+    # |rank_pct-0.5| here would be ~constant — the basket is by definition the
+    # top decile — so it must come from the model's magnitude, not the rank.)
+    avg_conv = float(pd.to_numeric(in_basket["pred_ret"], errors="coerce").mean()) if len(in_basket) else 0.0
 
     base = _base_exposure(regime)
     # breadth nudge: only REDUCE below the regime cap when breadth is thin.

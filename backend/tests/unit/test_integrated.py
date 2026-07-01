@@ -65,6 +65,8 @@ class TestRunSelection(unittest.TestCase):
         self.assertAlmostEqual(res.target_exposure, 0.7, places=3)
         self.assertEqual(len(res.basket), 3)                       # 3 BUYs
         self.assertAlmostEqual(res.basket[0].target_weight, 1 / 3, places=4)
+        # conviction = mean predicted 21d return of the 3 BUYs (all 0.05)
+        self.assertAlmostEqual(res.avg_conviction, 0.05, places=4)
 
     def test_crisis_zero_exposure(self):
         from decision.selection import run_selection
@@ -90,6 +92,87 @@ class TestTimingThresholds(unittest.TestCase):
         self.assertLess(EXIT_MAX, ENTRY_MIN)
         self.assertGreater(MIN_EXPOSURE, 0.0)
         self.assertLess(MIN_EXPOSURE, 0.1)
+
+
+@unittest.skipUnless(_HAVE_DEPS, "pandas required")
+class TestIntegratedRunner(unittest.TestCase):
+    """Runner decision logic (C+D) with run_selection + technical timing +
+    broker patched out, so we assert BUY/WAIT/SELL/REJECTED orchestration."""
+
+    def _run(self, *, basket, tech_scores, positions=None, exposure=0.7,
+             risk_ok=True):
+        from datetime import date, datetime
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock, patch
+        from decision import integrated_runner as ir
+        from decision.selection import BasketName, SelectionResult
+        from core.types import Market
+
+        sel = SelectionResult(
+            market="US", as_of=date(2026, 6, 29), regime="neutral",
+            target_exposure=exposure, breadth=0.9, avg_conviction=0.05,
+            basket=[BasketName(ticker=t, rank_pct=rp, target_weight=1 / len(basket),
+                               target_price=None, pred_ret_21d=0.05,
+                               band_low=None, band_high=None)
+                    for t, rp in basket],
+        )
+        close_map = {t: 100.0 for t, _ in basket}
+        for p in (positions or []):
+            close_map.setdefault(p.ticker, 100.0)
+        acct = SimpleNamespace(base_currency="USD", balance=1000.0)
+        ex = SimpleNamespace(ok=True, fill_price=100.0, fill_volume=1.0, error=None)
+        broker = SimpleNamespace(
+            get_account=lambda: acct,
+            get_positions=lambda: list(positions or []),
+            execute=lambda intent: ex,
+        )
+        risk = SimpleNamespace(check=lambda i, s, l: SimpleNamespace(all_passed=risk_ok))
+        rec = SimpleNamespace(recommend=lambda f, c, cfg=None: __import__("pandas").DataFrame())
+        with patch.object(ir, "run_selection", return_value=sel), \
+             patch.object(ir, "_tech_score", side_effect=lambda s, m, t, a: tech_scores.get(t)), \
+             patch.object(ir, "_risk_state", return_value=None):
+            return ir.run_integrated_decisions(
+                MagicMock(), market=Market.US, as_of=datetime(2026, 6, 29),
+                broker=broker, risk_engine=risk, risk_limits=None,
+                recommender=rec, feat_df=__import__("pandas").DataFrame(), close_map=close_map)
+
+    def _pos(self, ticker):
+        from types import SimpleNamespace
+        return SimpleNamespace(ticker=ticker, volume=1.0, entry_price=100.0, current_price=100.0)
+
+    def test_buys_strong_waits_weak(self):
+        rep = self._run(basket=[("A", 0.98), ("B", 0.95), ("C", 0.92)],
+                        tech_scores={"A": 50.0, "B": -10.0, "C": 20.0})
+        self.assertEqual(rep.buys_executed, 2)   # A, C not bearish
+        self.assertEqual(rep.waiting, 1)          # B bearish → delayed (D1, not vetoed)
+        self.assertEqual(rep.sells_executed, 0)
+
+    def test_wait_on_missing_tech(self):
+        rep = self._run(basket=[("A", 0.98)], tech_scores={})  # no score → wait
+        self.assertEqual(rep.buys_executed, 0)
+        self.assertEqual(rep.waiting, 1)
+
+    def test_exit_on_basket_drop(self):
+        rep = self._run(basket=[("A", 0.98)], tech_scores={"A": 40.0},
+                        positions=[self._pos("Z")])   # Z no longer in basket
+        self.assertEqual(rep.sells_executed, 1)
+
+    def test_exit_on_tech_breakdown(self):
+        rep = self._run(basket=[("A", 0.98)], tech_scores={"A": -40.0},
+                        positions=[self._pos("A")])   # held but tech collapsed
+        self.assertEqual(rep.sells_executed, 1)
+
+    def test_defensive_closes_all_no_buys(self):
+        rep = self._run(basket=[("A", 0.98)], tech_scores={"A": 90.0},
+                        positions=[self._pos("A")], exposure=0.0)
+        self.assertTrue(rep.defensive)
+        self.assertEqual(rep.sells_executed, 1)   # exit_defensive
+        self.assertEqual(rep.buys_executed, 0)
+
+    def test_risk_rejection(self):
+        rep = self._run(basket=[("A", 0.98)], tech_scores={"A": 50.0}, risk_ok=False)
+        self.assertEqual(rep.rejected, 1)
+        self.assertEqual(rep.buys_executed, 0)
 
 
 if __name__ == "__main__":

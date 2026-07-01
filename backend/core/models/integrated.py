@@ -48,9 +48,9 @@ class MarketRead(Base):
     regime: Mapped[str] = mapped_column(String(16), nullable=False, doc="RISK_ON|NEUTRAL|RISK_OFF|...")
     regime_conf: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False, default=0)
     breadth: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False, default=0,
-                                           doc="fraction of universe with positive predicted mn")
+                                           doc="fraction of universe with positive predicted 21d return")
     avg_conviction: Mapped[float] = mapped_column(Numeric(6, 4), nullable=False, default=0,
-                                                  doc="mean |rank_pct-0.5| over the basket")
+                                                  doc="mean predicted 21d return over the basket (signed)")
     target_exposure: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False, default=1,
                                                    doc="recommended overall invested fraction 0..1")
     inputs: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)

@@ -7,8 +7,8 @@ Serves the three new UX views designed for the new direction:
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
-from typing import Annotated, Any, Optional
+from datetime import date
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
