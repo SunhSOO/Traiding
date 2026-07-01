@@ -94,6 +94,9 @@ def main() -> None:
     ap.add_argument("--decile", type=float, default=0.1)
     ap.add_argument("--cache", default=None)
     ap.add_argument("--with-timing", action="store_true", help="technical timing overlay (slower)")
+    ap.add_argument("--tech-only", action="store_true",
+                    help="TECHNICAL-ONLY cell: no alpha selection — equal-weight the whole "
+                         "universe's technical-timing passers (fills the 2×2 matrix)")
     args = ap.parse_args()
 
     cache = args.cache or f"var/_bt_period_{args.market}_2018-01-01_2024-01-01.parquet"
@@ -107,6 +110,40 @@ def main() -> None:
                   reg_lambda=5.0, verbose=-1, n_jobs=-1)
 
     reb_idx = list(range(EMBARGO + 252, len(dates), args.step))  # need ≥1y history before first
+
+    # ── TECHNICAL-ONLY cell (no alpha model): equal-weight universe timing-passers ──
+    if args.tech_only:
+        t_bench, t_tech, t_inv = [], [], []
+        for i in reb_idx:
+            t = dates[i]
+            at_t = df[df["date"] == t].dropna(subset=[RET]).copy()
+            if len(at_t) < 30:
+                continue
+            td = pd.Timestamp(t).date()
+            passed = []
+            with session_scope() as s:
+                for tkr, r in zip(at_t["ticker"], at_t[RET]):
+                    score = _tech_score_by_trade_date(s, market, str(tkr), td)
+                    if score is not None and score >= ENTRY_MIN:
+                        passed.append(float(r))
+            t_bench.append(float(at_t[RET].mean()))
+            t_inv.append(len(passed) / len(at_t))
+            t_tech.append(float(np.mean(passed)) if passed else 0.0)
+            print(f"  {td}  univ={len(at_t)}  passers={len(passed)} ({t_inv[-1]*100:.0f}%)  "
+                  f"tech/win={t_tech[-1]*100:+.2f}%", flush=True)
+        wpy = 252.0 / args.step
+
+        def _line(name, series):
+            tot = _compound(series)
+            print(f"  {name:<22} tot {tot*100:+7.1f}%  CAGR {_cagr(tot,len(series),args.step)*100:+6.1f}%  "
+                  f"/win {np.mean(series)*100:+5.2f}%  Sharpe~{_sharpe_like(series,wpy):+.2f}  "
+                  f"hit {np.mean([r>0 for r in series])*100:.0f}%")
+        print(f"\n===== TECH-ONLY cell ({args.market}, {len(t_tech)} rebalances × {args.step}d) =====")
+        _line("benchmark(EW univ)", t_bench)
+        _line("technical-only", t_tech)
+        print(f"  avg invested fraction (technical-only): {np.mean(t_inv)*100:.0f}%")
+        return
+
     bench, alpha, tim_cash, tim_conc, invested = [], [], [], [], []
     n_used = 0
 
