@@ -1151,7 +1151,18 @@ ridge와 달리 mn_norm은 성급 기각 안 하고 4컷×bear까지 검증 → 
 - no-timing(none) 대비 timing이 양 시장 상위권을 채움 → 타이밍 게이트 유효 재확인.
 - 진입임계는 0~+20이 상위(엄격할수록 강한 기술만); 바스켓 10%가 US 스윗스팟(집중 시).
 
-**→ regime-적응 병합 구현**(integrated_runner): `target_exposure ≥ CONCENTRATE_MIN_EXPOSURE(0.6)`면 통과분에 노출 **집중**(bull), 미만이면 **현금-스타일** 슬롯 유지(bear). 노출 오버레이(regime×breadth)가 스위치. 2단계 ENTRIES(타이밍→사이징)로 리팩터, `rep.concentrated` 리포트. 단위테스트+라이브 smoke 통과. 단서: 20회 노이즈라 방향성 채택, paper로 확정.
+**→ regime-적응 병합 구현**(integrated_runner): `target_exposure ≥ CONCENTRATE_MIN_EXPOSURE(0.6)`면 통과분에 노출 **집중**(bull), 미만이면 **현금-스타일** 슬롯 유지(bear). 노출 오버레이(regime×breadth)가 스위치. 2단계 ENTRIES(타이밍→사이징)로 리팩터, `rep.concentrated` 리포트. 단위테스트+라이브 smoke 통과.
+
+**step(리밸런스 주기) 비교 → 노이즈 노출 + regime-적응 재확인:**
+
+| | US alpha vs벤치 | US 집중 Sharpe | KR 벤치 | KR 최적병합 |
+|---|---|---|---|---|
+| step=63 | +24.8%p | 0.98 | -17.1%(하락) | **현금**(+2.7 vs 집중-10) |
+| step=42 | +4.0%p | 0.55 | +20.4%(상승) | **집중**(+3.5 vs 현금+1.2) |
+
+- ⚠️ **매그니튜드는 step(날짜샘플)에 민감** — KR 벤치가 부호까지 뒤집힘(-17%↔+20%). step=63의 강한 US 수치(Sharpe0.98)를 과신 금물, ~20-30윈도 표본 한계.
+- 🟢 **방향성은 견고**: 알파≥벤치(US 양 step), 그리고 **KR이 하락(63)→상승(42)으로 바뀌자 최적 병합이 현금→집중으로 동반 반전** → regime-적응(상승=집중/하락=현금)이 시장무관·**방향종속**임을 재확인. 구현이 옳은 방향.
+- 결론: 방향성 채택(구현 완료), 매그니튜드는 paper 누적으로 확정. 진입임계·바스켓크기는 0/10% 기본 유지(스윕 상위권).
 
 ---
 
