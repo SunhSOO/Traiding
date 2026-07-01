@@ -183,6 +183,17 @@ class TestIntegratedRunner(unittest.TestCase):
         self.assertEqual(rep.rejected, 1)
         self.assertEqual(rep.buys_executed, 0)
 
+    def test_regime_adaptive_merge(self):
+        # high exposure (bull) → concentrate; low exposure (bear) → cash-style.
+        hi = self._run(basket=[("A", 0.98), ("B", 0.95)],
+                       tech_scores={"A": 50.0, "B": 50.0}, exposure=0.7)
+        self.assertTrue(hi.concentrated)
+        self.assertEqual(hi.buys_executed, 2)
+        lo = self._run(basket=[("A", 0.98), ("B", 0.95)],
+                       tech_scores={"A": 50.0, "B": 50.0}, exposure=0.4)
+        self.assertFalse(lo.concentrated)         # cash-style below the threshold
+        self.assertEqual(lo.buys_executed, 2)     # still invests (not defensive)
+
 
 if __name__ == "__main__":
     unittest.main()

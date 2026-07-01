@@ -34,6 +34,9 @@ from technical.runner import score_one_ticker
 ENTRY_MIN = 0.0     # enter only when technical not bearish; else WAIT (delay)
 EXIT_MAX = -30.0    # exit a held name on clear technical breakdown
 MIN_EXPOSURE = 0.02  # below this, treat as fully defensive (close all)
+# At/above this target_exposure, concentrate the exposure into the timed passers
+# (bull → amplify); below it, keep the cash-style per-basket slot (bear → protect).
+CONCENTRATE_MIN_EXPOSURE = 0.6
 
 
 @dataclass
@@ -48,6 +51,7 @@ class IntegratedReport:
     waiting: int = 0          # in basket but technical says wait
     rejected: int = 0
     defensive: bool = False
+    concentrated: bool = False  # regime-adaptive merge: concentrate vs cash-style
     errors: list[str] = field(default_factory=list)
 
 
@@ -135,9 +139,9 @@ def run_integrated_decisions(
 
     # ── C+D: ENTRIES — basket names not held, gated by technical timing ──
     if not rep.defensive:
-        avail = float(broker.get_account().balance)
-        # rank order: strongest conviction first
-        ordered = sorted(basket.values(), key=lambda b: -b.rank_pct)
+        ordered = sorted(basket.values(), key=lambda b: -b.rank_pct)  # strongest conviction first
+        # Pass 1 — technical timing gate: collect the passers, audit the waiters.
+        passers: list[tuple] = []
         for b in ordered:
             if b.ticker in positions:
                 continue  # already long
@@ -148,9 +152,21 @@ def run_integrated_decisions(
                 rep.waiting += 1
                 continue
             price = close_map.get(b.ticker)
-            if not price or price <= 0:
-                continue
-            size_value = min(per_name, avail)
+            if price and price > 0:
+                passers.append((b, tech, price))
+
+        # Sizing — regime-adaptive merge (backtest sweep 2026-06-30): a favourable
+        # regime (high target_exposure) CONCENTRATES the exposure into the timed
+        # passers (bull → amplify); a defensive/low-exposure regime keeps the
+        # cash-style per-basket slot so waiters stay cash (bear → protect).
+        rep.concentrated = sel.target_exposure >= CONCENTRATE_MIN_EXPOSURE
+        n_deploy = max(len(passers), 1) if rep.concentrated else n_basket
+        per_deploy = equity * sel.target_exposure / n_deploy
+
+        # Pass 2 — size, risk-check, execute.
+        avail = float(broker.get_account().balance)
+        for b, tech, price in passers:
+            size_value = min(per_deploy, avail)
             if size_value < equity * 0.005:
                 continue
             volume = size_value / price

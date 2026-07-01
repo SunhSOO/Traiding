@@ -101,6 +101,9 @@ def main() -> None:
                     help="use the PRODUCTION training recipe per fold (per-market label "
                          "US=tb/KR=mn + per-date z-score + top-50 select + |label| weight) "
                          "instead of the naive rank proxy")
+    ap.add_argument("--sweep", action="store_true",
+                    help="GRID sweep of (basket decile × technical entry threshold × merge "
+                         "method) from ONE expensive pass — ranks every config by Sharpe")
     args = ap.parse_args()
 
     cache = args.cache or f"var/_bt_period_{args.market}_2018-01-01_2024-01-01.parquet"
@@ -113,7 +116,7 @@ def main() -> None:
     # ── PRODUCTION recipe setup (once, PIT-safe): per-market label + per-date
     #    cross-section z-score. Feature selection + |label| weighting happen
     #    per fold inside the loop. Blitz is already a feature column. ──
-    target_col, use_prod = RANK, args.production
+    target_col, use_prod = RANK, (args.production or args.sweep)
     if use_prod:
         df["mn_fwd_21d"] = df[RET] - df.groupby("date")[RET].transform("mean")
         if args.market == "US":
@@ -165,6 +168,68 @@ def main() -> None:
         _line("benchmark(EW univ)", t_bench)
         _line("technical-only", t_tech)
         print(f"  avg invested fraction (technical-only): {np.mean(t_inv)*100:.0f}%")
+        return
+
+    # ── GRID SWEEP: (basket decile × technical entry threshold × merge method) ──
+    if args.sweep:
+        from collections import defaultdict
+        DECILES = [0.05, 0.10, 0.20]
+        THRS = [None, -20.0, -10.0, 0.0, 10.0, 20.0]   # None = no timing (alpha-only)
+        acc = defaultdict(list); bench_s = []
+        maxdec = max(DECILES)
+        for i in reb_idx:
+            t = dates[i]; train_cut = dates[i - EMBARGO]
+            lo = dates[max(0, i - EMBARGO - args.train_window)] if args.train_window else dates[0]
+            tr = df[(df["date"] <= train_cut) & (df["date"] > lo)].dropna(subset=[target_col])
+            at_t = df[df["date"] == t].dropna(subset=[RET]).copy()
+            if len(tr) < 5000 or len(at_t) < 30:
+                continue
+            sw = np.abs(tr[target_col].values)
+            sel = lgb.LGBMRegressor(**params).fit(
+                tr[feats].astype(float), tr[target_col].astype(float), sample_weight=sw)
+            cols = pd.Series(sel.feature_importances_, index=feats).sort_values(
+                ascending=False).head(50).index.tolist()
+            model = lgb.LGBMRegressor(**params).fit(
+                tr[cols].astype(float), tr[target_col].astype(float), sample_weight=sw)
+            at_t["score"] = model.predict(at_t[cols].astype(float))
+            at_t["rank_pct"] = at_t["score"].rank(pct=True)
+            bench_s.append(float(at_t[RET].mean()))
+            wide = at_t[at_t["rank_pct"] >= 1 - maxdec]
+            td = pd.Timestamp(t).date()
+            tsc = {}
+            with session_scope() as s:
+                for tkr in wide["ticker"]:
+                    tsc[str(tkr)] = _tech_score_by_trade_date(s, market, str(tkr), td)
+            for dec in DECILES:
+                basket = at_t[at_t["rank_pct"] >= 1 - dec]
+                n_b = max(len(basket), 1)
+                rets = list(zip(basket["ticker"].astype(str), basket[RET].astype(float)))
+                for thr in THRS:
+                    if thr is None:
+                        passed = [r for _, r in rets]
+                    else:
+                        passed = [r for tk, r in rets if tsc.get(tk) is not None and tsc[tk] >= thr]
+                    acc[(dec, thr, "cash")].append(sum(passed) / n_b)
+                    acc[(dec, thr, "conc")].append(float(np.mean(passed)) if passed else 0.0)
+            print(f"  swept {td} (top{int(maxdec*100)}%={len(tsc)} scored)", flush=True)
+        wpy = 252.0 / args.step
+        rows = []
+        for (dec, thr, meth), series in acc.items():
+            rows.append((_sharpe_like(series, wpy), _compound(series), dec, thr, meth,
+                         float(np.mean(series))))
+        rows.sort(reverse=True)
+        b_tot, b_sh = _compound(bench_s), _sharpe_like(bench_s, wpy)
+        # persist first (so an encoding hiccup on print can't lose the expensive run)
+        out = pd.DataFrame([{"decile": d, "entry": ("none" if th is None else th),
+                             "method": m, "total": t, "sharpe": s, "per_win": w}
+                            for s, t, d, th, m, w in rows])
+        out.to_csv(f"var/_sweep_{args.market}.csv", index=False)
+        print(f"\n===== SWEEP ({args.market}, {len(bench_s)} rebalances x {args.step}d) - Sharpe rank =====")
+        print(f"  {'benchmark(EW univ)':<26} tot {b_tot*100:+7.1f}%  Sharpe {b_sh:+.2f}")
+        print(f"  {'cfg basket/entry/method':<26} {'tot':>8}  {'Sharpe':>7}  {'/win':>7}")
+        for s, t, d, th, m, w in rows:
+            tag = f"{int(d*100)}%/{'none' if th is None else int(th)}/{m}"
+            print(f"  {tag:<26} {t*100:+7.1f}%  {s:+.2f}  {w*100:+6.2f}%")
         return
 
     bench, alpha, tim_cash, tim_conc, invested = [], [], [], [], []
