@@ -50,6 +50,7 @@ class IntegratedReport:
     sells_executed: int = 0
     waiting: int = 0          # in basket but technical says wait
     rejected: int = 0
+    trims: int = 0            # overweight winners trimmed back toward target (rebalance)
     defensive: bool = False
     concentrated: bool = False  # regime-adaptive merge: concentrate vs cash-style
     errors: list[str] = field(default_factory=list)
@@ -73,6 +74,7 @@ def run_integrated_decisions(
     close_map: dict[str, float],
     cfg: SizingConfig = SizingConfig(),
     concentrate: bool = False,
+    rebalance_band: Optional[float] = None,
 ) -> IntegratedReport:
     rep = IntegratedReport(market=market.value)
 
@@ -126,7 +128,26 @@ def run_integrated_decisions(
         elif tech is not None and tech <= EXIT_MAX:
             reason = "exit_tech_breakdown"
         else:
-            continue  # keep holding
+            # keep holding — but optionally TRIM an overweight winner back toward the
+            # equal-weight target (banded to avoid churn) so winners don't dominate.
+            if rebalance_band is not None and per_name > 0:
+                price = close_map.get(ticker) or float(pos.current_price or pos.entry_price)
+                cur_val = float(pos.current_price or pos.entry_price) * pos.volume
+                if price > 0 and cur_val > per_name * (1.0 + rebalance_band):
+                    trim_vol = (cur_val - per_name) / price
+                    if trim_vol > 0:
+                        intent = OrderIntent(market=market, ticker=ticker, side=OrderSide.SELL,
+                                             order_type=OrderType.MARKET, volume=trim_vol,
+                                             comment="rebalance_trim")
+                        try:
+                            ex = broker.execute(intent)
+                            audit(ticker, "TRIM", cur_val - per_name, rank_pct=b.rank_pct,
+                                  tech=tech, timing="rebalance_trim", exec_result=ex)
+                            if ex.ok:
+                                rep.trims += 1
+                        except Exception as e:
+                            rep.errors.append(f"trim {ticker}: {e}")
+            continue
         intent = OrderIntent(market=market, ticker=ticker, side=OrderSide.SELL,
                              order_type=OrderType.MARKET, volume=pos.volume, comment=reason)
         try:

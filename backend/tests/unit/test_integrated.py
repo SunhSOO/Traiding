@@ -109,7 +109,7 @@ class TestIntegratedRunner(unittest.TestCase):
     broker patched out, so we assert BUY/WAIT/SELL/REJECTED orchestration."""
 
     def _run(self, *, basket, tech_scores, positions=None, exposure=0.7,
-             risk_ok=True, concentrate=False):
+             risk_ok=True, concentrate=False, rebalance_band=None):
         from datetime import date, datetime
         from types import SimpleNamespace
         from unittest.mock import MagicMock, patch
@@ -144,11 +144,11 @@ class TestIntegratedRunner(unittest.TestCase):
                 MagicMock(), market=Market.US, as_of=datetime(2026, 6, 29),
                 broker=broker, risk_engine=risk, risk_limits=None,
                 recommender=rec, feat_df=__import__("pandas").DataFrame(), close_map=close_map,
-                concentrate=concentrate)
+                concentrate=concentrate, rebalance_band=rebalance_band)
 
-    def _pos(self, ticker):
+    def _pos(self, ticker, volume=1.0):
         from types import SimpleNamespace
-        return SimpleNamespace(ticker=ticker, volume=1.0, entry_price=100.0, current_price=100.0)
+        return SimpleNamespace(ticker=ticker, volume=volume, entry_price=100.0, current_price=100.0)
 
     def test_buys_strong_waits_weak(self):
         rep = self._run(basket=[("A", 0.98), ("B", 0.95), ("C", 0.92)],
@@ -191,6 +191,23 @@ class TestIntegratedRunner(unittest.TestCase):
                       tech_scores={"A": 50.0, "B": 50.0}, exposure=0.9)
         self.assertFalse(r.concentrated)
         self.assertEqual(r.buys_executed, 2)
+
+    def test_rebalance_trims_overweight_winner(self):
+        # A is held, still in basket, tech OK → normally kept. With a big position
+        # (overweight vs equal-weight target) and rebalance_band on, it's trimmed.
+        big = self._pos("A", volume=20.0)   # value 2000 vs per-name target ~700
+        rep = self._run(basket=[("A", 0.98), ("B", 0.95), ("C", 0.92)],
+                        tech_scores={"A": 50.0, "B": 50.0, "C": 50.0},
+                        positions=[big], exposure=0.7, rebalance_band=0.3)
+        self.assertEqual(rep.trims, 1)
+        self.assertEqual(rep.sells_executed, 0)   # trim is not a full exit
+
+    def test_no_trim_without_band(self):
+        big = self._pos("A", volume=20.0)
+        rep = self._run(basket=[("A", 0.98), ("B", 0.95), ("C", 0.92)],
+                        tech_scores={"A": 50.0, "B": 50.0, "C": 50.0},
+                        positions=[big], exposure=0.7)   # rebalance_band=None → off
+        self.assertEqual(rep.trims, 0)
 
     def test_concentrate_opt_in(self):
         # opt-in + favourable exposure → concentrate; low exposure stays cash even if opted in.
