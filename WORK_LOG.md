@@ -1229,6 +1229,13 @@ direction-test는 **breadth 하나**만 봤음(평균회귀 IC −0.14). 사용�
 
 > no-complacency 3회 루프: 포기→재도전→breadth실패→전체모델→게이팅→임계/풀드까지 소진. 결과: US 레버 검증·배선(활성화 대기), KR 정직한 미해결(현금 유지). "다 해봤다"에 근접한 소진 후의 정직한 부분승리.
 
+**T5/T6 잔여 과업 소진:**
+- **T5 as_of_ts 백필(완료·적용)**: `scripts/backfill_as_of_ts.py`(dry-run 기본, --apply)로 as_of_ts를 trade_date 장마감 UTC로 재계산(US131만+KR74만=205만행). **역사 PIT 기술 스코어링 복구**(score_one_ticker @2021 = 20.0, 이전 None; 라이브도 정상). GAPS 한계 해소.
+- **T6 KR winsor(측정·기각)**: KR alpha zscore(-11.5%/+5.6%p) vs winsor(-9.4%/+7.6%p) — winsor 총수익 +2%p 나으나 **Sharpe 동일(0.03), 여전히 음수** → 알파캠페인 "wash" 재확인. zscore 프로덕션 기본 유지, winsor는 `--norm-mode winsor`로 선택 가능(채택 안 함).
+- 584 테스트 통과.
+
+> 이번 배치(T1~T6)로 열린 과업 소진: 방향레버(US검증/KR미해결)·리밸런싱·as_of_ts복구·winsor측정. 남은 근본 상한은 여전히 (a)알파 포화 (b)대체데이터(저장공간) (c)paper 시간 — 코드/검증로 더 짜낼 여지는 이번에 대부분 소진.
+
 ---
 
 ## 보류 결정 (status=proposed)

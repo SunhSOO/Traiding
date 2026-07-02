@@ -118,6 +118,8 @@ def main() -> None:
     ap.add_argument("--pooled-direction", action="store_true",
                     help="train the direction model on BOTH markets pooled (more samples — helps "
                          "the thin/noisy market). Used with --direction-gated.")
+    ap.add_argument("--norm-mode", choices=["zscore", "winsor"], default="zscore",
+                    help="per-date feature normalization (production default zscore; winsor clips ±3)")
     args = ap.parse_args()
 
     cache = args.cache or f"var/_bt_period_{args.market}_2018-01-01_2024-01-01.parquet"
@@ -178,7 +180,9 @@ def main() -> None:
         df = df.dropna(subset=[target_col]).copy()
         g = df.groupby("date")
         df[feats] = (df[feats] - g[feats].transform("mean")) / (g[feats].transform("std") + 1e-9)
-        print(f"[prod] label={target_col} + per-date z-score on {len(feats)} feats", flush=True)
+        if args.norm_mode == "winsor":
+            df[feats] = df[feats].clip(-3, 3)
+        print(f"[prod] label={target_col} + per-date {args.norm_mode} on {len(feats)} feats", flush=True)
 
     params = dict(n_estimators=(300 if use_prod else 150), num_leaves=31,
                   learning_rate=(0.03 if use_prod else 0.05), min_child_samples=100,

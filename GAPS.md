@@ -1646,7 +1646,7 @@ regime-conditional / topk30 / 섹터중립 / 롱숏 / VIX게이팅 / 앙상블(L
 - ⏭️ **selection_basket가 전체 유니버스 영속**: `_persist`는 바스켓뿐 아니라 전 종목 recs를 기록(US ~500행/일). 전체 랭킹 뷰엔 유용하나 저장 증가(≈125k행/년/시장). 인덱스로 쿼리는 무해, 필요시 in_basket만 저장으로 축소 가능.
 - ⏭️ **UX 리치니스(설계 목업 대비 v1 간소화)**: 시황=지수추세/VIX/노출추이차트/regime리본, 선정=conviction분포·클릭→선정사유(피처기여), 실행=클릭→기술적상세(trend/RSI/RedGreen) 미구현. 데이터 의존(노출추이=market_read 누적, 선정사유=SHAP류 인프라). P2에서 단계 구현.
 - ✅ **보안 점검 통과**: `decode_access_token`의 `verify_exp=False` 전환 후 비테스트 호출자는 `_resolve_user` 하나뿐이며 즉시 `is_token_expired`로 만료 강제 — 만료 우회 없음 확인.
-- ⚠️ **역사 PIT 기술 스코어링 불가(as_of_ts=일괄적재시각)**: `daily_prices.as_of_ts`가 봉의 실제 가용시각이 아니라 **벌크 적재 타임스탬프(~2026-06-02)**로 전 봉(2015~)에 동일하게 찍혀 있음. `_load_bars`의 PIT 가드 `as_of_ts <= as_of`가 과거 날짜엔 전부 미래→0봉→`score_one_ticker`=None. **라이브(as_of=now)는 정상**이나 **역사 백테스트에서 기술 타이밍 스코어를 못 냄**. `backtest_integrated.py`는 우회로 trade_date 기반 스코어러 사용. 근본해결: 적재 시 as_of_ts를 trade_date의 장마감 UTC로 채우기(또는 PIT 로더에 trade_date 폴백).
+- ✅ **역사 PIT 기술 스코어링 복구(as_of_ts 백필 완료 2026-07-02)**: 과거 as_of_ts=일괄적재시각(~2026-06)이라 `_load_bars` PIT 가드가 과거를 전부 거부했던 문제 → `scripts/backfill_as_of_ts.py`로 as_of_ts를 **trade_date 장마감 UTC(+lag)**로 재계산(US 131만+KR 74만=205만행 --apply). 검증: `score_one_ticker` @2021-05-05 = 20.0(이전 None), 라이브 @now도 정상. 이제 production 경로로 역사 PIT 스코어 가능(백테스트 trade_date 우회는 잔존하나 불필요).
 
 ### 통합 백테스트 결과 (walk-forward, 정직판정 2026-06-30)
 - ✅ **프로덕션 레시피 walk-forward 이식 완료 → 알파 실재 확인**(`--production`): 간이 프록시(US 알파 +30.8%, 벤치 하회)는 프로덕션 5레버(tb/mn·정규화·top50·|label|가중) 미복제라 과소평가였음. 복제 후 **US 알파단독 +61.5%/Sharpe0.70(벤치 +24.8%p 상회), KR +5.6%p 상회** — 양시장 실 엣지. (매트릭스는 WORK_LOG 2026-06-30(2))
