@@ -120,6 +120,8 @@ def main() -> None:
                          "the thin/noisy market). Used with --direction-gated.")
     ap.add_argument("--norm-mode", choices=["zscore", "winsor"], default="zscore",
                     help="per-date feature normalization (production default zscore; winsor clips ±3)")
+    ap.add_argument("--band", type=float, default=0.02,
+                    help="regime-split sideways band: |bench 21d return| <= band → 횡보")
     args = ap.parse_args()
 
     cache = args.cache or f"var/_bt_period_{args.market}_2018-01-01_2024-01-01.parquet"
@@ -360,10 +362,11 @@ def main() -> None:
                   f"/win {np.mean(gated)*100:+.2f}%  (concentrate {up_rate*100:.0f}%)")
         return
 
-    # ── REGIME-SPLIT: per-window (bench, cash, conc) then bucket by benchmark sign ──
+    # ── REGIME-SPLIT: per-window (bench, alpha, cash, conc), bucket UP/SIDE/DOWN ──
     if args.regime_split:
         dec = args.decile
-        wins = []   # (bench, cash, conc)
+        band = args.band                      # |bench 21d| <= band → sideways
+        wins = []   # (bench, alpha, cash, conc)
         for i in reb_idx:
             t = dates[i]; train_cut = dates[i - EMBARGO]
             lo = dates[max(0, i - EMBARGO - args.train_window)] if args.train_window else dates[0]
@@ -383,6 +386,7 @@ def main() -> None:
             bench_r = float(at_t[RET].mean())
             basket = at_t[at_t["rank_pct"] >= 1 - dec]
             n_b = max(len(basket), 1)
+            alpha_r = float(basket[RET].mean())              # alpha-only (no timing)
             td = pd.Timestamp(t).date()
             passed = []
             with session_scope() as s:
@@ -392,17 +396,22 @@ def main() -> None:
                         passed.append(float(r))
             cash_r = sum(passed) / n_b
             conc_r = float(np.mean(passed)) if passed else 0.0
-            wins.append((bench_r, cash_r, conc_r))
-            print(f"  {td}  bench={bench_r*100:+.2f}%  cash={cash_r*100:+.2f}%  conc={conc_r*100:+.2f}%", flush=True)
-        up = [(c, k) for b, c, k in wins if b > 0]
-        dn = [(c, k) for b, c, k in wins if b <= 0]
-        print(f"\n===== REGIME-SPLIT ({args.market}, {len(wins)} windows, basket {int(dec*100)}%) =====")
-        for name, bucket in [("UP  (bench>0)", up), ("DOWN(bench<=0)", dn)]:
-            if not bucket:
-                print(f"  {name}: (없음)"); continue
-            mc = float(np.mean([c for c, _ in bucket])); mk = float(np.mean([k for _, k in bucket]))
-            win = "집중" if mk > mc else "현금"
-            print(f"  {name}  n={len(bucket):<3} cash/win {mc*100:+.2f}%  conc/win {mk*100:+.2f}%  → {win} 우세")
+            wins.append((bench_r, alpha_r, cash_r, conc_r))
+            print(f"  {td}  bench={bench_r*100:+.2f}%  alpha={alpha_r*100:+.2f}%  cash={cash_r*100:+.2f}%  conc={conc_r*100:+.2f}%", flush=True)
+        buckets = {
+            f"상승 (bench>+{band*100:.0f}%)": [w for w in wins if w[0] > band],
+            f"횡보 (|bench|<={band*100:.0f}%)": [w for w in wins if abs(w[0]) <= band],
+            f"하락 (bench<-{band*100:.0f}%)": [w for w in wins if w[0] < -band],
+        }
+        print(f"\n===== REGIME-SPLIT 3분 ({args.market}, {len(wins)} windows, basket {int(dec*100)}%) =====")
+        print(f"  {'구간':<22} {'n':>3}  {'벤치':>7} {'알파단독':>7} {'현금타이밍':>8} {'집중':>7}  최선")
+        for name, bk in buckets.items():
+            if not bk:
+                print(f"  {name:<22} (없음)"); continue
+            mb = np.mean([w[0] for w in bk]); ma = np.mean([w[1] for w in bk])
+            mc = np.mean([w[2] for w in bk]); mk = np.mean([w[3] for w in bk])
+            best = max([("벤치", mb), ("알파", ma), ("현금", mc), ("집중", mk)], key=lambda x: x[1])[0]
+            print(f"  {name:<22} {len(bk):>3}  {mb*100:>+6.2f}% {ma*100:>+6.2f}% {mc*100:>+7.2f}% {mk*100:>+6.2f}%  → {best}")
         return
 
     bench, alpha, tim_cash, tim_conc, invested = [], [], [], [], []
