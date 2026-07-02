@@ -151,6 +151,13 @@ def main() -> None:
     ap.add_argument("--timing-ablation", action="store_true",
                     help="which technical SIGNAL drives the timing gate? Evaluate cash-timing "
                          "under each signal separately (down-market defense is the key), 1 pass")
+    ap.add_argument("--cost-test", action="store_true",
+                    help="charge realistic transaction costs (turnover × round-trip bps) per "
+                         "rebalance and report NET Sharpe for each strategy — does the timing "
+                         "gate's high turnover erode its edge?")
+    ap.add_argument("--hysteresis", type=float, default=0.0,
+                    help="basket hysteresis band: keep a held name while its rank stays within "
+                         "top-(decile+band) — reduces turnover (cost-test alpha leg)")
     args = ap.parse_args()
 
     cache = args.cache or f"var/_bt_period_{args.market}_2018-01-01_2024-01-01.parquet"
@@ -403,6 +410,68 @@ def main() -> None:
             gated = np.where(dsc > thr, alpha_arr, cash_a)
             g = _compound(list(gated))
             print(f"    gated@dir>{thr*100:+.1f}%  tot {g*100:+7.1f}%  Sharpe {_sharpe_like(list(gated),wpy):+.2f}  /win {np.mean(gated)*100:+.2f}%")
+        return
+
+    # ── COST TEST: charge turnover × round-trip bps per rebalance, report NET ──
+    if args.cost_test:
+        dec = args.decile
+        COSTS = [0, 20, 40, 60]     # round-trip bps applied to the fraction of holdings replaced
+        prev = {"alpha": set(), "cash": set(), "conc": set()}
+        rows = []   # per window: gross{a,c,k} + turnover{a,c,k}
+        for i in reb_idx:
+            t = dates[i]; train_cut = dates[i - EMBARGO]
+            lo = dates[max(0, i - EMBARGO - args.train_window)] if args.train_window else dates[0]
+            tr = df[(df["date"] <= train_cut) & (df["date"] > lo)].dropna(subset=[target_col])
+            at_t = df[df["date"] == t].dropna(subset=[RET]).copy()
+            if len(tr) < 5000 or len(at_t) < 30:
+                continue
+            sw = np.abs(tr[target_col].values)
+            sel = lgb.LGBMRegressor(**params).fit(tr[feats].astype(float), tr[target_col].astype(float), sample_weight=sw)
+            cols = pd.Series(sel.feature_importances_, index=feats).sort_values(ascending=False).head(50).index.tolist()
+            model = lgb.LGBMRegressor(**params).fit(tr[cols].astype(float), tr[target_col].astype(float), sample_weight=sw)
+            at_t["score"] = model.predict(at_t[cols].astype(float))
+            at_t["rank_pct"] = at_t["score"].rank(pct=True)
+            strict = at_t[at_t["rank_pct"] >= 1 - dec]
+            if args.hysteresis > 0 and prev["alpha"]:
+                # keep previously-held names still within the wider top-(dec+hyst) band
+                wide = at_t[at_t["rank_pct"] >= 1 - dec - args.hysteresis]
+                keep = wide[wide["ticker"].astype(str).isin(prev["alpha"])]
+                basket = pd.concat([strict, keep]).drop_duplicates(subset=["ticker"])
+            else:
+                basket = strict
+            n_b = max(len(basket), 1)
+            bset = set(basket["ticker"].astype(str))
+            td = pd.Timestamp(t).date()
+            pset, prets = set(), []
+            with session_scope() as s:
+                for tkr, r in zip(basket["ticker"].astype(str), basket[RET].astype(float)):
+                    sc = _tech_score_by_trade_date(s, market, tkr, td)
+                    if sc is not None and sc >= ENTRY_MIN:
+                        pset.add(tkr); prets.append(float(r))
+            gross = {"alpha": float(basket[RET].mean()),
+                     "cash": sum(prets) / n_b,
+                     "conc": float(np.mean(prets)) if prets else 0.0}
+            # turnover = fraction of held names replaced vs previous window (one-way)
+            def _turn(cur, key):
+                p = prev[key]
+                return 1.0 if not p else len(cur - p) / max(len(cur), 1)
+            turn = {"alpha": _turn(bset, "alpha"), "cash": _turn(pset, "cash"), "conc": _turn(pset, "conc")}
+            prev["alpha"], prev["cash"], prev["conc"] = bset, pset, pset
+            rows.append((gross, turn))
+            print(f"  {td}  turnover a/c={turn['alpha']*100:.0f}%/{turn['cash']*100:.0f}%", flush=True)
+        wpy = 252.0 / args.step
+        print(f"\n===== COST TEST ({args.market}, {len(rows)} windows) — NET Sharpe by round-trip bps =====")
+        print(f"  {'bps':>4}  {'alpha-only':>18}  {'cash-timing':>18}  {'concentrate':>18}")
+        for bps in COSTS:
+            out = {}
+            for key in ("alpha", "cash", "conc"):
+                net = [g[key] - t[key] * bps / 10000.0 for g, t in rows]
+                out[key] = (_compound(net), _sharpe_like(net, wpy))
+            print(f"  {bps:>4}  {out['alpha'][0]*100:>+7.1f}%/Sh{out['alpha'][1]:>+.2f}  "
+                  f"{out['cash'][0]*100:>+7.1f}%/Sh{out['cash'][1]:>+.2f}  "
+                  f"{out['conc'][0]*100:>+7.1f}%/Sh{out['conc'][1]:>+.2f}")
+        avg_ta = np.mean([t["alpha"] for _, t in rows]); avg_tc = np.mean([t["cash"] for _, t in rows])
+        print(f"  평균 회전율: alpha {avg_ta*100:.0f}%/rebal, cash-timing {avg_tc*100:.0f}%/rebal")
         return
 
     # ── TIMING ABLATION: which technical SIGNAL drives the gate's defense? ──
