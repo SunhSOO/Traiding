@@ -108,6 +108,10 @@ def main() -> None:
                     help="classify each rebalance window by benchmark sign (UP vs DOWN) and "
                          "compare concentrate-vs-cash WITHIN each — tests the regime-adaptive "
                          "merge directly (fills e.g. the US-bear cell) free of market/step confound")
+    ap.add_argument("--direction-test", action="store_true",
+                    help="THE honest test of the switch itself: does the price breadth (200d-SMA, "
+                         "known at t) PREDICT the forward benchmark direction? If not, the "
+                         "regime-adaptive merge has no live edge (needs hindsight it lacks).")
     args = ap.parse_args()
 
     cache = args.cache or f"var/_bt_period_{args.market}_2018-01-01_2024-01-01.parquet"
@@ -116,6 +120,41 @@ def main() -> None:
     dates = np.sort(df["date"].unique())
     feats = [c for c in ALL_FEATURE_COLS if c in df.columns]
     market = Market(args.market)
+
+    # ── DIRECTION TEST: can the switch (price breadth at t) predict the forward
+    #    benchmark direction? No model — just breadth(t) vs realized fwd return. ──
+    if args.direction_test:
+        from scipy.stats import spearmanr
+        reb_idx = list(range(EMBARGO + 252, len(dates), args.step))
+        pts = []   # (breadth_t, fwd_bench)
+        for i in reb_idx:
+            t = dates[i]
+            at_t = df[df["date"] == t].dropna(subset=[RET]).copy()
+            if len(at_t) < 30 or "px_vs_sma200" not in at_t.columns:
+                continue
+            pv = pd.to_numeric(at_t["px_vs_sma200"], errors="coerce").dropna()
+            if not len(pv):
+                continue
+            breadth = float((pv > 0).mean())            # fraction above 200d SMA, known at t
+            fwd = float(at_t[RET].mean())               # realized forward benchmark return
+            pts.append((breadth, fwd))
+        b = np.array([p[0] for p in pts]); f = np.array([p[1] for p in pts])
+        rho = spearmanr(b, f).correlation
+        # switch at breadth median (proxy for the exposure≥0.6 concentrate gate)
+        thr = float(np.median(b))
+        hi = f[b >= thr]; loo = f[b < thr]
+        # directional hit-rate: does breadth>0.5 predict fwd>0?
+        pred_up = b >= 0.5
+        acc = float((pred_up == (f > 0)).mean())
+        base_up = float((f > 0).mean())
+        print(f"\n===== DIRECTION TEST ({args.market}, {len(pts)} windows) =====")
+        print(f"  breadth(t) vs forward bench return  Spearman rho = {rho:+.3f}")
+        print(f"  high-breadth(>={thr:.2f}) fwd mean {np.mean(hi)*100:+.2f}%  (n={len(hi)})")
+        print(f"  low-breadth (< {thr:.2f}) fwd mean {np.mean(loo)*100:+.2f}%  (n={len(loo)})")
+        print(f"  spread (hi-lo) = {(np.mean(hi)-np.mean(loo))*100:+.2f}%p  "
+              f"{'→ 스위치가 방향 예측력 있음' if np.mean(hi)>np.mean(loo) else '→ 예측력 없음/역전'}")
+        print(f"  directional hit-rate (breadth>0.5 → up): {acc*100:.0f}%  (baseline up-rate {base_up*100:.0f}%)")
+        return
 
     # ── PRODUCTION recipe setup (once, PIT-safe): per-market label + per-date
     #    cross-section z-score. Feature selection + |label| weighting happen

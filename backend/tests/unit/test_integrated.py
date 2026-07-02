@@ -109,7 +109,7 @@ class TestIntegratedRunner(unittest.TestCase):
     broker patched out, so we assert BUY/WAIT/SELL/REJECTED orchestration."""
 
     def _run(self, *, basket, tech_scores, positions=None, exposure=0.7,
-             risk_ok=True):
+             risk_ok=True, concentrate=False):
         from datetime import date, datetime
         from types import SimpleNamespace
         from unittest.mock import MagicMock, patch
@@ -143,7 +143,8 @@ class TestIntegratedRunner(unittest.TestCase):
             return ir.run_integrated_decisions(
                 MagicMock(), market=Market.US, as_of=datetime(2026, 6, 29),
                 broker=broker, risk_engine=risk, risk_limits=None,
-                recommender=rec, feat_df=__import__("pandas").DataFrame(), close_map=close_map)
+                recommender=rec, feat_df=__import__("pandas").DataFrame(), close_map=close_map,
+                concentrate=concentrate)
 
     def _pos(self, ticker):
         from types import SimpleNamespace
@@ -183,16 +184,23 @@ class TestIntegratedRunner(unittest.TestCase):
         self.assertEqual(rep.rejected, 1)
         self.assertEqual(rep.buys_executed, 0)
 
-    def test_regime_adaptive_merge(self):
-        # high exposure (bull) → concentrate; low exposure (bear) → cash-style.
+    def test_merge_default_is_cash(self):
+        # concentration is OFF by default (direction-test: switch can't predict
+        # forward direction, so we don't bet on it). Cash-style regardless of exposure.
+        r = self._run(basket=[("A", 0.98), ("B", 0.95)],
+                      tech_scores={"A": 50.0, "B": 50.0}, exposure=0.9)
+        self.assertFalse(r.concentrated)
+        self.assertEqual(r.buys_executed, 2)
+
+    def test_concentrate_opt_in(self):
+        # opt-in + favourable exposure → concentrate; low exposure stays cash even if opted in.
         hi = self._run(basket=[("A", 0.98), ("B", 0.95)],
-                       tech_scores={"A": 50.0, "B": 50.0}, exposure=0.7)
+                       tech_scores={"A": 50.0, "B": 50.0}, exposure=0.7, concentrate=True)
         self.assertTrue(hi.concentrated)
-        self.assertEqual(hi.buys_executed, 2)
         lo = self._run(basket=[("A", 0.98), ("B", 0.95)],
-                       tech_scores={"A": 50.0, "B": 50.0}, exposure=0.4)
-        self.assertFalse(lo.concentrated)         # cash-style below the threshold
-        self.assertEqual(lo.buys_executed, 2)     # still invests (not defensive)
+                       tech_scores={"A": 50.0, "B": 50.0}, exposure=0.4, concentrate=True)
+        self.assertFalse(lo.concentrated)         # below threshold → cash even when opted in
+        self.assertEqual(lo.buys_executed, 2)
 
 
 if __name__ == "__main__":

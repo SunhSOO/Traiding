@@ -72,6 +72,7 @@ def run_integrated_decisions(
     feat_df: pd.DataFrame,
     close_map: dict[str, float],
     cfg: SizingConfig = SizingConfig(),
+    concentrate: bool = False,
 ) -> IntegratedReport:
     rep = IntegratedReport(market=market.value)
 
@@ -155,11 +156,15 @@ def run_integrated_decisions(
             if price and price > 0:
                 passers.append((b, tech, price))
 
-        # Sizing — regime-adaptive merge (backtest sweep 2026-06-30): a favourable
-        # regime (high target_exposure) CONCENTRATES the exposure into the timed
-        # passers (bull → amplify); a defensive/low-exposure regime keeps the
-        # cash-style per-basket slot so waiters stay cash (bear → protect).
-        rep.concentrated = sel.target_exposure >= CONCENTRATE_MIN_EXPOSURE
+        # Sizing — merge method. CASH-STYLE by default (waiters stay cash): this is
+        # inherently defensive and needs NO forward-direction call. CONCENTRATE
+        # (deploy exposure into the passers) amplifies in up-markets — the sweep
+        # showed it wins in UP windows — BUT the direction-test (2026-07-02) found
+        # our breadth/exposure switch does NOT predict forward direction (US rho
+        # -0.14, even reversed). So concentration is a bet on a call we can't make;
+        # it stays OFF by default and opt-in (`concentrate=True`) until a validated
+        # forward-direction signal exists. The defensive side lives in target_exposure.
+        rep.concentrated = bool(concentrate and sel.target_exposure >= CONCENTRATE_MIN_EXPOSURE)
         n_deploy = max(len(passers), 1) if rep.concentrated else n_basket
         per_deploy = equity * sel.target_exposure / n_deploy
 
