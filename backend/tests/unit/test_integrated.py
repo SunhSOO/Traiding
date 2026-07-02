@@ -132,7 +132,8 @@ class TestIntegratedRunner(unittest.TestCase):
     broker patched out, so we assert BUY/WAIT/SELL/REJECTED orchestration."""
 
     def _run(self, *, basket, tech_scores, positions=None, exposure=0.7,
-             risk_ok=True, concentrate=False, rebalance_band=None, direction_score=None):
+             risk_ok=True, concentrate=False, rebalance_band=None, direction_score=None,
+             held_ranks=None, basket_hysteresis=0.0):
         from datetime import date, datetime
         from types import SimpleNamespace
         from unittest.mock import MagicMock, patch
@@ -159,7 +160,11 @@ class TestIntegratedRunner(unittest.TestCase):
             execute=lambda intent: ex,
         )
         risk = SimpleNamespace(check=lambda i, s, l: SimpleNamespace(all_passed=risk_ok))
-        rec = SimpleNamespace(recommend=lambda f, c, cfg=None: __import__("pandas").DataFrame())
+        # recs df drives rank_map (for basket hysteresis): basket names + any held-name ranks
+        rrows = [{"ticker": t, "rank_pct": rp} for t, rp in basket]
+        rrows += [{"ticker": tk, "rank_pct": rp} for tk, rp in (held_ranks or {}).items()]
+        recs_df = pd.DataFrame(rrows)
+        rec = SimpleNamespace(recommend=lambda f, c, cfg=None: recs_df)
         with patch.object(ir, "run_selection", return_value=sel), \
              patch.object(ir, "_tech_score", side_effect=lambda s, m, t, a: tech_scores.get(t)), \
              patch.object(ir, "_risk_state", return_value=None):
@@ -168,7 +173,7 @@ class TestIntegratedRunner(unittest.TestCase):
                 broker=broker, risk_engine=risk, risk_limits=None,
                 recommender=rec, feat_df=__import__("pandas").DataFrame(), close_map=close_map,
                 concentrate=concentrate, rebalance_band=rebalance_band,
-                direction_score=direction_score)
+                direction_score=direction_score, basket_hysteresis=basket_hysteresis)
 
     def _pos(self, ticker, volume=1.0):
         from types import SimpleNamespace
@@ -225,6 +230,15 @@ class TestIntegratedRunner(unittest.TestCase):
                         positions=[big], exposure=0.7, rebalance_band=0.3)
         self.assertEqual(rep.trims, 1)
         self.assertEqual(rep.sells_executed, 0)   # trim is not a full exit
+
+    def test_basket_hysteresis_keeps_held_in_band(self):
+        posz = self._pos("Z")   # held, dropped from strict basket (rank 0.86 in cache)
+        base = dict(basket=[("A", 0.98), ("B", 0.92)], tech_scores={"A": 50.0, "B": 50.0, "Z": 50.0},
+                    positions=[posz], held_ranks={"Z": 0.86})
+        r0 = self._run(**base)                              # no hysteresis → dropped → sold
+        self.assertEqual(r0.sells_executed, 1)
+        r1 = self._run(**base, basket_hysteresis=0.10)      # hold_thr=0.92-0.10=0.82; 0.86≥0.82 → kept
+        self.assertEqual(r1.sells_executed, 0)
 
     def test_no_trim_without_band(self):
         big = self._pos("A", volume=20.0)

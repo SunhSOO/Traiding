@@ -1284,6 +1284,11 @@ direction-test는 **breadth 하나**만 봤음(평균회귀 IC −0.14). 사용�
 - **→ 회전율 통제가 신규 실질 레버**(리밸런싱 트림은 가중드리프트용, 회전율 감축 아님). 바스켓 히스테리시스(`--hysteresis`, 보유종목 넓은밴드 유지) 테스트중.
 - 주의: LGBM n_jobs=-1 비결정성으로 gross 절대값 run간 변동(예 alpha gross Sharpe 0.53~0.60), **비용 상대영향(회전율 높을수록 침식↑)은 견고**.
 
+**🟢 회전율 통제(바스켓 히스테리시스) — 검증·구현:** 보유종목을 top-(decile+band) 내면 유지(청산 안 함).
+- 실측(US, 밴드0.10): **알파 회전율 54%→37%**, **순Sharpe@40bps 0.53→0.59 / @60bps 0.49→0.56**(gross도 0.60→0.63 소폭↑ — 승자 홀딩 momentum). 거래비용 침식을 부분 상쇄.
+- (cash-timing 회전율은 61%로 잔존 — 기술필터 churn 지배. 타이밍 히스테리시스는 별도 리드.)
+- 러너 구현: `run_integrated_decisions(basket_hysteresis=0.0)` 기본 OFF, EXIT 로직이 hold band 내 보유종목은 exit_basket_drop 면제. recs rank_pct로 판정. 단위테스트+라이브 smoke 통과(20테스트). **거의 무손실 개선이라 default-on 유력 후보이나 29윈도라 opt-in 유지, paper 확인 후 상향.**
+
 ---
 
 ## 보류 결정 (status=proposed)
