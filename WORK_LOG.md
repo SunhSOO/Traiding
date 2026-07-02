@@ -1254,6 +1254,11 @@ direction-test는 **breadth 하나**만 봤음(평균회귀 IC −0.14). 사용�
 - **이유**: 매트릭스의 "알파>집중"은 *완벽한 방향지식* 전제. 실제 방향모델은 **오탐(false-up)** 존재 → 오탐 윈도에서 B(전 바스켓 노출)는 손실 그대로, A(타이밍 통과분만)는 **기술필터가 손실 완충**. **불완전 예측 하에선 집중의 타이밍 필터가 오탐을 쿠션**.
 - **결론**: 현 구현(A=집중 게이팅)이 옳음. "상승장 풀투자(B)"는 유혹적이나 테스트로 기각 — 검증 없이 채택했으면 실수. hindsight 조건부 최적(알파)을 노이즈 예측기에 그대로 적용하면 안 됨을 재확인.
 
+**전체가능성 추가 소진 — 방향모델 개선 + 타이밍 신호 ablation:**
+- **방향모델 스윕**(`direction_sweep.py`, 회귀/분류×6피처그룹): **US clf/all 68%>baseline 63%**(회귀 58%보다 개선!), **KR은 clf도 62%<64%**(대부분 always-up 편향, 분리력 없음) → KR 방향 예측 불가 재확정.
+- **clf 채택**: `market_direction.predict_direction(mode="clf")` 기본화. clf-게이팅 US pooled **+61.0%/Sharpe0.73 > reg +60.0%/0.72**(방향정확도 68>58 반영). 소폭이나 실측 개선.
+- **타이밍 신호 ablation**(`--timing-ablation`, 신호별 하락장 방어): **red_green이 방어 주도** — US 하락장 red_green -3.35% ≈ composite -3.60%(벤치 -5.25%). (1차 실행은 신호명 불일치 버그로 momentum/trend/meanrev 아티팩트 → 실제 verdict명 momentum_rsi_macd/trend_ema_alignment/mean_reversion_zscore로 수정 재실행.)
+
 ---
 
 ## 보류 결정 (status=proposed)

@@ -67,6 +67,30 @@ def _tech_score_by_trade_date(session, market, ticker, as_of_date, lookback=300)
     return score_technical(ctx).score
 
 
+def _tech_signals_by_trade_date(session, market, ticker, as_of_date, lookback=300):
+    """Per-SIGNAL technical scores {signal_name: score} + composite, via one bar
+    load. Used for the timing-signal ablation (which signal drives the gate)."""
+    from sqlalchemy import text
+    from technical.indicators import from_ohlcv
+    from technical.score import score_technical
+    rows = session.execute(text(
+        "SELECT open, high, low, close, volume FROM daily_prices "
+        "WHERE market=:m AND ticker=:t AND trade_date <= :d "
+        "ORDER BY trade_date DESC LIMIT :n"),
+        {"m": market.value, "t": ticker, "d": as_of_date, "n": lookback}).all()
+    if len(rows) < 30:
+        return None
+    rows = rows[::-1]
+    ctx = from_ohlcv(
+        opens=[float(r[0]) for r in rows], highs=[float(r[1]) for r in rows],
+        lows=[float(r[2]) for r in rows], closes=[float(r[3]) for r in rows],
+        volumes=[float(r[4]) for r in rows])
+    ts = score_technical(ctx)
+    out = {v.name: v.score for v in ts.verdicts}
+    out["composite"] = ts.score
+    return out
+
+
 def _compound(rets):
     eq = 1.0
     for r in rets:
@@ -118,10 +142,15 @@ def main() -> None:
     ap.add_argument("--pooled-direction", action="store_true",
                     help="train the direction model on BOTH markets pooled (more samples — helps "
                          "the thin/noisy market). Used with --direction-gated.")
+    ap.add_argument("--dir-mode", choices=["reg", "clf"], default="reg",
+                    help="direction model: reg (forward-return regression) or clf (P(up) classifier)")
     ap.add_argument("--norm-mode", choices=["zscore", "winsor"], default="zscore",
                     help="per-date feature normalization (production default zscore; winsor clips ±3)")
     ap.add_argument("--band", type=float, default=0.02,
                     help="regime-split sideways band: |bench 21d return| <= band → 횡보")
+    ap.add_argument("--timing-ablation", action="store_true",
+                    help="which technical SIGNAL drives the timing gate? Evaluate cash-timing "
+                         "under each signal separately (down-market defense is the key), 1 pass")
     args = ap.parse_args()
 
     cache = args.cache or f"var/_bt_period_{args.market}_2018-01-01_2024-01-01.parquet"
@@ -317,11 +346,18 @@ def main() -> None:
             mtr = src[src["date"] <= train_cut]
             if len(mtr) < 252:
                 continue
-            dmodel = lgb.LGBMRegressor(**dparams).fit(mtr[mf_feats].astype(float), mtr["fwd"].astype(float))
             mrow = mf[mf["date"] == t]
             if mrow.empty:
                 continue
-            dscore = float(dmodel.predict(mrow[mf_feats].astype(float))[0])
+            if args.dir_mode == "clf":
+                yb = (mtr["fwd"] > 0).astype(int)
+                if yb.nunique() < 2:
+                    continue
+                dmodel = lgb.LGBMClassifier(**dparams).fit(mtr[mf_feats].astype(float), yb)
+                dscore = float(dmodel.predict_proba(mrow[mf_feats].astype(float))[0, 1] - 0.5)
+            else:
+                dmodel = lgb.LGBMRegressor(**dparams).fit(mtr[mf_feats].astype(float), mtr["fwd"].astype(float))
+                dscore = float(dmodel.predict(mrow[mf_feats].astype(float))[0])
             # alpha + timing
             sw = np.abs(tr[target_col].values)
             sel = lgb.LGBMRegressor(**params).fit(tr[feats].astype(float), tr[target_col].astype(float), sample_weight=sw)
@@ -367,6 +403,52 @@ def main() -> None:
             gated = np.where(dsc > thr, alpha_arr, cash_a)
             g = _compound(list(gated))
             print(f"    gated@dir>{thr*100:+.1f}%  tot {g*100:+7.1f}%  Sharpe {_sharpe_like(list(gated),wpy):+.2f}  /win {np.mean(gated)*100:+.2f}%")
+        return
+
+    # ── TIMING ABLATION: which technical SIGNAL drives the gate's defense? ──
+    if args.timing_ablation:
+        band = args.band; dec = args.decile
+        sig_names = ["momentum_rsi_macd", "trend_ema_alignment", "mean_reversion_zscore",
+                     "red_green", "composite"]
+        wins = []   # (bench, {sig: cash_ret})
+        for i in reb_idx:
+            t = dates[i]; train_cut = dates[i - EMBARGO]
+            lo = dates[max(0, i - EMBARGO - args.train_window)] if args.train_window else dates[0]
+            tr = df[(df["date"] <= train_cut) & (df["date"] > lo)].dropna(subset=[target_col])
+            at_t = df[df["date"] == t].dropna(subset=[RET]).copy()
+            if len(tr) < 5000 or len(at_t) < 30:
+                continue
+            sw = np.abs(tr[target_col].values)
+            sel = lgb.LGBMRegressor(**params).fit(tr[feats].astype(float), tr[target_col].astype(float), sample_weight=sw)
+            cols = pd.Series(sel.feature_importances_, index=feats).sort_values(ascending=False).head(50).index.tolist()
+            model = lgb.LGBMRegressor(**params).fit(tr[cols].astype(float), tr[target_col].astype(float), sample_weight=sw)
+            at_t["score"] = model.predict(at_t[cols].astype(float))
+            at_t["rank_pct"] = at_t["score"].rank(pct=True)
+            bench_r = float(at_t[RET].mean())
+            basket = at_t[at_t["rank_pct"] >= 1 - dec]
+            n_b = max(len(basket), 1)
+            td = pd.Timestamp(t).date()
+            passed = {s: [] for s in sig_names}
+            with session_scope() as s:
+                for tkr, r in zip(basket["ticker"].astype(str), basket[RET].astype(float)):
+                    sc = _tech_signals_by_trade_date(s, market, tkr, td)
+                    if sc is None:
+                        continue
+                    for sig in sig_names:
+                        if sc.get(sig, 0.0) >= ENTRY_MIN:
+                            passed[sig].append(float(r))
+            wins.append((bench_r, {sig: (sum(passed[sig]) / n_b) for sig in sig_names}))
+            print(f"  {td} bench={bench_r*100:+.2f}%", flush=True)
+        dn = [w for w in wins if w[0] < -band]
+        up = [w for w in wins if w[0] > band]
+        print(f"\n===== TIMING-ABLATION ({args.market}, {len(wins)}w: 상승 {len(up)}/하락 {len(dn)}) — 신호별 cash/win =====")
+        print(f"  {'signal':<16} {'하락장 방어':>10} {'상승장':>8}")
+        for sig in sig_names:
+            d = float(np.mean([w[1][sig] for w in dn])) if dn else float("nan")
+            u = float(np.mean([w[1][sig] for w in up])) if up else float("nan")
+            print(f"  {sig:<16} {d*100:>+9.2f}% {u*100:>+7.2f}%")
+        # reference: alpha-only (no timing) in down = the exposure being defended
+        print(f"  {'(하락장 벤치)':<16} {np.mean([w[0] for w in dn])*100:>+9.2f}%")
         return
 
     # ── REGIME-SPLIT: per-window (bench, alpha, cash, conc), bucket UP/SIDE/DOWN ──
