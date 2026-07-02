@@ -1257,7 +1257,10 @@ direction-test는 **breadth 하나**만 봤음(평균회귀 IC −0.14). 사용�
 **전체가능성 추가 소진 — 방향모델 개선 + 타이밍 신호 ablation:**
 - **방향모델 스윕**(`direction_sweep.py`, 회귀/분류×6피처그룹): **US clf/all 68%>baseline 63%**(회귀 58%보다 개선!), **KR은 clf도 62%<64%**(대부분 always-up 편향, 분리력 없음) → KR 방향 예측 불가 재확정.
 - **clf 채택**: `market_direction.predict_direction(mode="clf")` 기본화. clf-게이팅 US pooled **+61.0%/Sharpe0.73 > reg +60.0%/0.72**(방향정확도 68>58 반영). 소폭이나 실측 개선.
-- **타이밍 신호 ablation**(`--timing-ablation`, 신호별 하락장 방어): **red_green이 방어 주도** — US 하락장 red_green -3.35% ≈ composite -3.60%(벤치 -5.25%). (1차 실행은 신호명 불일치 버그로 momentum/trend/meanrev 아티팩트 → 실제 verdict명 momentum_rsi_macd/trend_ema_alignment/mean_reversion_zscore로 수정 재실행.)
+- **타이밍 신호 ablation**(`--timing-ablation`, 신호명 수정 후 clean): 하락장 방어 cash/win —
+  - US(벤치-5.25): momentum -6.83(방어↓!)·trend -4.67·meanrev -5.60·**red_green -3.35★**·composite -3.60
+  - KR(벤치-8.78): momentum -6.38·trend -7.12·meanrev -8.00·**red_green -5.93★**·composite -6.07
+  - **red_green이 양 시장 방어 1등**(composite보다 약간 나음, 방어 주동력). **momentum은 방어 약화**(상승캡처 최고나 하락 해로움). 상충: red_green=최고방어/최저상승, momentum=반대. **어느 단일신호도 양축 지배 못함 → composite 유지 합리적.** red_green=방어담당 확인. 리드(defer): momentum 축소한 방어편중 가중.
 
 ---
 
