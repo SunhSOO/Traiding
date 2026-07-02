@@ -112,6 +112,9 @@ def main() -> None:
                     help="THE honest test of the switch itself: does the price breadth (200d-SMA, "
                          "known at t) PREDICT the forward benchmark direction? If not, the "
                          "regime-adaptive merge has no live edge (needs hindsight it lacks).")
+    ap.add_argument("--direction-gated", action="store_true",
+                    help="PAYOFF test: route concentrate/cash by a LEARNED market-direction model "
+                         "(trend+momentum+VIX+regime) predicted at t. Does gated beat cash-always?")
     args = ap.parse_args()
 
     cache = args.cache or f"var/_bt_period_{args.market}_2018-01-01_2024-01-01.parquet"
@@ -159,7 +162,7 @@ def main() -> None:
     # ── PRODUCTION recipe setup (once, PIT-safe): per-market label + per-date
     #    cross-section z-score. Feature selection + |label| weighting happen
     #    per fold inside the loop. Blitz is already a feature column. ──
-    target_col, use_prod = RANK, (args.production or args.sweep or args.regime_split)
+    target_col, use_prod = RANK, (args.production or args.sweep or args.regime_split or args.direction_gated)
     if use_prod:
         df["mn_fwd_21d"] = df[RET] - df.groupby("date")[RET].transform("mean")
         if args.market == "US":
@@ -273,6 +276,69 @@ def main() -> None:
         for s, t, d, th, m, w in rows:
             tag = f"{int(d*100)}%/{'none' if th is None else int(th)}/{m}"
             print(f"  {tag:<26} {t*100:+7.1f}%  {s:+.2f}  {w*100:+6.2f}%")
+        return
+
+    # ── DIRECTION-GATED: route concentrate/cash by a LEARNED direction model ──
+    if args.direction_gated:
+        from scripts.market_direction_test import build_market_frame
+        dparams = dict(n_estimators=200, num_leaves=15, learning_rate=0.03,
+                       min_child_samples=20, subsample=0.8, colsample_bytree=0.7,
+                       reg_lambda=5.0, verbose=-1)
+        mf = build_market_frame(df.assign(date=df["date"]))
+        mf_feats = [c for c in mf.columns if c not in ("date", "fwd")]
+        mf = mf.reset_index(drop=True)
+        dec = args.decile
+        bench_s, cash_s, conc_s, gated_s, pred_up = [], [], [], [], []
+        for i in reb_idx:
+            t = dates[i]; train_cut = dates[i - EMBARGO]
+            lo = dates[max(0, i - EMBARGO - args.train_window)] if args.train_window else dates[0]
+            tr = df[(df["date"] <= train_cut) & (df["date"] > lo)].dropna(subset=[target_col])
+            at_t = df[df["date"] == t].dropna(subset=[RET]).copy()
+            if len(tr) < 5000 or len(at_t) < 30:
+                continue
+            # direction model: train on market frame up to train_cut, predict at t
+            mtr = mf[mf["date"] <= train_cut]
+            if len(mtr) < 252:
+                continue
+            dmodel = lgb.LGBMRegressor(**dparams).fit(mtr[mf_feats].astype(float), mtr["fwd"].astype(float))
+            mrow = mf[mf["date"] == t]
+            if mrow.empty:
+                continue
+            dscore = float(dmodel.predict(mrow[mf_feats].astype(float))[0])
+            # alpha + timing
+            sw = np.abs(tr[target_col].values)
+            sel = lgb.LGBMRegressor(**params).fit(tr[feats].astype(float), tr[target_col].astype(float), sample_weight=sw)
+            cols = pd.Series(sel.feature_importances_, index=feats).sort_values(ascending=False).head(50).index.tolist()
+            model = lgb.LGBMRegressor(**params).fit(tr[cols].astype(float), tr[target_col].astype(float), sample_weight=sw)
+            at_t["score"] = model.predict(at_t[cols].astype(float))
+            at_t["rank_pct"] = at_t["score"].rank(pct=True)
+            bench_s.append(float(at_t[RET].mean()))
+            basket = at_t[at_t["rank_pct"] >= 1 - dec]
+            n_b = max(len(basket), 1)
+            td = pd.Timestamp(t).date()
+            passed = []
+            with session_scope() as s:
+                for tkr, r in zip(basket["ticker"].astype(str), basket[RET].astype(float)):
+                    sc = _tech_score_by_trade_date(s, market, tkr, td)
+                    if sc is not None and sc >= ENTRY_MIN:
+                        passed.append(float(r))
+            cash_r = sum(passed) / n_b
+            conc_r = float(np.mean(passed)) if passed else 0.0
+            up = dscore > 0
+            cash_s.append(cash_r); conc_s.append(conc_r); pred_up.append(up)
+            gated_s.append(conc_r if up else cash_r)     # concentrate when predicted up, else cash
+            print(f"  {td}  dir={dscore*100:+.2f}%({'UP' if up else 'DN'})  cash={cash_r*100:+.2f}% conc={conc_r*100:+.2f}%", flush=True)
+        wpy = 252.0 / args.step
+        def _ln(name, series):
+            tot = _compound(series)
+            print(f"  {name:<24} tot {tot*100:+7.1f}%  Sharpe {_sharpe_like(series,wpy):+.2f}  /win {np.mean(series)*100:+.2f}%")
+        print(f"\n===== DIRECTION-GATED ({args.market}, {len(gated_s)} windows, pred-up {np.mean(pred_up)*100:.0f}%) =====")
+        _ln("benchmark", bench_s)
+        _ln("cash-always", cash_s)
+        _ln("concentrate-always", conc_s)
+        _ln("DIRECTION-GATED", gated_s)
+        g, c = _compound(gated_s), _compound(cash_s)
+        print(f"  gated vs cash-always: {(g-c)*100:+.1f}%p total  → {'게이팅 우세' if g>c else '현금-고정 우세'}")
         return
 
     # ── REGIME-SPLIT: per-window (bench, cash, conc) then bucket by benchmark sign ──
