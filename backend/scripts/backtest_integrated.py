@@ -115,6 +115,9 @@ def main() -> None:
     ap.add_argument("--direction-gated", action="store_true",
                     help="PAYOFF test: route concentrate/cash by a LEARNED market-direction model "
                          "(trend+momentum+VIX+regime) predicted at t. Does gated beat cash-always?")
+    ap.add_argument("--pooled-direction", action="store_true",
+                    help="train the direction model on BOTH markets pooled (more samples — helps "
+                         "the thin/noisy market). Used with --direction-gated.")
     args = ap.parse_args()
 
     cache = args.cache or f"var/_bt_period_{args.market}_2018-01-01_2024-01-01.parquet"
@@ -280,15 +283,22 @@ def main() -> None:
 
     # ── DIRECTION-GATED: route concentrate/cash by a LEARNED direction model ──
     if args.direction_gated:
-        from scripts.market_direction_test import build_market_frame
+        from decision.market_direction import build_market_frame
         dparams = dict(n_estimators=200, num_leaves=15, learning_rate=0.03,
                        min_child_samples=20, subsample=0.8, colsample_bytree=0.7,
                        reg_lambda=5.0, verbose=-1)
         mf = build_market_frame(df.assign(date=df["date"]))
+        mf_pool = None
+        if args.pooled_direction:
+            other = "KR" if args.market == "US" else "US"
+            ocache = f"var/_bt_period_{other}_2018-01-01_2024-01-01.parquet"
+            mfo = build_market_frame(pd.read_parquet(ocache))
+            mf_pool = pd.concat([mf, mfo], ignore_index=True).sort_values("date")
+            print(f"[dir] pooled direction frame: {len(mf)}(this)+{len(mfo)}({other}) dates", flush=True)
         mf_feats = [c for c in mf.columns if c not in ("date", "fwd")]
         mf = mf.reset_index(drop=True)
         dec = args.decile
-        bench_s, cash_s, conc_s, gated_s, pred_up = [], [], [], [], []
+        bench_s, cash_s, conc_s, gated_s, pred_up, dscores = [], [], [], [], [], []
         for i in reb_idx:
             t = dates[i]; train_cut = dates[i - EMBARGO]
             lo = dates[max(0, i - EMBARGO - args.train_window)] if args.train_window else dates[0]
@@ -296,8 +306,9 @@ def main() -> None:
             at_t = df[df["date"] == t].dropna(subset=[RET]).copy()
             if len(tr) < 5000 or len(at_t) < 30:
                 continue
-            # direction model: train on market frame up to train_cut, predict at t
-            mtr = mf[mf["date"] <= train_cut]
+            # direction model: train on market frame(s) up to train_cut, predict at t
+            src = mf_pool if mf_pool is not None else mf
+            mtr = src[src["date"] <= train_cut]
             if len(mtr) < 252:
                 continue
             dmodel = lgb.LGBMRegressor(**dparams).fit(mtr[mf_feats].astype(float), mtr["fwd"].astype(float))
@@ -324,21 +335,25 @@ def main() -> None:
                         passed.append(float(r))
             cash_r = sum(passed) / n_b
             conc_r = float(np.mean(passed)) if passed else 0.0
-            up = dscore > 0
-            cash_s.append(cash_r); conc_s.append(conc_r); pred_up.append(up)
-            gated_s.append(conc_r if up else cash_r)     # concentrate when predicted up, else cash
-            print(f"  {td}  dir={dscore*100:+.2f}%({'UP' if up else 'DN'})  cash={cash_r*100:+.2f}% conc={conc_r*100:+.2f}%", flush=True)
+            cash_s.append(cash_r); conc_s.append(conc_r); dscores.append(dscore)
+            print(f"  {td}  dir={dscore*100:+.2f}%  cash={cash_r*100:+.2f}% conc={conc_r*100:+.2f}%", flush=True)
         wpy = 252.0 / args.step
+        cash_a, conc_a, dsc = np.array(cash_s), np.array(conc_s), np.array(dscores)
         def _ln(name, series):
-            tot = _compound(series)
-            print(f"  {name:<24} tot {tot*100:+7.1f}%  Sharpe {_sharpe_like(series,wpy):+.2f}  /win {np.mean(series)*100:+.2f}%")
-        print(f"\n===== DIRECTION-GATED ({args.market}, {len(gated_s)} windows, pred-up {np.mean(pred_up)*100:.0f}%) =====")
+            tot = _compound(list(series))
+            print(f"  {name:<26} tot {tot*100:+7.1f}%  Sharpe {_sharpe_like(list(series),wpy):+.2f}  /win {np.mean(series)*100:+.2f}%")
+        pool = " POOLED" if mf_pool is not None else ""
+        print(f"\n===== DIRECTION-GATED{pool} ({args.market}, {len(cash_s)} windows) =====")
         _ln("benchmark", bench_s)
-        _ln("cash-always", cash_s)
-        _ln("concentrate-always", conc_s)
-        _ln("DIRECTION-GATED", gated_s)
-        g, c = _compound(gated_s), _compound(cash_s)
-        print(f"  gated vs cash-always: {(g-c)*100:+.1f}%p total  → {'게이팅 우세' if g>c else '현금-고정 우세'}")
+        _ln("cash-always", cash_a)
+        _ln("concentrate-always", conc_a)
+        # confidence-threshold sweep: concentrate only when dscore > thr, else cash
+        for thr in (0.0, 0.003, 0.005, 0.01, 0.015):
+            gated = np.where(dsc > thr, conc_a, cash_a)
+            up_rate = float((dsc > thr).mean())
+            g = _compound(list(gated))
+            print(f"  gated@dir>{thr*100:+.1f}%   tot {g*100:+7.1f}%  Sharpe {_sharpe_like(list(gated),wpy):+.2f}  "
+                  f"/win {np.mean(gated)*100:+.2f}%  (concentrate {up_rate*100:.0f}%)")
         return
 
     # ── REGIME-SPLIT: per-window (bench, cash, conc) then bucket by benchmark sign ──

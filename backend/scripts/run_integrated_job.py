@@ -32,6 +32,14 @@ ACCOUNTS = [
     (Market.US, "core-us", "USD", 1_000.0),
 ]
 
+# Direction-gated concentrate — per market. US is backtest-validated (Sharpe
+# 0.62→0.72, direction-gated); KR is NOT (gating fails even pooled). Kept OFF for
+# both until (a) a longer direction-history cache exists for live (the 365d cache
+# is thin vs the validated long history) and (b) paper confirms the base system.
+# Flip US→True to activate the validated lever. The direction score is computed &
+# logged regardless for observability.
+CONCENTRATE_BY_MARKET = {"US": False, "KR": False}
+
 
 def main() -> None:
     now = datetime.now(timezone.utc)
@@ -43,6 +51,11 @@ def main() -> None:
             print(f"[{market.value}] no cache; skip"); continue
         rec = ProductionRecommender(market.value)
         feat = latest_rows_from_cache(cache)
+        # market-direction score (full-history frame) — observability + concentrate gate
+        from decision.market_direction import predict_direction
+        import pandas as pd
+        dscore = predict_direction(pd.read_parquet(cache))
+        concentrate = CONCENTRATE_BY_MARKET.get(market.value, False)
         with session_scope() as s:
             close_map = latest_close_map(s, market.value)
             account = load_or_create_account(s, name=acct_name, base_currency=ccy,
@@ -55,7 +68,11 @@ def main() -> None:
                 s, market=market, as_of=now, broker=broker,
                 risk_engine=risk_engine, risk_limits=risk_limits,
                 recommender=rec, feat_df=feat, close_map=close_map,
+                concentrate=concentrate, direction_score=dscore,
             )
+        print(f"[{market.value}] direction_score={dscore:+.4f} concentrate={concentrate} "
+              f"→ concentrated={rep.concentrated}" if dscore is not None else
+              f"[{market.value}] direction_score=None", flush=True)
         acct = broker.get_account()
         pos = broker.get_positions()
         pos_val = sum((p.current_price or p.entry_price) * p.volume for p in pos)

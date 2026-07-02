@@ -34,9 +34,10 @@ from technical.runner import score_one_ticker
 ENTRY_MIN = 0.0     # enter only when technical not bearish; else WAIT (delay)
 EXIT_MAX = -30.0    # exit a held name on clear technical breakdown
 MIN_EXPOSURE = 0.02  # below this, treat as fully defensive (close all)
-# At/above this target_exposure, concentrate the exposure into the timed passers
-# (bull → amplify); below it, keep the cash-style per-basket slot (bear → protect).
+# Fallback concentrate gate when no direction_score is supplied (exposure heuristic).
 CONCENTRATE_MIN_EXPOSURE = 0.6
+# Concentrate when the market-direction model predicts forward return above this.
+CONCENTRATE_DIR_THRESHOLD = 0.0
 
 
 @dataclass
@@ -74,6 +75,7 @@ def run_integrated_decisions(
     close_map: dict[str, float],
     cfg: SizingConfig = SizingConfig(),
     concentrate: bool = False,
+    direction_score: Optional[float] = None,
     rebalance_band: Optional[float] = None,
 ) -> IntegratedReport:
     rep = IntegratedReport(market=market.value)
@@ -177,15 +179,20 @@ def run_integrated_decisions(
             if price and price > 0:
                 passers.append((b, tech, price))
 
-        # Sizing — merge method. CASH-STYLE by default (waiters stay cash): this is
-        # inherently defensive and needs NO forward-direction call. CONCENTRATE
-        # (deploy exposure into the passers) amplifies in up-markets — the sweep
-        # showed it wins in UP windows — BUT the direction-test (2026-07-02) found
-        # our breadth/exposure switch does NOT predict forward direction (US rho
-        # -0.14, even reversed). So concentration is a bet on a call we can't make;
-        # it stays OFF by default and opt-in (`concentrate=True`) until a validated
-        # forward-direction signal exists. The defensive side lives in target_exposure.
-        rep.concentrated = bool(concentrate and sel.target_exposure >= CONCENTRATE_MIN_EXPOSURE)
+        # Sizing — merge method. CASH-STYLE by default (waiters stay cash): defensive,
+        # needs NO direction call. CONCENTRATE (deploy exposure into the passers)
+        # amplifies in up-markets — but only pays off when we can actually predict
+        # "up". So it's opt-in (`concentrate=True`) AND, when a `direction_score`
+        # from the market-direction model is supplied, gated on it (concentrate only
+        # when direction predicted up). Backtest: this gate lifts US Sharpe 0.62→0.72
+        # but fails for KR → enable per market. Without a direction_score we fall
+        # back to the (weaker) exposure heuristic. Default concentrate=False.
+        if not concentrate:
+            rep.concentrated = False
+        elif direction_score is not None:
+            rep.concentrated = direction_score > CONCENTRATE_DIR_THRESHOLD
+        else:
+            rep.concentrated = sel.target_exposure >= CONCENTRATE_MIN_EXPOSURE
         n_deploy = max(len(passers), 1) if rep.concentrated else n_basket
         per_deploy = equity * sel.target_exposure / n_deploy
 

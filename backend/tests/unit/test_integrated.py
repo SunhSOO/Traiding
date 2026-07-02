@@ -94,6 +94,29 @@ class TestRunSelection(unittest.TestCase):
 
 
 @unittest.skipUnless(_HAVE_DEPS, "pandas required")
+class TestMarketDirection(unittest.TestCase):
+    def test_build_market_frame_one_row_per_date(self):
+        from decision.market_direction import build_market_frame
+        df = pd.DataFrame({
+            "date": ["2024-01-02", "2024-01-02", "2024-01-03", "2024-01-03"],
+            "ticker": ["A", "B", "A", "B"],
+            "ret_fwd_21d": [0.01, 0.03, -0.01, 0.05],
+            "px_vs_sma200": [0.1, -0.1, 0.2, 0.2], "vix": [15, 15, 16, 16],
+            "ret_21d": [0.02, 0.01, -0.01, 0.0],
+        })
+        mf = build_market_frame(df)
+        self.assertEqual(len(mf), 2)                        # one row per date
+        self.assertAlmostEqual(mf.iloc[0]["fwd"], 0.02)     # mean(0.01,0.03)
+        self.assertAlmostEqual(mf.iloc[0]["px_vs_sma200_frac"], 0.5)  # 1 of 2 > 0
+
+    def test_predict_direction_none_when_short(self):
+        from decision.market_direction import predict_direction
+        df = pd.DataFrame({"date": ["2024-01-02"], "ticker": ["A"],
+                           "ret_fwd_21d": [0.01], "vix": [15]})
+        self.assertIsNone(predict_direction(df))           # nowhere near min_train
+
+
+@unittest.skipUnless(_HAVE_DEPS, "pandas required")
 class TestTimingThresholds(unittest.TestCase):
     def test_timing_constants_sane(self):
         from decision.integrated_runner import ENTRY_MIN, EXIT_MAX, MIN_EXPOSURE
@@ -109,7 +132,7 @@ class TestIntegratedRunner(unittest.TestCase):
     broker patched out, so we assert BUY/WAIT/SELL/REJECTED orchestration."""
 
     def _run(self, *, basket, tech_scores, positions=None, exposure=0.7,
-             risk_ok=True, concentrate=False, rebalance_band=None):
+             risk_ok=True, concentrate=False, rebalance_band=None, direction_score=None):
         from datetime import date, datetime
         from types import SimpleNamespace
         from unittest.mock import MagicMock, patch
@@ -144,7 +167,8 @@ class TestIntegratedRunner(unittest.TestCase):
                 MagicMock(), market=Market.US, as_of=datetime(2026, 6, 29),
                 broker=broker, risk_engine=risk, risk_limits=None,
                 recommender=rec, feat_df=__import__("pandas").DataFrame(), close_map=close_map,
-                concentrate=concentrate, rebalance_band=rebalance_band)
+                concentrate=concentrate, rebalance_band=rebalance_band,
+                direction_score=direction_score)
 
     def _pos(self, ticker, volume=1.0):
         from types import SimpleNamespace
@@ -218,6 +242,16 @@ class TestIntegratedRunner(unittest.TestCase):
                        tech_scores={"A": 50.0, "B": 50.0}, exposure=0.4, concentrate=True)
         self.assertFalse(lo.concentrated)         # below threshold → cash even when opted in
         self.assertEqual(lo.buys_executed, 2)
+
+    def test_direction_gated_concentrate(self):
+        # with a direction_score, concentrate is gated on it (not the exposure heuristic)
+        up = self._run(basket=[("A", 0.98), ("B", 0.95)], tech_scores={"A": 50.0, "B": 50.0},
+                       exposure=0.4, concentrate=True, direction_score=0.05)  # up
+        self.assertTrue(up.concentrated)          # dir up → concentrate even at low exposure
+        dn = self._run(basket=[("A", 0.98), ("B", 0.95)], tech_scores={"A": 50.0, "B": 50.0},
+                       exposure=0.9, concentrate=True, direction_score=-0.05)  # down
+        self.assertFalse(dn.concentrated)         # dir down → cash even at high exposure
+        self.assertEqual(dn.buys_executed, 2)
 
 
 if __name__ == "__main__":
