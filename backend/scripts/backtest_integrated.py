@@ -304,7 +304,7 @@ def main() -> None:
         mf_feats = [c for c in mf.columns if c not in ("date", "fwd")]
         mf = mf.reset_index(drop=True)
         dec = args.decile
-        bench_s, cash_s, conc_s, gated_s, pred_up, dscores = [], [], [], [], [], []
+        bench_s, cash_s, conc_s, alpha_s, dscores = [], [], [], [], []
         for i in reb_idx:
             t = dates[i]; train_cut = dates[i - EMBARGO]
             lo = dates[max(0, i - EMBARGO - args.train_window)] if args.train_window else dates[0]
@@ -332,6 +332,7 @@ def main() -> None:
             bench_s.append(float(at_t[RET].mean()))
             basket = at_t[at_t["rank_pct"] >= 1 - dec]
             n_b = max(len(basket), 1)
+            alpha_r = float(basket[RET].mean())          # full-invest basket, no timing filter
             td = pd.Timestamp(t).date()
             passed = []
             with session_scope() as s:
@@ -341,10 +342,10 @@ def main() -> None:
                         passed.append(float(r))
             cash_r = sum(passed) / n_b
             conc_r = float(np.mean(passed)) if passed else 0.0
-            cash_s.append(cash_r); conc_s.append(conc_r); dscores.append(dscore)
-            print(f"  {td}  dir={dscore*100:+.2f}%  cash={cash_r*100:+.2f}% conc={conc_r*100:+.2f}%", flush=True)
+            cash_s.append(cash_r); conc_s.append(conc_r); alpha_s.append(alpha_r); dscores.append(dscore)
+            print(f"  {td}  dir={dscore*100:+.2f}%  alpha={alpha_r*100:+.2f}% cash={cash_r*100:+.2f}% conc={conc_r*100:+.2f}%", flush=True)
         wpy = 252.0 / args.step
-        cash_a, conc_a, dsc = np.array(cash_s), np.array(conc_s), np.array(dscores)
+        cash_a, conc_a, alpha_arr, dsc = np.array(cash_s), np.array(conc_s), np.array(alpha_s), np.array(dscores)
         def _ln(name, series):
             tot = _compound(list(series))
             print(f"  {name:<26} tot {tot*100:+7.1f}%  Sharpe {_sharpe_like(list(series),wpy):+.2f}  /win {np.mean(series)*100:+.2f}%")
@@ -352,14 +353,20 @@ def main() -> None:
         print(f"\n===== DIRECTION-GATED{pool} ({args.market}, {len(cash_s)} windows) =====")
         _ln("benchmark", bench_s)
         _ln("cash-always", cash_a)
+        _ln("alpha-always(full)", alpha_arr)
         _ln("concentrate-always", conc_a)
-        # confidence-threshold sweep: concentrate only when dscore > thr, else cash
-        for thr in (0.0, 0.003, 0.005, 0.01, 0.015):
+        # policy A — concentrate in predicted-up, cash in predicted-down
+        print("  [A] 예측-상승→집중 / 하락→현금:")
+        for thr in (0.0, 0.005, 0.01):
             gated = np.where(dsc > thr, conc_a, cash_a)
-            up_rate = float((dsc > thr).mean())
             g = _compound(list(gated))
-            print(f"  gated@dir>{thr*100:+.1f}%   tot {g*100:+7.1f}%  Sharpe {_sharpe_like(list(gated),wpy):+.2f}  "
-                  f"/win {np.mean(gated)*100:+.2f}%  (concentrate {up_rate*100:.0f}%)")
+            print(f"    gated@dir>{thr*100:+.1f}%  tot {g*100:+7.1f}%  Sharpe {_sharpe_like(list(gated),wpy):+.2f}  /win {np.mean(gated)*100:+.2f}%")
+        # policy B — FULL-invest(alpha) in predicted-up, cash in predicted-down (matrix: up→alpha best)
+        print("  [B] 예측-상승→알파단독(풀) / 하락→현금:")
+        for thr in (0.0, 0.005, 0.01):
+            gated = np.where(dsc > thr, alpha_arr, cash_a)
+            g = _compound(list(gated))
+            print(f"    gated@dir>{thr*100:+.1f}%  tot {g*100:+7.1f}%  Sharpe {_sharpe_like(list(gated),wpy):+.2f}  /win {np.mean(gated)*100:+.2f}%")
         return
 
     # ── REGIME-SPLIT: per-window (bench, alpha, cash, conc), bucket UP/SIDE/DOWN ──
