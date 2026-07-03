@@ -51,6 +51,7 @@ class IntegratedReport:
     sells_executed: int = 0
     waiting: int = 0          # in basket but technical says wait
     rejected: int = 0
+    stops: int = 0            # positions closed by the stop-loss (risk management)
     trims: int = 0            # overweight winners trimmed back toward target (rebalance)
     defensive: bool = False
     concentrated: bool = False  # regime-adaptive merge: concentrate vs cash-style
@@ -78,6 +79,7 @@ def run_integrated_decisions(
     direction_score: Optional[float] = None,
     rebalance_band: Optional[float] = None,
     basket_hysteresis: float = 0.0,
+    stop_loss: Optional[float] = None,
 ) -> IntegratedReport:
     rep = IntegratedReport(market=market.value)
 
@@ -134,7 +136,14 @@ def run_integrated_decisions(
         # effective membership: strict basket OR still within the hysteresis hold band
         in_basket_eff = (b is not None) or (
             basket_hysteresis > 0 and rk is not None and rk >= hold_thr)
-        if rep.defensive:
+        # STOP-LOSS (risk mgmt, checked first): backtest — SL10 lifts Sharpe US 0.53→0.75 /
+        # KR 0.27→0.99 and roughly halves the worst-window loss (cut losers, let winners run).
+        cur_px = float(pos.current_price or pos.entry_price)
+        stopped = (stop_loss is not None and pos.entry_price
+                   and cur_px <= float(pos.entry_price) * (1.0 - stop_loss))
+        if stopped:
+            reason = "exit_stop_loss"
+        elif rep.defensive:
             reason = "exit_defensive"
         elif not in_basket_eff:
             reason = "exit_basket_drop"
@@ -169,6 +178,8 @@ def run_integrated_decisions(
                   tech=tech, timing=reason, exec_result=ex)
             if ex.ok:
                 rep.sells_executed += 1
+                if reason == "exit_stop_loss":
+                    rep.stops += 1
         except Exception as e:
             rep.errors.append(f"sell {ticker}: {e}")
 

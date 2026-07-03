@@ -915,7 +915,8 @@ async def _job_integrated_daily() -> None:
                 rep = run_integrated_decisions(
                     s, market=market, as_of=now, broker=broker,
                     risk_engine=risk_engine, risk_limits=risk_limits,
-                    recommender=rec, feat_df=feat, close_map=close_map)
+                    recommender=rec, feat_df=feat, close_map=close_map,
+                    stop_loss=0.15)   # risk mgmt: halves worst-window loss (backtest)
             log.info("job.integrated", market=market.value, regime=rep.regime,
                      exposure=float(rep.target_exposure), defensive=rep.defensive,
                      basket=rep.basket_size, buys=rep.buys_executed, sells=rep.sells_executed,

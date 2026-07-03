@@ -133,7 +133,7 @@ class TestIntegratedRunner(unittest.TestCase):
 
     def _run(self, *, basket, tech_scores, positions=None, exposure=0.7,
              risk_ok=True, concentrate=False, rebalance_band=None, direction_score=None,
-             held_ranks=None, basket_hysteresis=0.0):
+             held_ranks=None, basket_hysteresis=0.0, stop_loss=None):
         from datetime import date, datetime
         from types import SimpleNamespace
         from unittest.mock import MagicMock, patch
@@ -173,11 +173,13 @@ class TestIntegratedRunner(unittest.TestCase):
                 broker=broker, risk_engine=risk, risk_limits=None,
                 recommender=rec, feat_df=__import__("pandas").DataFrame(), close_map=close_map,
                 concentrate=concentrate, rebalance_band=rebalance_band,
-                direction_score=direction_score, basket_hysteresis=basket_hysteresis)
+                direction_score=direction_score, basket_hysteresis=basket_hysteresis,
+                stop_loss=stop_loss)
 
-    def _pos(self, ticker, volume=1.0):
+    def _pos(self, ticker, volume=1.0, current_price=100.0):
         from types import SimpleNamespace
-        return SimpleNamespace(ticker=ticker, volume=volume, entry_price=100.0, current_price=100.0)
+        return SimpleNamespace(ticker=ticker, volume=volume, entry_price=100.0,
+                               current_price=current_price)
 
     def test_buys_strong_waits_weak(self):
         rep = self._run(basket=[("A", 0.98), ("B", 0.95), ("C", 0.92)],
@@ -230,6 +232,25 @@ class TestIntegratedRunner(unittest.TestCase):
                         positions=[big], exposure=0.7, rebalance_band=0.3)
         self.assertEqual(rep.trims, 1)
         self.assertEqual(rep.sells_executed, 0)   # trim is not a full exit
+
+    def test_stop_loss_closes_loser(self):
+        # A held (still in basket, tech OK) but down 12% → stop-loss (10%) fires first.
+        down = self._pos("A", current_price=88.0)   # -12% vs entry 100
+        rep = self._run(basket=[("A", 0.98)], tech_scores={"A": 50.0},
+                        positions=[down], stop_loss=0.10)
+        self.assertEqual(rep.stops, 1)
+        self.assertEqual(rep.sells_executed, 1)
+        # without stop_loss it would be kept (in basket, tech OK)
+        rep2 = self._run(basket=[("A", 0.98)], tech_scores={"A": 50.0}, positions=[down])
+        self.assertEqual(rep2.stops, 0)
+        self.assertEqual(rep2.sells_executed, 0)
+
+    def test_stop_loss_holds_winner(self):
+        up = self._pos("A", current_price=95.0)   # -5%, above the 10% stop → kept
+        rep = self._run(basket=[("A", 0.98)], tech_scores={"A": 50.0},
+                        positions=[up], stop_loss=0.10)
+        self.assertEqual(rep.stops, 0)
+        self.assertEqual(rep.sells_executed, 0)
 
     def test_basket_hysteresis_keeps_held_in_band(self):
         posz = self._pos("Z")   # held, dropped from strict basket (rank 0.86 in cache)

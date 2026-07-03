@@ -40,6 +40,12 @@ ACCOUNTS = [
 # logged regardless for observability.
 CONCENTRATE_BY_MARKET = {"US": False, "KR": False}
 
+# Stop-loss (risk management, ON by default): backtest — a 10-15% stop halves the
+# worst-window loss (US -14.8%→-8.5%, KR -31%→-9.7%) AND lifts Sharpe (cut losers,
+# let winners run). 0.15 chosen over the backtest-best 0.10 to reduce whipsaw/gap
+# risk that the clean daily-close backtest understates.
+STOP_LOSS = 0.15
+
 
 def main() -> None:
     now = datetime.now(timezone.utc)
@@ -68,7 +74,7 @@ def main() -> None:
                 s, market=market, as_of=now, broker=broker,
                 risk_engine=risk_engine, risk_limits=risk_limits,
                 recommender=rec, feat_df=feat, close_map=close_map,
-                concentrate=concentrate, direction_score=dscore,
+                concentrate=concentrate, direction_score=dscore, stop_loss=STOP_LOSS,
             )
         print(f"[{market.value}] direction_score={dscore:+.4f} concentrate={concentrate} "
               f"→ concentrated={rep.concentrated}" if dscore is not None else

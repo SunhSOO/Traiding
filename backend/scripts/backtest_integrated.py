@@ -67,6 +67,35 @@ def _tech_score_by_trade_date(session, market, ticker, as_of_date, lookback=300)
     return score_technical(ctx).score
 
 
+def _stopped_return(session, market, ticker, entry_date, *, sl=None, tp=None,
+                    trail=None, horizon=21):
+    """Realized return over the next ``horizon`` trading days WITH intra-period
+    stops applied on the daily close path (stop-loss / take-profit / trailing).
+    Falls back to the plain horizon return if no stop triggers or data missing."""
+    from sqlalchemy import text
+    rows = session.execute(text(
+        "SELECT close FROM daily_prices WHERE market=:m AND ticker=:t AND trade_date > :d "
+        "ORDER BY trade_date ASC LIMIT :n"),
+        {"m": market.value, "t": ticker, "d": entry_date, "n": horizon}).all()
+    base = session.execute(text(
+        "SELECT close FROM daily_prices WHERE market=:m AND ticker=:t AND trade_date <= :d "
+        "ORDER BY trade_date DESC LIMIT 1"),
+        {"m": market.value, "t": ticker, "d": entry_date}).scalar()
+    if base is None or float(base) <= 0 or not rows:
+        return None
+    base = float(base); peak = 0.0
+    for (c,) in rows:
+        cr = float(c) / base - 1.0
+        peak = max(peak, cr)
+        if sl is not None and cr <= -sl:
+            return -sl
+        if tp is not None and cr >= tp:
+            return tp
+        if trail is not None and (peak - cr) >= trail and peak > 0:
+            return cr
+    return float(rows[-1][0]) / base - 1.0
+
+
 def _tech_signals_by_trade_date(session, market, ticker, as_of_date, lookback=300):
     """Per-SIGNAL technical scores {signal_name: score} + composite, via one bar
     load. Used for the timing-signal ablation (which signal drives the gate)."""
@@ -162,6 +191,12 @@ def main() -> None:
                     help="cost-test cash leg: apply the runner's ENTRY/EXIT hysteresis (hold a "
                          "passer while tech > EXIT_MAX, not just >= ENTRY_MIN) — the naive per-"
                          "window passer set overstates cash turnover")
+    ap.add_argument("--stops-test", action="store_true",
+                    help="apply intra-period position stops (SL/TP/trailing) on the alpha basket's "
+                         "daily path — does risk management improve Sharpe / cut worst-window loss?")
+    ap.add_argument("--ltr-test", action="store_true",
+                    help="learning-to-rank: compare LGBMRegressor vs LGBMRanker (lambdarank) for "
+                         "selection — the task is ranking, not regression. alpha-only, walk-forward")
     args = ap.parse_args()
 
     cache = args.cache or f"var/_bt_period_{args.market}_2018-01-01_2024-01-01.parquet"
@@ -210,7 +245,8 @@ def main() -> None:
     #    cross-section z-score. Feature selection + |label| weighting happen
     #    per fold inside the loop. Blitz is already a feature column. ──
     target_col, use_prod = RANK, (args.production or args.sweep or args.regime_split
-                                  or args.direction_gated or args.cost_test or args.timing_ablation)
+                                  or args.direction_gated or args.cost_test or args.timing_ablation
+                                  or args.stops_test or args.ltr_test)
     if use_prod:
         df["mn_fwd_21d"] = df[RET] - df.groupby("date")[RET].transform("mean")
         if args.market == "US":
@@ -415,6 +451,91 @@ def main() -> None:
             gated = np.where(dsc > thr, alpha_arr, cash_a)
             g = _compound(list(gated))
             print(f"    gated@dir>{thr*100:+.1f}%  tot {g*100:+7.1f}%  Sharpe {_sharpe_like(list(gated),wpy):+.2f}  /win {np.mean(gated)*100:+.2f}%")
+        return
+
+    # ── LTR TEST: regression vs learning-to-rank (lambdarank) selection ──
+    if args.ltr_test:
+        from scipy.stats import spearmanr
+        dec = args.decile
+        reg_s, ltr_s, bench_s, reg_ic, ltr_ic = [], [], [], [], []
+        for i in reb_idx:
+            t = dates[i]; train_cut = dates[i - EMBARGO]
+            lo = dates[max(0, i - EMBARGO - args.train_window)] if args.train_window else dates[0]
+            tr = df[(df["date"] <= train_cut) & (df["date"] > lo)].dropna(subset=[target_col]).sort_values("date")
+            at_t = df[df["date"] == t].dropna(subset=[RET]).copy()
+            if len(tr) < 5000 or len(at_t) < 30:
+                continue
+            sw = np.abs(tr[target_col].values)
+            # regression (current production)
+            regm = lgb.LGBMRegressor(**params).fit(tr[feats].astype(float), tr[target_col].astype(float), sample_weight=sw)
+            # learning-to-rank: per-date relevance deciles (0..9) + date groups
+            grp = tr.groupby("date").size().values
+            rel = tr.groupby("date")[target_col].rank(pct=True).mul(9).round().astype(int).values
+            lparams = {k: v for k, v in params.items() if k != "n_jobs"}
+            ltrm = lgb.LGBMRanker(objective="lambdarank", n_jobs=-1, **lparams).fit(
+                tr[feats].astype(float), rel, group=grp)
+            pr = regm.predict(at_t[feats].astype(float)); pl = ltrm.predict(at_t[feats].astype(float))
+            y = at_t[RET].values
+            bench_s.append(float(np.mean(y)))
+            for pred, s_acc, ic_acc in ((pr, reg_s, reg_ic), (pl, ltr_s, ltr_ic)):
+                rk = pd.Series(pred).rank(pct=True).values
+                s_acc.append(float(y[rk >= 1 - dec].mean()))
+                ic_acc.append(spearmanr(pred, at_t["mn_fwd_21d"].values).correlation)
+            print(f"  {pd.Timestamp(t).date()}", flush=True)
+        wpy = 252.0 / args.step
+        print(f"\n===== LTR TEST ({args.market}, {len(reg_s)} windows, basket {int(dec*100)}%) =====")
+        for name, ser, ic in (("regression", reg_s, reg_ic), ("lambdarank", ltr_s, ltr_ic)):
+            print(f"  {name:<12} tot {_compound(ser)*100:>+7.1f}%  Sharpe {_sharpe_like(ser,wpy):>+.2f}  "
+                  f"/win {np.mean(ser)*100:>+.2f}%  meanIC {np.nanmean(ic):>+.4f}")
+        print(f"  benchmark    tot {_compound(bench_s)*100:>+7.1f}%  Sharpe {_sharpe_like(bench_s,wpy):>+.2f}")
+        return
+
+    # ── STOPS TEST: intra-period SL/TP/trailing on the alpha basket ──
+    if args.stops_test:
+        dec = args.decile
+        CFGS = [("none", {}), ("SL10", {"sl": 0.10}), ("SL15", {"sl": 0.15}),
+                ("TP20", {"tp": 0.20}), ("SL10/TP20", {"sl": 0.10, "tp": 0.20}),
+                ("trail10", {"trail": 0.10}), ("SL15/trail10", {"sl": 0.15, "trail": 0.10})]
+        series = {k: [] for k, _ in CFGS}
+        for i in reb_idx:
+            t = dates[i]; train_cut = dates[i - EMBARGO]
+            lo = dates[max(0, i - EMBARGO - args.train_window)] if args.train_window else dates[0]
+            tr = df[(df["date"] <= train_cut) & (df["date"] > lo)].dropna(subset=[target_col])
+            at_t = df[df["date"] == t].dropna(subset=[RET]).copy()
+            if len(tr) < 5000 or len(at_t) < 30:
+                continue
+            sw = np.abs(tr[target_col].values)
+            sel = lgb.LGBMRegressor(**params).fit(tr[feats].astype(float), tr[target_col].astype(float), sample_weight=sw)
+            cols = pd.Series(sel.feature_importances_, index=feats).sort_values(ascending=False).head(50).index.tolist()
+            model = lgb.LGBMRegressor(**params).fit(tr[cols].astype(float), tr[target_col].astype(float), sample_weight=sw)
+            at_t["score"] = model.predict(at_t[cols].astype(float))
+            at_t["rank_pct"] = at_t["score"].rank(pct=True)
+            basket = at_t[at_t["rank_pct"] >= 1 - dec]
+            ed = pd.Timestamp(t).date()
+            plain = list(basket[RET].astype(float))
+            with session_scope() as s:
+                stopped = {k: [] for k, _ in CFGS if k != "none"}
+                for tkr in basket["ticker"].astype(str):
+                    for k, kw in CFGS:
+                        if k == "none":
+                            continue
+                        r = _stopped_return(s, market, tkr, ed, **kw)
+                        stopped[k].append(r)
+            series["none"].append(float(np.mean(plain)))
+            for k, _ in CFGS:
+                if k == "none":
+                    continue
+                # fall back to plain per-name return where the path was missing
+                vals = [(sv if sv is not None else pv) for sv, pv in zip(stopped[k], plain)]
+                series[k].append(float(np.mean(vals)))
+            print(f"  {ed}  none={series['none'][-1]*100:+.2f}%", flush=True)
+        wpy = 252.0 / args.step
+        print(f"\n===== STOPS TEST ({args.market}, {len(series['none'])} windows, basket {int(dec*100)}%) =====")
+        print(f"  {'config':<14} {'tot':>8} {'Sharpe':>7} {'/win':>7} {'worst-win':>9}")
+        for k, _ in CFGS:
+            ser = series[k]
+            tot = _compound(ser); sh = _sharpe_like(ser, wpy); worst = min(ser) if ser else 0.0
+            print(f"  {k:<14} {tot*100:>+7.1f}% {sh:>+.2f} {np.mean(ser)*100:>+6.2f}% {worst*100:>+8.2f}%")
         return
 
     # ── COST TEST: charge turnover × round-trip bps per rebalance, report NET ──
