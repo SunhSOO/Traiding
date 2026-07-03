@@ -34,7 +34,7 @@ import lightgbm as lgb
 
 from core.db import session_scope
 from core.types import Market
-from decision.integrated_runner import ENTRY_MIN
+from decision.integrated_runner import ENTRY_MIN, EXIT_MAX
 from scripts.train_lgbm import ALL_FEATURE_COLS
 
 RANK = "rank_fwd_21d"     # training target (cross-sectional rank)
@@ -158,6 +158,10 @@ def main() -> None:
     ap.add_argument("--hysteresis", type=float, default=0.0,
                     help="basket hysteresis band: keep a held name while its rank stays within "
                          "top-(decile+band) — reduces turnover (cost-test alpha leg)")
+    ap.add_argument("--timing-hyst", action="store_true",
+                    help="cost-test cash leg: apply the runner's ENTRY/EXIT hysteresis (hold a "
+                         "passer while tech > EXIT_MAX, not just >= ENTRY_MIN) — the naive per-"
+                         "window passer set overstates cash turnover")
     args = ap.parse_args()
 
     cache = args.cache or f"var/_bt_period_{args.market}_2018-01-01_2024-01-01.parquet"
@@ -205,7 +209,8 @@ def main() -> None:
     # ── PRODUCTION recipe setup (once, PIT-safe): per-market label + per-date
     #    cross-section z-score. Feature selection + |label| weighting happen
     #    per fold inside the loop. Blitz is already a feature column. ──
-    target_col, use_prod = RANK, (args.production or args.sweep or args.regime_split or args.direction_gated)
+    target_col, use_prod = RANK, (args.production or args.sweep or args.regime_split
+                                  or args.direction_gated or args.cost_test or args.timing_ablation)
     if use_prod:
         df["mn_fwd_21d"] = df[RET] - df.groupby("date")[RET].transform("mean")
         if args.market == "US":
@@ -442,12 +447,21 @@ def main() -> None:
             n_b = max(len(basket), 1)
             bset = set(basket["ticker"].astype(str))
             td = pd.Timestamp(t).date()
-            pset, prets = set(), []
+            tmap = {}
             with session_scope() as s:
                 for tkr, r in zip(basket["ticker"].astype(str), basket[RET].astype(float)):
                     sc = _tech_score_by_trade_date(s, market, tkr, td)
-                    if sc is not None and sc >= ENTRY_MIN:
-                        pset.add(tkr); prets.append(float(r))
+                    if sc is not None:
+                        tmap[tkr] = (sc, float(r))
+            fresh = {tk for tk, (sc, _) in tmap.items() if sc >= ENTRY_MIN}
+            if args.timing_hyst:
+                # runner behaviour: a held passer stays held while tech > EXIT_MAX (not sold on a
+                # minor dip below ENTRY_MIN). Naive per-window `fresh` overstates cash turnover.
+                kept = {tk for tk in prev["cash"] if tk in tmap and tmap[tk][0] > EXIT_MAX}
+                pset = fresh | kept
+            else:
+                pset = fresh
+            prets = [tmap[tk][1] for tk in pset]
             gross = {"alpha": float(basket[RET].mean()),
                      "cash": sum(prets) / n_b,
                      "conc": float(np.mean(prets)) if prets else 0.0}

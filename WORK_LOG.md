@@ -1286,7 +1286,11 @@ direction-test는 **breadth 하나**만 봤음(평균회귀 IC −0.14). 사용�
 
 **🟢 회전율 통제(바스켓 히스테리시스) — 검증·구현:** 보유종목을 top-(decile+band) 내면 유지(청산 안 함).
 - 실측(US, 밴드0.10): **알파 회전율 54%→37%**, **순Sharpe@40bps 0.53→0.59 / @60bps 0.49→0.56**(gross도 0.60→0.63 소폭↑ — 승자 홀딩 momentum). 거래비용 침식을 부분 상쇄.
-- (cash-timing 회전율은 61%로 잔존 — 기술필터 churn 지배. 타이밍 히스테리시스는 별도 리드.)
+- (cash-timing 회전율은 61%로 잔존 — 기술필터 churn 지배. 타이밍 히스테리시스는 아래 별도 보정.)
+
+**타이밍 히스테리시스 보정(`--timing-hyst`) — naive 백테스트가 cash 회전율 과대추정:** cost-test cash leg를 러너 실제거동(진입 tech≥0/청산 tech≤-30, 사소한 하락엔 홀딩 유지)으로 보정. (cost_test/timing_ablation을 use_prod에 추가해 production 알파로 통일.)
+- US production: cash 회전율 **77%→63%**, 순Sharpe **@40bps 0.11→0.26 / @60bps 0.01(사망)→0.19(생존)**, gross@0 0.31→0.41. **비용 피해 대략 절반으로 교정.**
+- 정정: 무마찰이 엣지 과대평가는 맞으나, **러너 히스테리시스(타이밍ENTRY/EXIT+바스켓)가 회전율 완화**해 실제 비용피해는 naive 추정의 ~절반. 그럼에도 cash-timing은 비용조정 최약체(alpha/concentrate 우위) — 방어 성격 재확인.
 - 러너 구현: `run_integrated_decisions(basket_hysteresis=0.0)` 기본 OFF, EXIT 로직이 hold band 내 보유종목은 exit_basket_drop 면제. recs rank_pct로 판정. 단위테스트+라이브 smoke 통과(20테스트). **거의 무손실 개선이라 default-on 유력 후보이나 29윈도라 opt-in 유지, paper 확인 후 상향.**
 
 ---
