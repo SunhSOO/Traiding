@@ -60,6 +60,8 @@ def _clean_name(name: str) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=180)
+    ap.add_argument("--end", type=str, default=None,
+                    help="window end date YYYY-MM-DD (default today) — for historical backfill chunks")
     ap.add_argument("--limit-companies", type=int, default=0,
                     help="cap company name list (0 = all SP500)")
     ap.add_argument("--batch-size", type=int, default=30,
@@ -70,7 +72,7 @@ def main() -> None:
     project = settings.gcp_project_id if hasattr(settings, "gcp_project_id") else \
         __import__("os").environ.get("GCP_PROJECT_ID", "project-39b6b2ad-4644-4993-aeb")
 
-    end = date.today()
+    end = date.fromisoformat(args.end) if args.end else date.today()
     start = end - timedelta(days=args.days)
     print(f"GDELT GKG backfill :: {start} -> {end} project={project}")
 
