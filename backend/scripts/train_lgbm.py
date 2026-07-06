@@ -127,14 +127,17 @@ FEATURE_COLS_CROSS_ASSET = [
     "rel_spy_21d", "rel_qqq_21d", "rel_iwm_21d",
     "rel_gld_21d", "rel_uso_21d", "rel_tlt_21d",
     "corr_spy_63d",
-    # KR overnight/foreign-priced proxies (relative momentum vs KR drivers)
-    "rel_ewy_21d", "rel_soxx_21d", "rel_smh_21d", "rel_fxi_21d", "rel_mchi_21d",
+    # NOTE: rel_ewy/soxx/smh/fxi/mchi_21d were CUT after IC screen — cross-
+    # sectionally identical to plain 21d momentum (rel_X = own - market-const),
+    # IC redundant. The EWY/SOXX/FXI panels are retained only for the betas.
 ]
 
-# New — per-stock FX/overnight-proxy betas (KR-direction cross-sectional axis)
+# New — per-stock FX/overnight-proxy betas (KR-direction cross-sectional axis).
+# IC-screened (KR fwd21d, 2022-24): usdcny t+7.3, usdkrw t+4.4, ewy t-5.3 KEPT;
+# beta_fxi t-0.3 (noise) CUT — its China signal is already in beta_usdcny.
 FEATURE_COLS_BETA_XASSET = [
     "beta_usdkrw_63d", "beta_usdkrw_126d", "beta_usdcny_63d",
-    "beta_soxx_63d", "beta_fxi_63d", "beta_ewy_63d",
+    "beta_soxx_63d", "beta_ewy_63d",
 ]
 
 # New — Amihud illiquidity (on-disk OHLCV; cross-sectional liquidity premium)
@@ -142,9 +145,12 @@ FEATURE_COLS_LIQUIDITY = [
     "amihud_illiq_21d", "amihud_illiq_63d", "amihud_illiq_z_60d",
 ]
 
-# New — FINRA settled short-interest positioning (US only; look-ahead-lagged)
+# New — FINRA settled short-interest positioning (US only; look-ahead-lagged).
+# IC-screened (US fwd21d): si_days_to_cover t-5.1 (crowded-short anomaly) +
+# si_change_pct t+3.4 KEPT; si_dtc_chg t+0.4 (noise) CUT; si_shares_z_12p
+# t+1.6 kept as borderline (top-50 selection prunes if it doesn't earn a slot).
 FEATURE_COLS_SHORT_INTEREST = [
-    "si_days_to_cover", "si_change_pct", "si_shares_z_12p", "si_dtc_chg",
+    "si_days_to_cover", "si_change_pct", "si_shares_z_12p",
 ]
 
 FEATURE_COLS_EXTRA_TECH = [

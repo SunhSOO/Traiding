@@ -656,7 +656,9 @@ def compute_beta_features(
             feat["beta_usdcny_63d"] = _rolling_beta(own_ret, fx["FX_USDCNY"].pct_change(), 63)
     ca = _load_cross_asset_panel(session, dates)
     if not ca.empty:
-        for sym, suf in (("SOXX", "soxx"), ("FXI", "fxi"), ("EWY", "ewy")):
+        # beta_fxi dropped post-IC-screen (noise); China exposure lives in
+        # beta_usdcny. SOXX (US semis signal) + EWY (KR appetite) kept.
+        for sym, suf in (("SOXX", "soxx"), ("EWY", "ewy")):
             if sym in ca.columns:
                 feat[f"beta_{suf}_63d"] = _rolling_beta(own_ret, ca[sym].pct_change(), 63)
     return feat.astype(float)
