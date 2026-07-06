@@ -67,6 +67,7 @@ FEATURE_COLS_FUND = [
     "pe_ttm", "pb", "ev_ebitda", "roe_q", "roa_q",
     "debt_equity", "current_ratio", "gross_margin",
     "rev_yoy", "eps_yoy",
+    "days_since_q_filing",   # PEAD drift-window recency (surprise sign = eps_yoy)
 ]
 
 FEATURE_COLS_INFO = [
@@ -139,6 +140,11 @@ FEATURE_COLS_BETA_XASSET = [
 # New — Amihud illiquidity (on-disk OHLCV; cross-sectional liquidity premium)
 FEATURE_COLS_LIQUIDITY = [
     "amihud_illiq_21d", "amihud_illiq_63d", "amihud_illiq_z_60d",
+]
+
+# New — FINRA settled short-interest positioning (US only; look-ahead-lagged)
+FEATURE_COLS_SHORT_INTEREST = [
+    "si_days_to_cover", "si_change_pct", "si_shares_z_12p", "si_dtc_chg",
 ]
 
 FEATURE_COLS_EXTRA_TECH = [
@@ -318,6 +324,7 @@ _RAW_ALL = (
     + FEATURE_COLS_MACRO + FEATURE_COLS_REGIME
     + FEATURE_COLS_CALENDAR + FEATURE_COLS_CROSS_ASSET
     + FEATURE_COLS_BETA_XASSET + FEATURE_COLS_LIQUIDITY
+    + FEATURE_COLS_SHORT_INTEREST
     + FEATURE_COLS_EXTRA_TECH + FEATURE_COLS_STAT
     + FEATURE_COLS_MICRO + FEATURE_COLS_FS_COMPOSITE
     + FEATURE_COLS_EVENT_CAL + FEATURE_COLS_GDELT

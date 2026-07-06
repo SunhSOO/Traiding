@@ -380,6 +380,22 @@ def compute_fundamental_features(
         if eps and eps_prev and eps_prev != 0:
             feat.at[dt, "eps_yoy"] = eps / eps_prev - 1.0
 
+    # PEAD recency: days since the most recent quarterly report became
+    # public (period_end + ~45d filing lag = look-ahead-safe). Enables the
+    # post-earnings drift window; eps_yoy already supplies the surprise sign.
+    q = panel[panel["period_kind"] == "Q"]
+    if not q.empty:
+        avail = (pd.to_datetime(q["period_end"]) + pd.Timedelta(days=45)
+                 ).drop_duplicates().sort_values()
+        idx = pd.to_datetime(dates)
+        pos = np.searchsorted(avail.values, idx.values, side="right") - 1
+        dsf = np.full(len(dates), np.nan)
+        m = pos >= 0
+        dsf[m] = (idx.values[m] - avail.values[pos[m]]) / np.timedelta64(1, "D")
+        feat["days_since_q_filing"] = dsf
+    else:
+        feat["days_since_q_filing"] = np.nan
+
     return feat
 
 
@@ -663,6 +679,47 @@ def compute_liquidity_features(bars: pd.DataFrame) -> pd.DataFrame:
         (a21 - a21.rolling(60, min_periods=20).mean())
         / a21.rolling(60, min_periods=20).std().where(lambda x: x > 0)
     )
+    return feat.astype(float)
+
+
+def compute_short_interest_features(
+    session: Session, market: str, ticker: str, dates: pd.DatetimeIndex,
+) -> pd.DataFrame:
+    """FINRA settled short-interest positioning (US only) — crowded-short /
+    squeeze cross-sectional signal, distinct from the daily short-VOLUME noise.
+
+    Look-ahead safe: FINRA publishes ~8-9 business days after the settlement
+    date, so each value is mapped to an availability date = settlement + 14
+    calendar days before being ffill'd onto trading dates."""
+    from sqlalchemy import text as _sql_text
+
+    feat = pd.DataFrame(index=dates)
+    if market != "US":  # FINRA consolidated short interest is US-only
+        return feat
+    rows = list(session.execute(_sql_text(
+        "SELECT settlement_date, short_interest_shares, days_to_cover, change_pct "
+        "FROM short_interest WHERE market='US' AND ticker=:tk "
+        "ORDER BY settlement_date"
+    ), {"tk": ticker}).all())
+    if not rows:
+        return feat
+    df = pd.DataFrame(rows, columns=["sd", "si", "dtc", "chg"])
+    # Availability lag (publication delay guard) → no look-ahead.
+    df["avail"] = pd.to_datetime(df["sd"]) + pd.Timedelta(days=14)
+    df = df.set_index("avail").sort_index()
+    for c in ("si", "dtc", "chg"):
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    # Rolling stats on the bi-monthly observation series (≈12 obs = 6 months).
+    df["si_z"] = (
+        (df["si"] - df["si"].rolling(12, min_periods=4).mean())
+        / df["si"].rolling(12, min_periods=4).std().where(lambda x: x > 0)
+    )
+    df["dtc_chg"] = df["dtc"].diff()
+    daily = df.reindex(dates, method="ffill")
+    feat["si_days_to_cover"] = daily["dtc"]
+    feat["si_change_pct"] = daily["chg"]
+    feat["si_shares_z_12p"] = daily["si_z"]
+    feat["si_dtc_chg"] = daily["dtc_chg"]
     return feat.astype(float)
 
 
@@ -1088,6 +1145,8 @@ def build_feature_matrix(
         # New: per-stock FX/overnight-proxy betas + Amihud liquidity (on-disk).
         beta_feat = compute_beta_features(session, bars.index, bars["close"])
         liq_feat = compute_liquidity_features(bars)
+        # New: FINRA settled short-interest positioning (US only).
+        si_feat = compute_short_interest_features(session, market, ticker, bars.index)
         # Wave 1 — advanced features (Technical extras / Stats / Micro / FS composites)
         from training.features_advanced import (
             compute_extra_technical, compute_stat_features,
@@ -1169,6 +1228,7 @@ def build_feature_matrix(
             cross_feat,
             beta_feat,
             liq_feat,
+            si_feat,
             extra_tech,
             stat_feat,
             micro_feat,

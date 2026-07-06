@@ -107,6 +107,21 @@ async def _job_gdelt_history_monthly() -> None:
     )
 
 
+async def _job_forward_estimates_weekly() -> None:
+    """Weekly snapshot of US forward consensus (yfinance) into
+    forward_estimates. Run on a schedule so estimate-*revision* history
+    accumulates — revision momentum (post-revision drift) is the alpha, and
+    a single snapshot cannot yield it. Value accrues forward (weeks-months);
+    it hardens live paper-trading, not historical backtests."""
+    import asyncio
+
+    from scripts.yfinance_forward_estimates import run_forward_estimates_snapshot
+
+    summary = await asyncio.to_thread(run_forward_estimates_snapshot, 0)
+    log.info("job.forward_estimates", ok=summary["ok"],
+             fail=summary["fail"], total=summary["total"])
+
+
 async def _job_universe_refresh() -> None:
     from datetime import date
     from core.db import session_scope
@@ -1170,6 +1185,17 @@ DEFAULT_JOBS: list[JobSpec] = [
         func=_job_gdelt_history_monthly,
         trigger="cron",
         cron_kwargs={"day": 2, "hour": 4, "minute": 0},
+        timezone="UTC",
+        enabled=True,
+    ),
+    JobSpec(
+        # Weekly US forward-consensus snapshot → estimate-revision history.
+        # Enabled: the alpha (revision momentum) only exists once multiple
+        # snapshots accumulate, so start collecting now. Sunday 06:00 UTC.
+        id="fundamentals.forward_estimates.weekly",
+        func=_job_forward_estimates_weekly,
+        trigger="cron",
+        cron_kwargs={"day_of_week": "sun", "hour": 6, "minute": 0},
         timezone="UTC",
         enabled=True,
     ),

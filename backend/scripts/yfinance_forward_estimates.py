@@ -105,26 +105,25 @@ def fetch_estimates(ticker: str) -> dict | None:
     return out
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--limit", type=int, default=0, help="0 = all US tickers")
-    args = ap.parse_args()
-
+def run_forward_estimates_snapshot(limit: int = 0) -> dict:
+    """Snapshot today's forward consensus for all US tickers into
+    forward_estimates. Run on a schedule so estimate-*revision* history
+    accumulates (rev-momentum is the alpha; a single snapshot can't yield it).
+    Returns {ok, fail, total}. Callable from CLI and the weekly scheduler job."""
     eng = get_engine()
     with eng.begin() as conn:
         for stmt in CREATE_TABLE_SQL.strip().split(";"):
             if stmt.strip():
                 conn.execute(text(stmt))
-    print("forward_estimates table ensured.")
 
     with session_scope() as s:
         rows = list(s.execute(select(Security.ticker).where(
             Security.market == "US", Security.is_active == True
         )).all())
     tickers = [r[0] for r in rows]
-    if args.limit > 0:
-        tickers = tickers[:args.limit]
-    print(f"Processing {len(tickers)} US tickers...")
+    if limit > 0:
+        tickers = tickers[:limit]
+    print(f"forward_estimates snapshot :: {len(tickers)} US tickers", flush=True)
 
     today = date.today()
     now = datetime.now(timezone.utc)
@@ -165,8 +164,15 @@ def main() -> None:
         time.sleep(0.3)   # yfinance rate-limit gentle
         if total_ok % 25 == 0:
             print(f"  ok={total_ok}/{len(tickers)} fail={total_fail}", flush=True)
+    print(f"\nDone. ok={total_ok}/{len(tickers)} fail={total_fail}", flush=True)
+    return {"ok": total_ok, "fail": total_fail, "total": len(tickers)}
 
-    print(f"\nDone. ok={total_ok}/{len(tickers)} fail={total_fail}")
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--limit", type=int, default=0, help="0 = all US tickers")
+    args = ap.parse_args()
+    run_forward_estimates_snapshot(limit=args.limit)
 
 
 if __name__ == "__main__":
