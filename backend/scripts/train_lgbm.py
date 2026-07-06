@@ -153,6 +153,12 @@ FEATURE_COLS_SHORT_INTEREST = [
     "si_days_to_cover", "si_change_pct", "si_shares_z_12p",
 ]
 
+# New — analyst estimate-revision momentum (US; accrues forward from the weekly
+# forward_estimates snapshot job — mostly NaN until several snapshots exist)
+FEATURE_COLS_FWD_EST = [
+    "fwd_eps_rev_21d", "ptgt_rev_21d", "rec_mean_chg_21d",
+]
+
 FEATURE_COLS_EXTRA_TECH = [
     # extra technical from features_advanced.py
     "trix_15", "dpo_20", "tsi", "ppo", "pvo", "bop", "chande_20",
@@ -330,7 +336,7 @@ _RAW_ALL = (
     + FEATURE_COLS_MACRO + FEATURE_COLS_REGIME
     + FEATURE_COLS_CALENDAR + FEATURE_COLS_CROSS_ASSET
     + FEATURE_COLS_BETA_XASSET + FEATURE_COLS_LIQUIDITY
-    + FEATURE_COLS_SHORT_INTEREST
+    + FEATURE_COLS_SHORT_INTEREST + FEATURE_COLS_FWD_EST
     + FEATURE_COLS_EXTRA_TECH + FEATURE_COLS_STAT
     + FEATURE_COLS_MICRO + FEATURE_COLS_FS_COMPOSITE
     + FEATURE_COLS_EVENT_CAL + FEATURE_COLS_GDELT

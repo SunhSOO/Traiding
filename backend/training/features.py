@@ -725,6 +725,37 @@ def compute_short_interest_features(
     return feat.astype(float)
 
 
+def compute_forward_estimate_features(
+    session: Session, market: str, ticker: str, dates: pd.DatetimeIndex,
+) -> pd.DataFrame:
+    """Analyst estimate-REVISION momentum from forward_estimates snapshots.
+    Rising forward EPS / target price and falling recommendation-mean (=
+    upgrades) are the post-revision-drift alpha. Value accrues as the weekly
+    snapshot job accumulates history — mostly NaN until several snapshots
+    exist (a live-forward signal, not a 2018-2024 backtest one)."""
+    from sqlalchemy import text as _sql_text
+
+    feat = pd.DataFrame(index=dates)
+    if market != "US":  # forward_estimates is US (yfinance) only
+        return feat
+    rows = list(session.execute(_sql_text(
+        "SELECT as_of_date, forward_eps_avg, price_target_mean, recommendation_mean "
+        "FROM forward_estimates WHERE market='US' AND ticker=:tk ORDER BY as_of_date"
+    ), {"tk": ticker}).all())
+    if len(rows) < 2:
+        return feat
+    df = pd.DataFrame(rows, columns=["d", "feps", "ptgt", "rec"])
+    df["d"] = pd.to_datetime(df["d"])
+    df = df.set_index("d").sort_index()
+    for c in ("feps", "ptgt", "rec"):
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    daily = df.reindex(dates, method="ffill")
+    feat["fwd_eps_rev_21d"] = daily["feps"].pct_change(21)
+    feat["ptgt_rev_21d"] = daily["ptgt"].pct_change(21)
+    feat["rec_mean_chg_21d"] = daily["rec"].diff(21)   # negative = upgrades
+    return feat.astype(float)
+
+
 # ──────────────────────────────────────────────────────────────────────
 # SEC disclosure features (insider Form 4 + 8-K event counts)
 # ──────────────────────────────────────────────────────────────────────
@@ -1149,6 +1180,8 @@ def build_feature_matrix(
         liq_feat = compute_liquidity_features(bars)
         # New: FINRA settled short-interest positioning (US only).
         si_feat = compute_short_interest_features(session, market, ticker, bars.index)
+        # New: analyst estimate-revision momentum (US; accrues forward).
+        fwdest_feat = compute_forward_estimate_features(session, market, ticker, bars.index)
         # Wave 1 — advanced features (Technical extras / Stats / Micro / FS composites)
         from training.features_advanced import (
             compute_extra_technical, compute_stat_features,
@@ -1231,6 +1264,7 @@ def build_feature_matrix(
             beta_feat,
             liq_feat,
             si_feat,
+            fwdest_feat,
             extra_tech,
             stat_feat,
             micro_feat,
