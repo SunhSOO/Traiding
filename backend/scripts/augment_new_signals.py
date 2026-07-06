@@ -37,8 +37,12 @@ KRMACRO = ["kr_10y", "kr_10y_21d_chg", "kr_term_spread_3_10",
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--market", required=True, choices=["KR", "US"])
+    ap.add_argument("--cache", default=None,
+                    help="override cache path (default the 2018-2024 bt_period). "
+                         "lo/hi are derived from the cache's own dates, so this "
+                         "works for the 365d live _fs_ab caches too.")
     a = ap.parse_args()
-    cache = Path(f"var/_bt_period_{a.market}_{PERIOD}.parquet")
+    cache = Path(a.cache) if a.cache else Path(f"var/_bt_period_{a.market}_{PERIOD}.parquet")
     df = pd.read_parquet(cache)
     df["date"] = pd.to_datetime(df["date"])
     dates = pd.DatetimeIndex(np.sort(df["date"].unique()))

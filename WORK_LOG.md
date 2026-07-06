@@ -1377,3 +1377,26 @@ direction-test는 **breadth 하나**만 봤음(평균회귀 IC −0.14). 사용�
 - ✅ **#4 PEAD**: eps_yoy(전년동기 서프라이즈)는 **이미 존재** 확인 → 비중복분 `days_since_q_filing`(드리프트 리센시, period_end+45d look-ahead안전)만 추가.
 
 > **IC 취사선택 결과: FX/중국 베타(#2)+Amihud+FINRA-DTC(#7)=검증된 승자.** rel_프록시 중복 + 노이즈베타/SI = 컷(7개). 잔여 약신호는 top-50 선택이 시장별 판정. 시장레벨 KR레짐/리비전=시간·방향모델로 후속 검증. **최종 판정은 프로덕션 재학습 OOS(top-50)이며 본 IC는 강건한 사전스크린(status=proposed).**
+
+### OOS 재학습 검증 + 배포 (2026-07-06 후속)
+
+근거: `augment_new_signals.py`(캐시 주입), `backtest_integrated.py --production`(walk-forward), `train_production.py`(번들 재학습), `scratchpad/{ic_screen_new,imp_probe}.py`
+
+**누락 보완**: #3 forward_estimates를 읽는 피처가 없었음(스냅샷만 축적) → `compute_forward_estimate_features`(리비전 21d) 추가·등록(484피처).
+
+**OOS walk-forward A/B (2018-2024, --production=US=tb/KR=mn 라벨 + per-date z + top-50 + |label|가중), baseline vs 신규피처-augmented:**
+
+| 시장 | baseline(alpha-only) | augmented | 판정 |
+|------|----------------------|-----------|------|
+| **KR** | Sharpe +0.03, tot -11.5%, +5.6%p | **Sharpe +0.12, tot +1.0%, +18.0%p** | ✅ **개선(재현 2회 동일=결정론적, 시드노이즈 아님)** |
+| US | Sharpe +0.70, +24.8%p | Sharpe +0.68, +25.0%p | ~flat(이미 포화) |
+
+- **KR 병목 시장에서 선정알파 총수익 -11.5%→+1.0% 전환, 초과수익 5.6→18.0%p(3.2배).** FX/중국 수출민감도 베타 + Amihud가 원화/중국을 수출주-내수주 분리축으로 전환.
+- **기전 확인(top-50 importance)**: KR — `amihud_illiq_63d` **전체 5위**, beta_usdkrw_126d(14), beta_ewy(19), beta_usdcny(23), kospi_rv(29), days_since_q_filing(40), beta_soxx(43), kr_10y(49) = 8개 top-50 진입. US — beta_soxx(9)/beta_ewy(16)/days_since_q_filing(21) 진입, SI는 rank_proxy에선 미진입(→ US flat 설명).
+
+**배포(라이브 반영)**: `_fs_ab_{KR,US}_365` 라이브 캐시 augment + `train_production.py` 재학습(백업 .bak 보존). 재학습 결과:
+- **KR 번들**: walk-forward rank-IC **+0.191**(std 0.028, 100% 양수). top-50에 amihud_illiq_63d/21d/z + beta_usdcny/usdkrw63·126/ewy/soxx = **8개 신규피처 선정**.
+- **US 번들**: rank-IC **+0.246**(100% 양수). top-50에 **si_days_to_cover**(tb라벨에선 채택!)/days_since_q_filing/beta_usdcny/soxx/usdkrw126/amihud21/si_shares_z = 7개 신규.
+- 번들(production_{KR,US}.joblib)·캐시=로컬 아티팩트(git 미추적), 재학습으로 갱신.
+
+> **결론: 신규 무료데이터가 KR 병목을 OOS에서 실측 개선(결정론적), 양 시장 라이브 프로덕션 모델에 신규피처 선정·배포 완료.** SI는 rank-proxy 백테스트선 약했으나 프로덕션 tb라벨에선 top-50 채택. 리비전(#3)은 시간경과 축적으로 후속 활성화.
