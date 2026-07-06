@@ -52,6 +52,12 @@ ECOS_SERIES = {
     "KR_BOK_KOSPI": ("802Y001", "0001000", "D"),         # KOSPI 종합
     "KR_BOK_CSI_HEAD": ("511Y002", "FME", "M"),          # 소비자심리지수
     "KR_BOK_BSI_HEAD": ("512Y014", "C0000", "M"),        # 기업경기실사지수
+    # KR government bond yield curve (817Y002 시장금리 일별) — verified item
+    # codes. Note the counter-intuitive numbering: 3Y=..000, 5Y=..001, 10Y=..210.
+    # Named RATE_KR_* to match the RATE_US_* convention that features.py reads.
+    "RATE_KR_3Y": ("817Y002", "010200000", "D"),         # 국고채(3년)
+    "RATE_KR_5Y": ("817Y002", "010200001", "D"),         # 국고채(5년)
+    "RATE_KR_10Y": ("817Y002", "010210000", "D"),        # 국고채(10년)
 }
 
 

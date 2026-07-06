@@ -28,6 +28,12 @@ TARGETS: list[tuple[str, str]] = [
     ("XLU", "US"), ("XLRE", "US"), ("XLC", "US"),
     ("SPY", "US"), ("QQQ", "US"), ("IWM", "US"),
     ("GLD", "MACRO"), ("USO", "MACRO"), ("TLT", "MACRO"),
+    # KR overnight/foreign-priced proxies (credential-free route to the KR
+    # direction signal that the KRX login-wall blocks): EWY = USD MSCI-Korea
+    # (foreign appetite + KRW), SOXX/SMH = semis (KOSPI's biggest driver),
+    # FXI/MCHI = China (KR is China-levered). All US-listed → FDR-reliable.
+    ("EWY", "MACRO"), ("SOXX", "MACRO"), ("SMH", "MACRO"),
+    ("FXI", "MACRO"), ("MCHI", "MACRO"),
 ]
 
 

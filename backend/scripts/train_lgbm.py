@@ -104,6 +104,9 @@ FEATURE_COLS_MACRO = [
     "yield_curve_5_30", "yield_curvature",
     "usdkrw_21d_chg", "usdjpy_21d_chg",
     "vix_pctile_252d", "vol_risk_premium", "funding_stress",
+    # KR-native regime block (govt bond curve + KOSPI realized-vol proxy)
+    "kr_10y", "kr_10y_21d_chg", "kr_term_spread_3_10",
+    "kospi_realized_vol_21d", "kospi_rv_pctile_252d",
 ]
 
 FEATURE_COLS_REGIME = [
@@ -123,6 +126,19 @@ FEATURE_COLS_CROSS_ASSET = [
     "rel_spy_21d", "rel_qqq_21d", "rel_iwm_21d",
     "rel_gld_21d", "rel_uso_21d", "rel_tlt_21d",
     "corr_spy_63d",
+    # KR overnight/foreign-priced proxies (relative momentum vs KR drivers)
+    "rel_ewy_21d", "rel_soxx_21d", "rel_smh_21d", "rel_fxi_21d", "rel_mchi_21d",
+]
+
+# New — per-stock FX/overnight-proxy betas (KR-direction cross-sectional axis)
+FEATURE_COLS_BETA_XASSET = [
+    "beta_usdkrw_63d", "beta_usdkrw_126d", "beta_usdcny_63d",
+    "beta_soxx_63d", "beta_fxi_63d", "beta_ewy_63d",
+]
+
+# New — Amihud illiquidity (on-disk OHLCV; cross-sectional liquidity premium)
+FEATURE_COLS_LIQUIDITY = [
+    "amihud_illiq_21d", "amihud_illiq_63d", "amihud_illiq_z_60d",
 ]
 
 FEATURE_COLS_EXTRA_TECH = [
@@ -301,6 +317,7 @@ _RAW_ALL = (
     + FEATURE_COLS_DISC + FEATURE_COLS_INSIDER
     + FEATURE_COLS_MACRO + FEATURE_COLS_REGIME
     + FEATURE_COLS_CALENDAR + FEATURE_COLS_CROSS_ASSET
+    + FEATURE_COLS_BETA_XASSET + FEATURE_COLS_LIQUIDITY
     + FEATURE_COLS_EXTRA_TECH + FEATURE_COLS_STAT
     + FEATURE_COLS_MICRO + FEATURE_COLS_FS_COMPOSITE
     + FEATURE_COLS_EVENT_CAL + FEATURE_COLS_GDELT

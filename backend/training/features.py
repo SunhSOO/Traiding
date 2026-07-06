@@ -531,6 +531,9 @@ CROSS_ASSET_TICKERS = [
     ("US", "SPY"), ("US", "QQQ"), ("US", "IWM"),
     # Commodities + FX (yfinance/FDR symbols)
     ("MACRO", "GLD"), ("MACRO", "USO"), ("MACRO", "TLT"),
+    # KR overnight/foreign-priced proxies (credential-free KR-direction signal)
+    ("MACRO", "EWY"), ("MACRO", "SOXX"), ("MACRO", "SMH"),
+    ("MACRO", "FXI"), ("MACRO", "MCHI"),
 ]
 
 
@@ -579,6 +582,87 @@ def compute_cross_asset_features(
         own_dr = own_close_f.pct_change(1)
         spy_dr = panel["SPY"].pct_change(1)
         feat["corr_spy_63d"] = own_dr.rolling(63).corr(spy_dr)
+    return feat.astype(float)
+
+
+_fx_panel_cache: dict[str, pd.DataFrame] = {}
+
+
+def _load_fx_panel(session: Session, dates: pd.DatetimeIndex) -> pd.DataFrame:
+    """Wide panel of FX levels (USD/KRW, USD/CNY) from macro_series."""
+    codes = ["FX_USDKRW", "FX_USDCNY"]
+    key = "default"
+    if key not in _fx_panel_cache:
+        stmt = (
+            select(MacroSeries.series_code, MacroSeries.ts, MacroSeries.value)
+            .where(MacroSeries.series_code.in_(codes))
+            .order_by(MacroSeries.ts)
+        )
+        rows = list(session.execute(stmt).all())
+        if not rows:
+            _fx_panel_cache[key] = pd.DataFrame()
+        else:
+            df = pd.DataFrame(rows, columns=["series_code", "ts", "value"])
+            df["value"] = df["value"].astype(float)
+            df["ts"] = pd.to_datetime(df["ts"])
+            _fx_panel_cache[key] = df.pivot_table(
+                index="ts", columns="series_code", values="value", aggfunc="first"
+            ).ffill()
+    panel = _fx_panel_cache[key]
+    if panel.empty:
+        return panel
+    return panel.reindex(dates, method="ffill")
+
+
+def _rolling_beta(own_ret: pd.Series, factor_ret: pd.Series, win: int) -> pd.Series:
+    """β = Cov(own, factor) / Var(factor) over a trailing window."""
+    cov = own_ret.rolling(win, min_periods=max(20, win // 2)).cov(factor_ret)
+    var = factor_ret.rolling(win, min_periods=max(20, win // 2)).var()
+    return cov / var.where(var > 0)
+
+
+def compute_beta_features(
+    session: Session, dates: pd.DatetimeIndex, ticker_close: pd.Series,
+) -> pd.DataFrame:
+    """Per-stock rolling betas to FX (USD/KRW, USD/CNY) and KR overnight
+    proxies (SOXX/FXI/EWY). Turns market-wide macro *scalars* into a genuine
+    cross-sectional axis — exporters (KRW-weak beneficiaries: semis/autos)
+    vs domestics differ in FX/China beta. Targets the KR direction gap."""
+    feat = pd.DataFrame(index=dates)
+    own_ret = ticker_close.astype(float).reindex(dates).pct_change()
+    fx = _load_fx_panel(session, dates)
+    if not fx.empty:
+        if "FX_USDKRW" in fx.columns:
+            fr = fx["FX_USDKRW"].pct_change()
+            feat["beta_usdkrw_63d"] = _rolling_beta(own_ret, fr, 63)
+            feat["beta_usdkrw_126d"] = _rolling_beta(own_ret, fr, 126)
+        if "FX_USDCNY" in fx.columns:
+            feat["beta_usdcny_63d"] = _rolling_beta(own_ret, fx["FX_USDCNY"].pct_change(), 63)
+    ca = _load_cross_asset_panel(session, dates)
+    if not ca.empty:
+        for sym, suf in (("SOXX", "soxx"), ("FXI", "fxi"), ("EWY", "ewy")):
+            if sym in ca.columns:
+                feat[f"beta_{suf}_63d"] = _rolling_beta(own_ret, ca[sym].pct_change(), 63)
+    return feat.astype(float)
+
+
+def compute_liquidity_features(bars: pd.DataFrame) -> pd.DataFrame:
+    """Amihud illiquidity (|ret| / dollar-volume) from on-disk OHLCV — a
+    documented cross-sectional premium, orthogonal to momentum/vol the tree
+    already splits on; especially informative for KR small/mid caps."""
+    feat = pd.DataFrame(index=bars.index)
+    close = bars["close"].astype(float)
+    vol = bars["volume"].astype(float)
+    abs_ret = close.pct_change().abs()
+    dollar_vol = (close * vol).where(lambda x: x > 0)
+    illiq = (abs_ret / dollar_vol) * 1e9  # scaled for numerical range
+    feat["amihud_illiq_21d"] = illiq.rolling(21, min_periods=10).mean()
+    feat["amihud_illiq_63d"] = illiq.rolling(63, min_periods=21).mean()
+    a21 = feat["amihud_illiq_21d"]
+    feat["amihud_illiq_z_60d"] = (
+        (a21 - a21.rolling(60, min_periods=20).mean())
+        / a21.rolling(60, min_periods=20).std().where(lambda x: x > 0)
+    )
     return feat.astype(float)
 
 
@@ -775,6 +859,8 @@ def load_macro_features(session: Session, dates: pd.DatetimeIndex) -> pd.DataFra
         "COPPER", "WTI_OIL", "NAT_GAS",
         "RATE_US_5Y", "RATE_US_30Y",
         "FX_USDKRW", "FX_USDJPY",
+        # KR-native regime block: govt bond curve + KOSPI (realized-vol proxy)
+        "RATE_KR_3Y", "RATE_KR_5Y", "RATE_KR_10Y", "IDX_KOSPI_ECOS",
     ]
     stmt = (
         select(MacroSeries.series_code, MacroSeries.ts, MacroSeries.value)
@@ -867,6 +953,21 @@ def load_macro_features(session: Session, dates: pd.DatetimeIndex) -> pd.DataFra
     # Funding stress — 3M T-bill minus fed funds (short history, guarded).
     if "RATE_US_3M" in panel and "FEDFUNDS_US" in panel:
         feat["funding_stress"] = panel["RATE_US_3M"] - panel["FEDFUNDS_US"]
+    # ── KR-native regime block ────────────────────────────────────────
+    # KR govt-bond curve: level + slope (3Y-10Y). A domestic term-spread
+    # voter the regime model wholly lacked (it only had the US curve).
+    if "RATE_KR_10Y" in panel:
+        feat["kr_10y"] = panel["RATE_KR_10Y"]
+        feat["kr_10y_21d_chg"] = panel["RATE_KR_10Y"].diff(21)
+    if "RATE_KR_3Y" in panel and "RATE_KR_10Y" in panel:
+        feat["kr_term_spread_3_10"] = panel["RATE_KR_10Y"] - panel["RATE_KR_3Y"]
+    # KOSPI realized vol — free proxy for the (KRX-login-walled) VKOSPI fear
+    # gauge. Honest substitute: realized, not implied, but KR-native stress.
+    if "IDX_KOSPI_ECOS" in panel:
+        krv = (panel["IDX_KOSPI_ECOS"].pct_change()
+               .rolling(21, min_periods=10).std() * (252 ** 0.5) * 100.0)
+        feat["kospi_realized_vol_21d"] = krv
+        feat["kospi_rv_pctile_252d"] = krv.rolling(252, min_periods=63).rank(pct=True)
     return feat
 
 
@@ -984,6 +1085,9 @@ def build_feature_matrix(
         insider_feat = compute_insider_features(session, market, ticker, bars.index)
         cal_feat = compute_calendar_features(bars.index)
         cross_feat = compute_cross_asset_features(session, bars.index, bars["close"])
+        # New: per-stock FX/overnight-proxy betas + Amihud liquidity (on-disk).
+        beta_feat = compute_beta_features(session, bars.index, bars["close"])
+        liq_feat = compute_liquidity_features(bars)
         # Wave 1 — advanced features (Technical extras / Stats / Micro / FS composites)
         from training.features_advanced import (
             compute_extra_technical, compute_stat_features,
@@ -1063,6 +1167,8 @@ def build_feature_matrix(
             insider_feat,
             cal_feat,
             cross_feat,
+            beta_feat,
+            liq_feat,
             extra_tech,
             stat_feat,
             micro_feat,
