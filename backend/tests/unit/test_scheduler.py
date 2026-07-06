@@ -52,6 +52,7 @@ class DefaultJobsTest(unittest.TestCase):
                 "mlops.retrain.weekly",
                 "mlops.drift_check.daily",
                 "news.backfill.nightly",
+                "news.gdelt_history.monthly",
             },
         )
 

@@ -57,42 +57,47 @@ def _clean_name(name: str) -> str:
     return s
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--days", type=int, default=180)
-    ap.add_argument("--end", type=str, default=None,
-                    help="window end date YYYY-MM-DD (default today) — for historical backfill chunks")
-    ap.add_argument("--limit-companies", type=int, default=0,
-                    help="cap company name list (0 = all SP500)")
-    ap.add_argument("--batch-size", type=int, default=30,
-                    help="company names per BigQuery query")
-    args = ap.parse_args()
-
+def _resolve_project() -> str:
     settings = get_settings()
-    project = settings.gcp_project_id if hasattr(settings, "gcp_project_id") else \
+    return settings.gcp_project_id if hasattr(settings, "gcp_project_id") else \
         __import__("os").environ.get("GCP_PROJECT_ID", "project-39b6b2ad-4644-4993-aeb")
 
-    end = date.fromisoformat(args.end) if args.end else date.today()
-    start = end - timedelta(days=args.days)
-    print(f"GDELT GKG backfill :: {start} -> {end} project={project}")
 
-    # Build (cleaned_name, ticker) list
+def build_name_map(limit_companies: int = 0) -> dict[str, str]:
+    """cleaned company name -> ticker, for the active US universe."""
     with session_scope() as s:
         rows = list(s.execute(
             select(Security.name, Security.ticker)
             .where(Security.market == "US", Security.is_active.is_(True))
             .order_by(Security.ticker)
         ).all())
-    if args.limit_companies > 0:
-        rows = rows[:args.limit_companies]
-    # name_clean -> ticker
+    if limit_companies > 0:
+        rows = rows[:limit_companies]
     name_map: dict[str, str] = {}
     for name, ticker in rows:
         cleaned = _clean_name(name)
         if cleaned and len(cleaned) >= 4:
             name_map[cleaned] = ticker
-    print(f"  {len(name_map)} clean company names to search")
+    return name_map
 
+
+def backfill_window(
+    end: date,
+    days: int = 180,
+    *,
+    limit_companies: int = 0,
+    batch_size: int = 30,
+    project: str | None = None,
+) -> dict:
+    """Backfill one [end-days, end] window. Returns
+    {articles, mentions, bytes_scanned, start, end}. Callable from the
+    resumable multi-chunk driver (gdelt_history_backfill.py) as well as CLI."""
+    project = project or _resolve_project()
+    start = end - timedelta(days=days)
+    print(f"GDELT GKG backfill :: {start} -> {end} project={project}", flush=True)
+
+    name_map = build_name_map(limit_companies)
+    print(f"  {len(name_map)} clean company names to search", flush=True)
     names = list(name_map.keys())
     client = bigquery.Client(project=project)
 
@@ -105,8 +110,8 @@ def main() -> None:
     end_yyyymmdd = int(end.strftime("%Y%m%d"))
     bytes_scanned_total = 0
 
-    for batch_idx in range(0, len(names), args.batch_size):
-        batch = names[batch_idx:batch_idx + args.batch_size]
+    for batch_idx in range(0, len(names), batch_size):
+        batch = names[batch_idx:batch_idx + batch_size]
         # Build REGEX safely
         escaped = [n.replace("'", "\\'") for n in batch]
         regex = "|".join([f"({n})" for n in escaped])
@@ -128,7 +133,7 @@ def main() -> None:
             df = job.to_dataframe()
             bytes_scanned_total += job.total_bytes_processed or 0
         except Exception as e:
-            print(f"  batch {batch_idx//args.batch_size}: FAIL {type(e).__name__}: {e}")
+            print(f"  batch {batch_idx//batch_size}: FAIL {type(e).__name__}: {e}")
             continue
 
         # Per row, match each batch name into V2Organizations
@@ -190,7 +195,7 @@ def main() -> None:
                     "relevance": 0.65,
                 })
 
-        print(f"  batch {batch_idx//args.batch_size + 1}/{(len(names) + args.batch_size - 1)//args.batch_size} "
+        print(f"  batch {batch_idx//batch_size + 1}/{(len(names) + batch_size - 1)//batch_size} "
               f"queried {len(df)} rows, articles={len(all_article_rows)} mentions={len(all_mention_rows)} "
               f"scanned={bytes_scanned_total/1e9:.2f}GB", flush=True)
 
@@ -253,7 +258,33 @@ def main() -> None:
         total_mentions = len(all_mention_rows)
 
     print(f"\nDone. articles={total_articles} mentions={total_mentions} "
-          f"total_bytes_scanned={bytes_scanned_total/1e9:.2f}GB")
+          f"total_bytes_scanned={bytes_scanned_total/1e9:.2f}GB", flush=True)
+    return {
+        "articles": total_articles,
+        "mentions": total_mentions,
+        "bytes_scanned": bytes_scanned_total,
+        "start": start,
+        "end": end,
+    }
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--days", type=int, default=180)
+    ap.add_argument("--end", type=str, default=None,
+                    help="window end date YYYY-MM-DD (default today) — for historical backfill chunks")
+    ap.add_argument("--limit-companies", type=int, default=0,
+                    help="cap company name list (0 = all SP500)")
+    ap.add_argument("--batch-size", type=int, default=30,
+                    help="company names per BigQuery query")
+    args = ap.parse_args()
+
+    end = date.fromisoformat(args.end) if args.end else date.today()
+    backfill_window(
+        end, args.days,
+        limit_companies=args.limit_companies,
+        batch_size=args.batch_size,
+    )
 
 
 if __name__ == "__main__":

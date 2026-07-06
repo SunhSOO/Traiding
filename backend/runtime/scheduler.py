@@ -85,6 +85,28 @@ async def _job_news_backfill_chunk() -> None:
         )
 
 
+async def _job_gdelt_history_monthly() -> None:
+    """Monthly quota-aware GDELT news-history backfill (the '무료 분할' path).
+
+    On the free BigQuery tier one month buys ~2yr of history (1 TB /
+    ~0.33 TB/chunk ≈ 3 chunks). Runs day-of-month 2 (after the quota
+    resets on the 1st) and self-limits on live month-to-date bytes billed,
+    so it never triggers paid overage. Walks backward until the 6-year
+    target is reached, then becomes a no-op ('target_reached')."""
+    import asyncio
+
+    from scripts.gdelt_history_backfill import run_history_backfill
+
+    # Blocking (BigQuery + DB, minutes) — run off the event loop.
+    summary = await asyncio.to_thread(run_history_backfill, target_years=6)
+    log.info(
+        "job.gdelt_history",
+        chunks=summary["chunks_run"], articles=summary["articles_added"],
+        month_used_tb=round(summary["month_used_tb"], 3),
+        oldest=str(summary["oldest"]), reason=summary["reason"],
+    )
+
+
 async def _job_universe_refresh() -> None:
     from datetime import date
     from core.db import session_scope
@@ -1137,6 +1159,19 @@ DEFAULT_JOBS: list[JobSpec] = [
         cron_kwargs={"hour": 3, "minute": 30},
         timezone="UTC",
         enabled=False,
+    ),
+    JobSpec(
+        # Quota-aware GDELT 6yr news-history backfill ('무료 분할'). Fires
+        # monthly on day 2 (after the BigQuery free tier resets on the 1st);
+        # self-limits on live month-to-date bytes billed so it stays within
+        # the free 1 TB and never incurs paid overage. No-ops once the 6-year
+        # target is reached. Enabled — it is self-throttling and idempotent.
+        id="news.gdelt_history.monthly",
+        func=_job_gdelt_history_monthly,
+        trigger="cron",
+        cron_kwargs={"day": 2, "hour": 4, "minute": 0},
+        timezone="UTC",
+        enabled=True,
     ),
 ]
 

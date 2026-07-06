@@ -1336,3 +1336,23 @@ direction-test는 **breadth 하나**만 봤음(평균회귀 IC −0.14). 사용�
 - ⚪ KR 시가총액 프록시를 KRX CSV 스크래퍼(선호) 또는 pykrx(엔드포인트 복구 시)로 교체
 - ⚪ Phase 6 브로커 어댑터 — KIS Developers (KR 무료) vs Alpaca paper (US 무료); 둘 다 페이퍼 3개월 통과 후 착수
 - ⚪ TimescaleDB 설치 vs 일반 Postgres 유지 (행수 증가 속도에 따라 결정)
+
+---
+
+## 2026-07-06 (월) — GDELT 뉴스 6년 백필 착수 (무료 분할)
+
+근거: `backend/scripts/gdelt_backfill.py`, `backend/scripts/gdelt_history_backfill.py`, `backend/runtime/scheduler.py` (`news.gdelt_history.monthly`)
+
+**결정 정정**: 위 보류의 "5TB"는 **BigQuery 스캔 처리량**이었고 **실제 디스크 저장은 6년=~18GB**(우리 종목만 필터링). 저장공간은 문제 아님을 실측 확인 → user 승인 하에 6년 백필 착수. 유일한 실제 제약 = **BigQuery 무료 스캔 월 1TB**. user 선택 = **무료 분할(3개월, 비용 $0)**.
+
+- ✅ `gdelt_backfill` 리팩터: `backfill_window(end, days)` + `build_name_map()` 함수 추출(드라이버에서 호출 가능), `--end` CLI 인자로 임의 과거 구간 지정.
+- ✅ **청크1-3 실행 완료** — 뉴스 역사 **7개월 → 2년치**:
+  - 청크1 `2025-05-07→2025-11-03`: +1.18M articles, 스캔 270GB
+  - 청크2 `2024-11-08→2025-05-07`: +1.32M, 315GB
+  - 청크3 `2024-05-12→2024-11-08`: +1.28M, 330GB
+  - 결과: `news_articles` **min 2024-05-12, max 2026-06-02, 5.21M건**, DB 7.9→12.26GB(+4.3GB)
+- ✅ **BigQuery 실사용 실측**(INFORMATION_SCHEMA.JOBS): 6월 0.776TB, **7월 0.924TB**(청크2·3이 7월 청구) → 7월 잔여 76GB뿐. 추가 청크 시 초과과금이라 **7월은 여기서 종료**(무료 준수).
+- ✅ **재개형 쿼터인지 드라이버** `gdelt_history_backfill.py`: 현재 最古 뉴스일에서 180일씩 역방향 walk, **live 월간-누적 청구바이트를 조회해 자기제한**(무료 1TB 초과 절대 불가). dry-run 전체 계획 = **6년 완성까지 8청크**(2020-06까지). 실행 검증: 7월 쿼터 소진 상태에서 `STOP quota_exhausted` 정상 무동작.
+- ✅ **월별 자동 잡** `news.gdelt_history.monthly`(scheduler, day=2 04:00 UTC, enabled): 매월 쿼터 리셋 후 자동 실행 → ~3청크(~2년)/월 → **8~10월경 6년 완성, 비용 $0**. 6년 도달 시 자동 no-op. 테스트 6/6 통과.
+
+> **현재 뉴스 상태: 2년치(2024-05~2026-06) 확보.** 나머지 4년은 스케줄러가 다음 달들에 무료로 자동 채움. 저장 최종 ~18GB(디스크 351GB 여유 대비 무관).
