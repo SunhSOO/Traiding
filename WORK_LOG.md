@@ -1356,3 +1356,24 @@ direction-test는 **breadth 하나**만 봤음(평균회귀 IC −0.14). 사용�
 - ✅ **월별 자동 잡** `news.gdelt_history.monthly`(scheduler, day=2 04:00 UTC, enabled): 매월 쿼터 리셋 후 자동 실행 → ~3청크(~2년)/월 → **8~10월경 6년 완성, 비용 $0**. 6년 도달 시 자동 no-op. 테스트 6/6 통과.
 
 > **현재 뉴스 상태: 2년치(2024-05~2026-06) 확보.** 나머지 4년은 스케줄러가 다음 달들에 무료로 자동 채움. 저장 최종 ~18GB(디스크 351GB 여유 대비 무관).
+
+---
+
+## 2026-07-06 (월) — 신규 데이터 기회 감사 + 7개 신호 구현·IC 취사선택
+
+근거: 56-에이전트 데이터 감사(43후보→30검증→랭킹), `training/features.py`, `scripts/train_lgbm.py`, `scripts/{finra_short_interest_backfill,cross_asset_backfill,bok_ecos_backfill,yfinance_forward_estimates}.py`, `runtime/scheduler.py`, IC 스크린 `scratchpad/ic_screen_new.py`
+
+**질문**: "더 필요한 새 무료 데이터는?" → 멀티에이전트 감사로 현 인벤토리 근거 랭킹. user가 상위 3클러스터(=사실상 전부) 선택 → NO-complacency대로 전부 구현 후 IC 취사선택.
+
+**핵심 발견(감사)**: "KR 외국인·기관 수급 이미 DB에 있음"은 **거짓** — `kr_prices.py:154-164`는 KOSPI·외국인합계만 긁는 로그인월 스텁, pykrx 수급/공매도/한도소진 전부 KRX 로그인월 차단(라이브 검증). → 상위 추천은 **무료 우회로**.
+
+구현(모두 커밋·푸시, 피처 478→최종 481):
+- ✅ **#1 KR 해외프록시** EWY/SOXX/SMH/FXI/MCHI 백필(2016~, 각 2640행). rel_* 상대모멘텀은 **IC 검증서 컷**(횡단면=순수모멘텀과 동일, IC 3개 완전일치=중복). 프록시 가격은 베타용으로 유지.
+- ✅ **#2 종목별 FX/프록시 롤링베타** — **최대 성과**. IC(KR fwd21d, 591일): `beta_usdcny_63d` **t+7.3**, `beta_usdkrw_63d` t+4.4, `beta_ewy_63d` t-5.3 = **KR 병목에 실제 횡단면 스킬**(시장스칼라→수출주/내수주 분리). `beta_fxi` t-0.3 노이즈 컷.
+- ✅ **Amihud 비유동성**(누락모달리티) — `amihud_illiq_21d` KR **t+10.4**(비유동성 프리미엄), z t+4.7. 온디스크 OHLCV.
+- ✅ **#5 KR 네이티브 레짐**: 국고채 3/5/10Y(ECOS 817Y002 검증코드) → kr_10y/term_spread + KOSPI 실현변동성(VKOSPI는 무료소스 전무=KRX월+investing.com CF차단). 시장레벨=방향모델용(횡단면 IC 대상 아님, proposed).
+- ✅ **#7 FINRA 공매도 잔고**(keyless API 검증): short_interest 테이블+백필(462종목 90k행, 2017~). `si_days_to_cover` US **t-5.1 = 크라우디드숏 이상현상 확인**, si_change_pct t+3.4. si_dtc_chg 노이즈 컷. look-ahead 안전(정산일+14d 러그). 일별 short VOLUME(기각노이즈)과 다른 신호.
+- ✅ **#3 추정 리비전** 주간 스냅샷 스케줄러(`fundamentals.forward_estimates.weekly`, enabled) → 리비전 히스토리 축적(시간경과 가치, 뉴스백필과 동류). 씨드 2스냅샷.
+- ✅ **#4 PEAD**: eps_yoy(전년동기 서프라이즈)는 **이미 존재** 확인 → 비중복분 `days_since_q_filing`(드리프트 리센시, period_end+45d look-ahead안전)만 추가.
+
+> **IC 취사선택 결과: FX/중국 베타(#2)+Amihud+FINRA-DTC(#7)=검증된 승자.** rel_프록시 중복 + 노이즈베타/SI = 컷(7개). 잔여 약신호는 top-50 선택이 시장별 판정. 시장레벨 KR레짐/리비전=시간·방향모델로 후속 검증. **최종 판정은 프로덕션 재학습 OOS(top-50)이며 본 IC는 강건한 사전스크린(status=proposed).**
