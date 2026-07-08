@@ -74,14 +74,17 @@ class TestRunSelection(unittest.TestCase):
                             as_of=datetime(2026, 6, 29), recs=self._recs(), persist=False)
         self.assertEqual(res.target_exposure, 0.0)                 # crisis → no exposure
 
-    def test_price_breadth_blend(self):
+    def test_price_breadth_sma50_primary(self):
+        # Exposure breadth = calibration-free PRICE breadth (SMA50 preferred over
+        # the slow SMA200), NOT blended with the model's pred_breadth optimism.
         from decision.selection import run_selection
-        recs = self._recs()                                        # pred_breadth 0.6
+        recs = self._recs()                                        # pred_breadth 0.6 (ignored)
         feat = pd.DataFrame({"ticker": [f"T{i}" for i in range(10)],
-                             "px_vs_sma200": [0.1] * 8 + [-0.1] * 2})   # price_breadth 0.8
+                             "px_vs_sma50": [0.1] * 7 + [-0.1] * 3,    # SMA50 breadth 0.7
+                             "px_vs_sma200": [0.1] * 10})              # SMA200 1.0 — must be ignored
         res = run_selection(self._session("neutral"), market="US",
                             as_of=datetime(2026, 6, 29), recs=recs, feat_df=feat, persist=False)
-        self.assertAlmostEqual(res.breadth, 0.7, places=3)         # 0.5*(0.6 + 0.8)
+        self.assertAlmostEqual(res.breadth, 0.7, places=3)         # SMA50 price breadth drives it
 
     def test_thin_breadth_reduces_exposure(self):
         from decision.selection import run_selection
