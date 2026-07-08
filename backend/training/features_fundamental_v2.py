@@ -36,42 +36,77 @@ import pandas as pd
 # ──────────────────────────────────────────────────────────────────────
 
 
+def _panel_index(panel: pd.DataFrame) -> dict:
+    """Precompute (concept, kind) -> {aod, val, pe_df} ONCE per panel, cached on
+    panel.attrs. Eliminates the per-call full-panel filter+sort that dominated
+    the profile (41.5k _latest_as_of + 26k _ttm/_nth calls per few tickers).
+
+    Rows are sorted by (as_of_ts, period_end) — a STABLE, DETERMINISTIC order.
+    The old code used pandas' default quicksort on the eligible subset, whose
+    tie-break among equal as_of_ts (restatements / same-day filings) was
+    arbitrary and even varied by query date; sorting by (as_of_ts, period_end)
+    makes 'latest as-of' reproducible = max as_of_ts, then latest period_end
+    (the newest reported quarter), which is the economically correct pick."""
+    idx = panel.attrs.get("_v2idx")
+    if idx is not None:
+        return idx
+    idx = {}
+    if not panel.empty:
+        aod_all = pd.to_datetime(panel["as_of_ts"]).dt.normalize()
+        tmp = panel.assign(_aod=aod_all.values)
+        for (c, k), g in tmp.groupby(["concept", "period_kind"], sort=False):
+            gg = g.sort_values(["as_of_ts", "period_end"], kind="stable")
+            pe_df = gg.sort_values(["period_end", "as_of_ts"], kind="stable")
+            idx[(c, k)] = {"aod": gg["_aod"].values,
+                           "val": gg["value"].values.astype(float),
+                           "pe_aod": pe_df["_aod"].values,
+                           "pe_val": pe_df["value"].values.astype(float)}
+    try:
+        panel.attrs["_v2idx"] = idx
+    except Exception:
+        pass
+    return idx
+
+
 def _latest_as_of(panel: pd.DataFrame, concept: str, as_of: DateType,
                    kind: str = "Q") -> Optional[float]:
-    sub = panel[(panel["concept"] == concept) & (panel["period_kind"] == kind)]
-    if sub.empty:
+    e = _panel_index(panel).get((concept, kind))
+    if e is None or len(e["aod"]) == 0:
         return None
-    eligible = sub[sub["as_of_ts"].dt.date <= as_of]
-    if eligible.empty:
+    cutoff = np.datetime64(pd.Timestamp(as_of).normalize())
+    nz = np.nonzero(e["aod"] <= cutoff)[0]  # eligible = as_of_ts.date <= as_of
+    if nz.size == 0:
         return None
-    return float(eligible.sort_values("as_of_ts").iloc[-1]["value"])
+    # gg sorted by (as_of_ts, period_end) → last eligible = max as_of_ts, then
+    # latest period_end. Deterministic (unlike the old unstable quicksort).
+    return float(e["val"][nz[-1]])
 
 
 def _ttm_sum(panel: pd.DataFrame, concept: str, as_of: DateType) -> Optional[float]:
-    """Sum of last 4 quarterly values."""
-    sub = panel[(panel["concept"] == concept) & (panel["period_kind"] == "Q")]
-    if sub.empty:
+    """Sum of last 4 quarterly values (by period_end)."""
+    e = _panel_index(panel).get((concept, "Q"))
+    if e is None:
         return None
-    eligible = sub[sub["as_of_ts"].dt.date <= as_of].sort_values("period_end")
-    if len(eligible) < 4:
+    cutoff = np.datetime64(pd.Timestamp(as_of).normalize())
+    nz = np.nonzero(e["pe_aod"] <= cutoff)[0]   # eligible, in period_end order
+    if nz.size < 4:
         return None
-    last4 = eligible.tail(4)
-    return float(last4["value"].sum())
+    return float(e["pe_val"][nz[-4:]].sum())
 
 
 def _nth_ago(panel: pd.DataFrame, concept: str, as_of: DateType,
               years_ago: int) -> Optional[float]:
     """Return concept value n years before as_of (annual kind preferred)."""
     target = DateType(as_of.year - years_ago, as_of.month, max(1, as_of.day - 1))
-    sub = panel[(panel["concept"] == concept) & (panel["period_kind"] == "A")]
-    if sub.empty:
-        sub = panel[(panel["concept"] == concept) & (panel["period_kind"] == "Q")]
-    if sub.empty:
+    idx = _panel_index(panel)
+    e = idx.get((concept, "A")) or idx.get((concept, "Q"))
+    if e is None or len(e["aod"]) == 0:
         return None
-    eligible = sub[sub["as_of_ts"].dt.date <= target]
-    if eligible.empty:
+    cutoff = np.datetime64(pd.Timestamp(target).normalize())
+    nz = np.nonzero(e["aod"] <= cutoff)[0]
+    if nz.size == 0:
         return None
-    return float(eligible.sort_values("as_of_ts").iloc[-1]["value"])
+    return float(e["val"][nz[-1]])
 
 
 def _safe_div(a: Optional[float], b: Optional[float]) -> float:
