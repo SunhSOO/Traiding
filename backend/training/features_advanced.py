@@ -112,15 +112,28 @@ def _ultimate_osc(high: pd.Series, low: pd.Series, close: pd.Series,
     return 100 * (4 * avg(p1) + 2 * avg(p2) + avg(p3)) / 7
 
 
+def _wma(series: pd.Series, n: int) -> pd.Series:
+    """Linear-weighted moving average (weights 1..n, newest = n), vectorized.
+
+    Identical to ``series.rolling(n).apply(lambda x: x@w / w.sum(), raw=True)``
+    but ~100× faster: a linear-weighted MA is a convolution. A window with any
+    NaN (or the leading n-1 positions) yields NaN — matching rolling's default
+    min_periods=n semantics."""
+    if n < 1:
+        return series.astype(float)
+    vals = series.to_numpy(dtype=float)
+    w = np.arange(1, n + 1, dtype=float)
+    out = np.full(len(vals), np.nan)
+    if len(vals) >= n:
+        out[n - 1:] = np.convolve(vals, w[::-1], mode="valid") / w.sum()
+    return pd.Series(out, index=series.index)
+
+
 def _coppock(close: pd.Series, slow: int = 14, fast: int = 11, wma: int = 10) -> pd.Series:
     """Coppock Curve = WMA of (ROC_slow + ROC_fast)."""
     roc_slow = close.pct_change(slow) * 100
     roc_fast = close.pct_change(fast) * 100
-    combined = roc_slow + roc_fast
-    weights = np.arange(1, wma + 1)
-    return combined.rolling(wma).apply(
-        lambda x: np.dot(x, weights) / weights.sum(), raw=True,
-    )
+    return _wma(roc_slow + roc_fast, wma)
 
 
 def _kama(close: pd.Series, period: int = 10) -> pd.Series:
@@ -140,16 +153,8 @@ def _hma(close: pd.Series, period: int = 20) -> pd.Series:
     """Hull Moving Average — fast and smooth."""
     half = int(period / 2)
     sqrt_n = int(np.sqrt(period))
-    wma_half = close.rolling(half).apply(
-        lambda x: np.dot(x, np.arange(1, half + 1)) / (half * (half + 1) / 2), raw=True,
-    )
-    wma_full = close.rolling(period).apply(
-        lambda x: np.dot(x, np.arange(1, period + 1)) / (period * (period + 1) / 2), raw=True,
-    )
-    diff = 2 * wma_half - wma_full
-    return diff.rolling(sqrt_n).apply(
-        lambda x: np.dot(x, np.arange(1, sqrt_n + 1)) / (sqrt_n * (sqrt_n + 1) / 2), raw=True,
-    )
+    diff = 2 * _wma(close, half) - _wma(close, period)
+    return _wma(diff, sqrt_n)
 
 
 def _supertrend(high: pd.Series, low: pd.Series, close: pd.Series,
