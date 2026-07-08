@@ -144,31 +144,40 @@ def _upsert_bars(session: Session, bars: list[DailyBar]) -> int:
         }
         for b in bars
     ]
-    stmt = pg_insert(DailyPrice).values(rows)
-    update_cols = {
-        c.name: c
-        for c in stmt.excluded
-        if c.name not in {"trade_date", "market", "ticker", "created_at"}
-    }
-    stmt = stmt.on_conflict_do_update(constraint="pk_daily_prices", set_=update_cols)
-    session.execute(stmt)
+    # Chunk to stay under Postgres' 65535-parameter cap: 13 cols/row → a single
+    # statement caps at ~5040 rows. 4000 leaves headroom. (Large syncs — full
+    # universe × long range — otherwise overflow in one INSERT.)
+    CHUNK = 4000
+    for k in range(0, len(rows), CHUNK):
+        chunk = rows[k:k + CHUNK]
+        stmt = pg_insert(DailyPrice).values(chunk)
+        update_cols = {
+            c.name: c
+            for c in stmt.excluded
+            if c.name not in {"trade_date", "market", "ticker", "created_at"}
+        }
+        stmt = stmt.on_conflict_do_update(constraint="pk_daily_prices", set_=update_cols)
+        session.execute(stmt)
     session.flush()
     return len(rows)
 
 
 def _default_source(market: Market) -> str:
-    return "pykrx" if market is Market.KR else "yfinance"
+    return "yfinance"   # KR now uses yfinance too (pykrx = KRX-login-walled here)
 
 
 def _default_fetcher(market: Market) -> Callable:
     """Bind one of our production adapters to a per-ticker callable."""
     if market is Market.KR:
-        from data.price.kr_prices import build_default_kr_price_fetcher, fetch_kr_daily
+        # pykrx is KRX-login-walled in this environment (freezes KR prices);
+        # yfinance (.KS/.KQ) serves fresh KR bars. Swap here to unblock KR.
+        from data.price.kr_prices import build_yfinance_kr_price_fetcher, fetch_kr_daily
 
-        adapters = build_default_kr_price_fetcher()
+        adapters = build_yfinance_kr_price_fetcher()
 
         def _kr(ticker: str, start: DateType, end: DateType):
-            return fetch_kr_daily(ticker=ticker, start=start, end=end, **adapters)
+            return fetch_kr_daily(ticker=ticker, start=start, end=end,
+                                  source="yfinance", **adapters)
         return _kr
 
     from data.price.us_prices import build_default_us_price_fetcher, fetch_us_daily

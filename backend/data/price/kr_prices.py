@@ -34,6 +34,7 @@ def fetch_kr_daily(
     fetch_ohlcv: Callable[[str, str, str], list[dict]],
     fetch_investor: Optional[Callable[[str, str, str], list[dict]]] = None,
     lag: timedelta = PYKRX_DEFAULT_LAG,
+    source: str = "pykrx",
 ) -> list[DailyBar]:
     """Return DailyBar list for one KR ticker over [start, end].
 
@@ -98,7 +99,7 @@ def fetch_kr_daily(
             adj_close=None,
             foreign_net=f_net,
             institution_net=i_net,
-            source="pykrx",
+            source=source,
             as_of_ts=_as_of_for_kr(d, lag),
         ))
     return bars
@@ -162,5 +163,47 @@ def build_default_kr_price_fetcher() -> dict[str, Callable]:
         # minimal — full implementation belongs to Phase 1.2 finish
         # after we wire up real pykrx integration tests with a live API.
         return df.reset_index().to_dict("records") if df is not None and not df.empty else []
+
+    return {"fetch_ohlcv": _ohlcv, "fetch_investor": _investor}
+
+
+def build_yfinance_kr_price_fetcher() -> dict[str, Callable]:
+    """KR OHLCV via yfinance (.KS = KOSPI, .KQ = KOSDAQ).
+
+    Replaces the pykrx feed, which requires a KRX login (KRX_ID/PW) that is
+    walled in this environment — pykrx returns empty, freezing KR prices.
+    yfinance serves fresh KR daily bars keyed by the 6-digit code + market
+    suffix; we try .KS first, then .KQ. Investor-flow breakdowns are not
+    available via yfinance → empty (they were login-walled stubs anyway)."""
+    import yfinance as yf
+
+    def _ohlcv(fr: str, to: str, ticker: str) -> list[dict]:
+        start = f"{fr[:4]}-{fr[4:6]}-{fr[6:8]}"
+        # yfinance `end` is exclusive → +1 day to include `to`.
+        end_d = DateType(int(to[:4]), int(to[4:6]), int(to[6:8])) + timedelta(days=1)
+        end = end_d.isoformat()
+        for suffix in (".KS", ".KQ"):
+            try:
+                h = yf.Ticker(ticker + suffix).history(
+                    start=start, end=end, auto_adjust=False,
+                )
+            except Exception:
+                h = None
+            if h is not None and not h.empty:
+                h = h.reset_index()
+                out = []
+                for _, r in h.iterrows():
+                    dt = r["Date"]
+                    out.append({
+                        "Date": dt.date() if hasattr(dt, "date") else dt,
+                        "Open": r.get("Open"), "High": r.get("High"),
+                        "Low": r.get("Low"), "Close": r.get("Close"),
+                        "Volume": r.get("Volume"),
+                    })
+                return out
+        return []
+
+    def _investor(fr: str, to: str, ticker: str) -> list[dict]:
+        return []   # no KR investor-flow data via yfinance
 
     return {"fetch_ohlcv": _ohlcv, "fetch_investor": _investor}
