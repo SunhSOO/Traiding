@@ -1470,3 +1470,10 @@ direction-test는 **breadth 하나**만 봤음(평균회귀 IC −0.14). 사용�
 4. 방어(TREND×VOL) 실측 재확인은 `scratchpad/realized_fast.py`로 가능(캐시+신선가격).
 
 > **세션 종합(정직): 방어는 유의미 개선(drawdown 반감). 엣지는 테스트한 모든 대안(LTR·앙상블·catboost·ridge)이 현 LGBM/회귀를 못 이김 → 엣지 개선 여지 작음. 시스템은 여전히 "믿고 돈 넣을 수익기계"가 아니며 실전 전 페이퍼 관측 필수.** 모든 코드 커밋됨(0e38bed까지). 재부팅 안전.
+
+### ⚠️ 정정 (모델비교 US 완료) — 앞 "전 대안 미채택"은 KR만 본 성급한 결론
+- **모델비교 완전판** (train≤2022-06 → test 2022-06..2023-06, per-date rank-IC):
+  - **KR**: lgbm **+0.067(최고)** > catboost 0.054 > ridge 0.040, 앙상블(lgbm+ridge) 0.066≈lgbm → KR은 LGBM 유지.
+  - **US**: ridge **+0.071** > 앙상블 **+0.075(최고, IC_IR 0.47)** >> lgbm 0.038 > catboost −0.015 → **US는 ridge/앙상블이 현 LGBM을 이김(IC 거의 2배)!**
+- **∴ US 엣지 레버 발견: lgbm+ridge 앙상블(또는 ridge).** 단 (a)단일 split이라 walk-forward 확인 필요, (b)과거 "ridge 가짜승리"(IC≈0+수익=틸트) 교훈 있으나 여기선 IC가 진짜 양수(+0.071)라 다름 — 그래도 walk-forward로 재확인 후 채택 결정.
+- **다음 할 일 갱신**: (1)~~US 모델비교~~ 완료. (2)**US ridge/앙상블 walk-forward 검증**(backtest_integrated에 model_kind 옵션 없으면 하네스 필요; multi_trainer는 ensemble 지원) → 이기면 US 프로덕션을 앙상블로 전환. (3)라벨/호라이즌·피처서브셋 등 미시도 엣지.
