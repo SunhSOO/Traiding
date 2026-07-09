@@ -1441,3 +1441,32 @@ direction-test는 **breadth 하나**만 봤음(평균회귀 IC −0.14). 사용�
 **미지-데이터 검정 인프라**: US 가격 yfinance로 7/6까지 갱신(515종목). KR은 무료피드(FDR)가 6월 KR가격 미제공 → KR 라이브 테스트 원천 불가.
 
 > **종합: 자동매매기는 작동하며(errors=0) walk-forward OOS에서 벤치를 US+25%p·KR+18%p 초과(하락장 방어 포함). 그러나 가장 최근 미지구간(2025-26)에서 US 선정스킬이 알파디케이로 ≈0 — dispersion은 높아 기회는 있으나 모델이 못 잡음. 완화는 주간 재학습이며 드리프트 모니터링 활성화가 다음 안전조치. 실전 전 페이퍼트레이딩 실시간 관측 필수.**
+
+---
+
+## 2026-07-09 (목) — 방어력·엣지 개선 캠페인 + 재부팅 RESUME 포인트
+
+근거: `decision/selection.py`(방어 오버레이), `scratchpad/{defense_sweep,lean_models,realized_fast}.py`, backtest_integrated `--ltr-test`/`--step`. **재부팅 대비 진행상황 기록** — 아래 "다음 할 일"부터 이어가면 됨.
+
+### 데이터/파이프라인 (완료·커밋)
+- ✅ **KR 시세 신선화**: pykrx(KRX 로그인월)→yfinance(.KS/.KQ). KR 가격 5/29→최신, 347종목. insert 65535 파라미터 버그픽(청킹). (커밋 f675376)
+- ✅ **파이프라인 ~10-25배 가속**: `fundamental_v2`(per-panel 캐시+결정론 tie-break, 값불변, a147a40), `features_advanced`(WMA→convolution 벡터화, 값불변, a9d5a06). ※전체 유니버스 빌드는 여전히 느림(다른 모듈 잔존) — 소량표본/캐시활용 권장.
+
+### 방어력 (완료·커밋) — TREND×VOL-SPIKE
+- ✅ 진단: 최근 KR −13% 하락은 사전감지 가능(브레드스 74%→41%가 수주 앞서). 기존 노출필터가 SMA200 breadth(느림) 써서 반응 못함.
+- ✅ **포괄 스윕(17신호, KR+US 2016-2026) 결과 → 승자=TREND(mean px_vs_sma50>0)×VOL-SPIKE(vix_pctile/kospi_rv_pctile<0.8)**. KR Calmar 0.92/Sharpe 1.29/MaxDD −18%, US 0.80/1.08/−14%. buy&hold(−44%)·구breadth200(−31%) 대비 **drawdown 반감**. 5/29 진입 시 vol 84백분위라 exposure 0.70→0.35(=최근 −13%→~−5% 완화). (커밋 0e38bed, test 22/22)
+- 기각: breadth(비율,노이즈), 공격적 de-risk(수익붕괴), 순수 vol-target/drawdown컷. **정직: EW시장 오버레이 기준·거래비용 미모델. 방어 개선이지 엣지 개선 아님.**
+
+### 엣지(선정 알파) 테스트 결과 (이번 캠페인)
+- ❌ **LTR(lambdarank)**: KR 회귀압도(회귀 IC+0.023 vs LTR −0.047), US 혼조(LTR 수익↑ IC↑이나 Sharpe↓) → **미채택, 회귀 유지**.
+- ❌ **모델비교(lgbm/ridge/catboost/앙상블)**: KR test-IC lgbm **+0.067(최고)** > catboost 0.054 > ridge 0.040, 앙상블 0.066≈lgbm → **LGBM 유지, 앙상블 이득 없음**. (US는 재실행 필요 — 아래)
+- ⚠️ **재학습빈도 step21(월간) vs step63(분기)**: step21이 훨씬 높게(KR alpha +303% Sharpe 1.03) 나오나 **벤치도 −17%→+114%로 폭등 = 리밸런싱 보너스+거래비용 미모델 아티팩트**. 알파의 벤치대비 Sharpe우위 0.23→0.32 = modest만 진짜. **깨끗한 승리 아님**(비용 넣으면 상쇄).
+- ✅ (기존) **타이밍 게이트** --with-timing: walk-forward +16%p → 채택(러너에 ENTRY/EXIT 이미 존재).
+
+### 🔻 다음 할 일 (재부팅 후 여기서 이어가기)
+1. **모델비교 US 재실행**: `uv run python scratchpad/lean_models.py`(경로: 세션 scratchpad) — KR은 LGBM 최고 확인됨, US 결과만 미확보. (백그라운드 job은 재부팅으로 종료됨)
+2. **미시도 엣지**: 라벨/호라이즌(5d/10d/21d, 다중호라이즌), 피처서브셋, 하이퍼파라미터.
+3. **엣지 종합 취사선택 보고**: 지금까지 LTR·앙상블·모델대안 전부 LGBM/회귀를 못 이김 = 엣지는 이미 잘 튜닝됨, 개선 여지 작음(정직).
+4. 방어(TREND×VOL) 실측 재확인은 `scratchpad/realized_fast.py`로 가능(캐시+신선가격).
+
+> **세션 종합(정직): 방어는 유의미 개선(drawdown 반감). 엣지는 테스트한 모든 대안(LTR·앙상블·catboost·ridge)이 현 LGBM/회귀를 못 이김 → 엣지 개선 여지 작음. 시스템은 여전히 "믿고 돈 넣을 수익기계"가 아니며 실전 전 페이퍼 관측 필수.** 모든 코드 커밋됨(0e38bed까지). 재부팅 안전.
