@@ -90,31 +90,28 @@ def run_selection(
     regime, regime_conf = _latest_regime(session, market)
 
     n = max(len(recs), 1)
-    # breadth: blend model-predicted breadth (fraction with pred_ret>0) with a
-    # price-based breadth (fraction above 200d SMA) — the latter is standard and
-    # calibration-free, so it stabilises the exposure overlay.
     pred_breadth = float((pd.to_numeric(recs["pred_ret"], errors="coerce") > 0).mean()) if len(recs) else 0.0
-    # Price breadth for the EXPOSURE overlay. Use the 50-day SMA (responsive) as
-    # the primary signal — the 200-day SMA is too slow to catch a fresh downturn
-    # (after a long uptrend most names still sit above their 200d line, so 200d
-    # breadth read ~0.85 while the market was already rolling over). Validated on
-    # KR 2016-2026: SMA50 vs SMA200 cut max-drawdown −31%→−27%, Sharpe 1.07→1.11.
+    # Market TREND drives the exposure overlay: the mean per-stock distance above
+    # the 50-day SMA (>0 = the average name is in an uptrend). An exhaustive
+    # overlay sweep (KR+US 2016-2026, 1d-lagged) ranked this FAR above the old
+    # breadth signals — Calmar (CAGR/MaxDD) 0.68→0.96 (KR) / 0.55→0.83 (US),
+    # max-drawdown −27%→−19%, with no return sacrifice. Why: the 200d SMA is too
+    # slow to catch a fresh downturn, and the *fraction* above (breadth) is
+    # noisier than the *mean distance* (trend strength). Breadth is still reported.
     cols = getattr(feat_df, "columns", []) if feat_df is not None else []
+    market_trend = None
     price_breadth = None
-    if "px_vs_sma50" in cols:
-        pv = pd.to_numeric(feat_df["px_vs_sma50"], errors="coerce").dropna()
-        if len(pv):
-            price_breadth = float((pv > 0).mean())
-    elif "px_vs_sma200" in cols:                        # fallback if 50d absent
-        pv = pd.to_numeric(feat_df["px_vs_sma200"], errors="coerce").dropna()
-        if len(pv):
-            price_breadth = float((pv > 0).mean())
-    # Lean on the calibration-free market signal (price breadth); the model's
-    # pred_breadth (q50 optimism) doesn't reflect market deterioration and is
-    # only a fallback when no price breadth is available.
+    for c in ("px_vs_sma50", "px_vs_sma200"):           # 50d preferred; 200d fallback
+        if c in cols:
+            pv = pd.to_numeric(feat_df[c], errors="coerce").dropna()
+            if len(pv):
+                market_trend = float(pv.mean())          # trend strength → exposure
+                price_breadth = float((pv > 0).mean())   # breadth → reported only
+                break
     breadth = price_breadth if price_breadth is not None else pred_breadth
     breadth_parts = {"pred_breadth": round(pred_breadth, 4),
-                     "price_breadth": (round(price_breadth, 4) if price_breadth is not None else None)}
+                     "price_breadth": (round(price_breadth, 4) if price_breadth is not None else None),
+                     "market_trend": (round(market_trend, 4) if market_trend is not None else None)}
     in_basket = recs[recs["action"] == "BUY"].copy()
     n_basket = max(len(in_basket), 1)
     # conviction: mean predicted 21d return of the chosen names. (Using
@@ -122,9 +119,30 @@ def run_selection(
     # top decile — so it must come from the model's magnitude, not the rank.)
     avg_conv = float(pd.to_numeric(in_basket["pred_ret"], errors="coerce").mean()) if len(in_basket) else 0.0
 
+    # Vol-spike de-risk: cut when market realized-vol is in its top 20% (a fast-
+    # crash signal that the slower trend filter lags). Read from the market-level
+    # vol-percentile feature (VIX for US, KOSPI realised-vol for KR).
+    vol_pctile = None
+    for vc in ("vix_pctile_252d", "kospi_rv_pctile_252d"):
+        if vc in cols:
+            vv = pd.to_numeric(feat_df[vc], errors="coerce").dropna()
+            if len(vv):
+                vol_pctile = float(vv.mean())
+                break
+    breadth_parts["vol_pctile"] = round(vol_pctile, 4) if vol_pctile is not None else None
+
     base = _base_exposure(regime)
-    # breadth nudge: only REDUCE below the regime cap when breadth is thin.
-    target_exposure = round(base * min(1.0, 0.4 + breadth), 4)
+    # Exposure overlay = TREND × VOL-SPIKE (validated best balance in the sweep:
+    # KR Calmar 0.92 / Sharpe 1.29 / MaxDD −18%, and it cut the recent 5wk crash
+    # to −7% vs trend-alone −15%). Full exposure only in an uptrend with calm
+    # vol; reduce on downtrend (0.4×) and/or a vol spike (0.5×). Falls back to the
+    # breadth nudge when the price trend is unavailable.
+    if market_trend is not None:
+        trend_mult = 1.0 if market_trend > 0 else 0.4
+        vol_mult = 0.5 if (vol_pctile is not None and vol_pctile >= 0.8) else 1.0
+        target_exposure = round(base * trend_mult * vol_mult, 4)
+    else:
+        target_exposure = round(base * min(1.0, 0.4 + breadth), 4)
     target_weight = round(1.0 / n_basket, 5)
 
     result = SelectionResult(
