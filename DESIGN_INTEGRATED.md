@@ -74,13 +74,19 @@
 - 입력: 라이브 피처(당일 횡단면) — **신규 과업**: 매일 피처 리빌드 잡(현재는 오프라인 캐시만; live 리빌드 미구현 = 갭).
 - 처리: `ProductionRecommender.recommend()` → rank_pct, action(top/bottom decile), target_price, 밴드.
 - 출력: `selection_basket` 영속(top-decile = in_basket=True).
-- 시장별 모델: US=triple-barrier 라벨, KR=mn 라벨(검증된 per-market). 정규화·blitz·|label|가중 포함.
+- 시장별 모델(검증된 per-market, **양 시장 pure LightGBM**): US=triple-barrier(tb) 라벨, KR=mn 라벨. per-date 정규화·blitz 잔차모멘텀·|label|가중 포함. ※per-market 분리가 정답(2026-07-10 방법론 확인: 판정 기준은 **초과수익**=상위decile−유니버스평균(베타제거=순수 선정가치)이며, 동일 ridge가 US-최고/KR-최악 = "한 시장 승자를 반대 시장에 요구"하는 교차일반화 기준이 부적절했음. 구조는 이미 맞았음).
+- ⚠️ **US lgbm+ridge 앙상블 = 기각(2026-07-10)**: 구현·재학습까지 진행(`training/ensemble_model.py`, `train_production.py --ensemble`)했으나 16폴드 walk-forward(`var/_analysis/wf_deep_US.csv`)+6-에이전트 적대검증에서 **기각** — ens−lgbm 평균 초과 +0.0010(무의미)·중앙값 −0.0071·폴드승률 44%, 양(+)갭의 74%가 상승반등 3폴드(레짐운빨), 하락폴드서 ridge 레그 IC −0.24로 **베어-독성**(ens −1.73% vs lgbm +1.41%). → **US 프로덕션 = pure LightGBM 유지**(번들 `.pre_ensemble` 롤백, WF IC 0.246). 앙상블은 옵트인 shadow 툴(기본 OFF 양시장)로만 보존, 2024-25+실제 드로다운 폴드 축적 후 재판정. (status=rejected, confidence medium)
 
 ## 5. 시황 계층 (A) — 우리 알파 + regime
 
 - regime: 기존 voting 분류기(`market_regime`) 재사용.
 - 알파 시장관점(신규): breadth(예측 양수 비율), 평균 conviction → 시장 폭/강도.
-- **target_exposure**: regime + breadth 매핑 (예: risk_on&고breadth=100%, neutral=70%, risk_off=40%, crisis=0%). 이게 "지수투자/시황" 노출 오버레이.
+- **target_exposure**: regime 기반 base 노출 × **방어 오버레이 TREND×VOL-SPIKE** (`decision/selection.py`, 커밋됨 2026-07-10). 공식 = `exposure = base × TREND_mult × VOL_mult`:
+  - base = regime 매핑(risk_on 100% / neutral 70% / risk_off 40% / crisis 0%).
+  - TREND_mult = 1.0(시장추세 = 종목평균 `px_vs_sma50` > 0) 또는 0.4(하락 추세).
+  - VOL_mult = 0.5(vol 백분위 `vix_pctile_252d`(US)/`kospi_rv_pctile_252d`(KR) ≥ 0.8 = vol 스파이크) 또는 1.0. 추세 피처 부재 시 base × (0.4+breadth) 폴백.
+  - 근거: 17신호 포괄 스윕(KR+US 2016-2026)의 **승자**. buy&hold −44% → −18% = **drawdown 반감**(KR Calmar 0.92 / US 0.80, tests 22/22). 이게 "지수투자/시황" 노출 오버레이.
+  - ⚠️ 정직: 이는 **방어(리스크·drawdown) 개선이지 알파(선정) 개선이 아님**. EW-시장 오버레이 기준·거래비용 미모델. breadth는 여전히 보고용(price_breadth).
 - *지수투자(ETF) 주의*: 현재 ETF 인스트루먼트 없음. v1은 **"바스켓 자체가 우리의 능동적 지수"**로 보고 target_exposure로 노출 조절. 실제 지수 ETF 매수는 인스트루먼트 추가 시 별도(향후).
 
 ## 6. 실행 계층 (C) — 기술적 단일종목 타이밍
@@ -160,7 +166,7 @@ regime.daily 06:45 KST · prices/technical.score(장마감 후)
 23:00 integrated.daily: A 시황read → B 선정 → C 기술적타이밍 → D 체결/감사
 ```
 기존 ml_decisions.daily / decisions.daily는 비교·레거시로 잔존(또는 단계적 정리).
-> 주의: features.rebuild는 build_feature_matrix가 느려 23:00 전 완료가 데이터/하드웨어 의존 — 증분 빌드로 단축 예정(GAPS).
+> 주의: features.rebuild는 build_feature_matrix가 느려 23:00 전 완료가 데이터/하드웨어 의존. **2026-07-10 가속: `features_fundamental_v2` ~10x(per-panel 캐시+결정론 tie-break)·`features_advanced` ~25x(WMA/HMA/Coppock convolution 벡터화), 값 100% 불변 검증.** 단 전체 유니버스 빌드는 잔존 모듈 때문에 여전히 느림 → 소량표본/캐시 활용 권장(GAPS).
 
 ---
 

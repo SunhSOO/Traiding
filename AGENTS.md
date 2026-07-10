@@ -55,8 +55,8 @@
 | `backend/backtest/` | Replay + Re-scoring 엔진 (survivorship-bias 가드 포함) | Service (pure + DB glue) |
 | `backend/scan/` | 시그널 dry-run 엔진 (Pre-trade preview) | Service (pure) |
 | `backend/runtime/` | 봉 마감 감지, 스케줄러 (16+ 잡), 웹소켓 브로드캐스트 | Runtime |
-| `backend/routes/` | FastAPI 라우터 (26개 모듈) | UI(서버) |
-| `backend/alembic/` | DB 마이그레이션 (10개) | tooling |
+| `backend/routes/` | FastAPI 라우터 (27개 모듈) | UI(서버) |
+| `backend/alembic/` | DB 마이그레이션 (12개) | tooling |
 
 ## 운영자 도구 카탈로그
 

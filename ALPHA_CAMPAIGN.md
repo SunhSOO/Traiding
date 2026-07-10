@@ -196,6 +196,22 @@ idio-vol + 다호라이즌 residual momentum를 mn_norm 위에 추가. 2-seed/�
 - 🟡 **seed-ensemble**(3시드 rank-평균): 양시장 IC↑(US 0.0339→0.0373, KR 0.0106→0.0132)+US분산↓. 알파보다 **시드-강건성** = production-hardening 레버(실배포 시).
 - ⏭️ **10년 데이터 확장 기각**: 2016-2024 빌드 후 *공정* 테스트(동일 2018+ 평가, 학습만 2016~) → US IC 0.0396→0.0227, KR 0.0118→0.0056 **둘 다 큰폭↓**. 2016-18 다른regime이 stale-noise. **데이터-양 가설 falsified**(pooling+10년 삼중확인). 최근 regime 데이터로 충분.
 
+### 시점 15 — US 앙상블(lgbm+ridge) 도전 · 2026-07-10 (단일 split 승자 → 16폴드 walk-forward + 적대검증 기각)
+캠페인의 **시그니처 패턴 재현**: 단일 split의 화려한 승자가 엄격 검증에서 탈락.
+- **선(先)정정 — 시장별 특화가 정답(방법론)**: 초과수익(excess=상위decile−유니버스평균, 베타제거=순수 선정가치)으로 판정하니 **동일 ridge가 US=최고·KR=최악**. 프로덕션 번들은 이미 시장별 분리(라벨 US=tb/KR=mn, per-date z, top-50, |label|가중)라 *구조는 옳았고*, "한 시장 승자를 반대 시장에 대입"하는 *검증기준*만 잘못이었음(cross-market은 각 시장 excess로 판정해야).
+- 구현: `EnsembleRankModel`(횡단면 rank-average, `training/ensemble_model.py`) + `train_production.py --ensemble` 옵트인. 재학습·추론 통과(US 515종목).
+
+| 검증 단계 | ens vs lgbm | 판정 |
+|---|---|---|
+| 단일 split 2022-23(excess) | ridge/ens 압도(+1.39/+0.85% vs lgbm +0.27%) | 🟡 유망(구현 착수) |
+| 16폴드 walk-forward 2020-23 (`var/_analysis/wf_deep_US.csv`) | 평균초과 **+0.0010(무의미)** · **중앙값 −0.0071** · 폴드승률 **44%(7/16)** | ❌ wash |
+| 레짐 분해 | 양(+)갭의 **74%가 상승반등 3폴드**(제거 시 평균 −0.76pp 반전) | ❌ 레짐운빨 |
+| bear(하락 2폴드) | ridge 레그 IC **−0.24 반전** → ens −1.73% vs lgbm +1.41%(0/2승) | ❌ 베어-독성 |
+| 변동성/꼬리 축소(앙상블 유일 근거) | **2026 2개월 sweep에만 존재, walk-forward선 반전**(ens std↑·최악폴드↓·IC_IR<lgbm) | ❌ 비재현 |
+| 비용 | 진짜 앙상블 유리(턴오버 0.888<0.908) — 단 무의미한 gross갭 증폭일 뿐 | ⚠️ 기각사유 아님 |
+
+> **또 단일 split 승자(ridge/ens)가 함정.** 16폴드 walk-forward + 6-에이전트 적대검증이 엣지를 **레짐운빨·위험조정 비재현·베어 꼬리리스크**로 폭로. ridge 단독은 최약(과거 "ridge 가짜승리"와 동종). **판정(confidence=medium): US 프로덕션 = pure LightGBM 유지(양시장).** "해롭다"가 아니라 *작동모델 교체 입증책임 미달 + 베어 꼬리비용* → **저후회 기각**. 번들 롤백(`production_US.joblib.pre_ensemble` 복원, WF IC 0.246 pure lgbm, recommend 515행 정상). 앙상블 코드는 옵트인 **shadow 툴**로 보존(`--ensemble` 기본 OFF 양시장), 2024-25+실제 드로다운 폴드 축적 후 재판정.
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +
@@ -209,11 +225,15 @@ per-date 정규화** 두 레버만 살아남아 프로덕션에 반영됨. *숫�
 | **Blitz residual momentum (신규 피처)** | ✅ **활성화 완료 (2026-06-18)** |
 | **\|label\| 샘플가중 (mn_swabs)** | ✅ **활성화 완료 (2026-06-19)** |
 | **triple-barrier 라벨** | ✅ **US만 활성화 (per-market, 2026-06-20)** |
-| 그 외 전부(ridge/MLP/LSTM/xgb/cat/et/rank/winsor/conv/regime류/조잡잔차/w5/recency/decile/팩터중립화/다호라이즌/Optuna튜닝) | ❌ 기각 |
+| 그 외 전부(ridge/MLP/LSTM/xgb/cat/et/rank/winsor/conv/regime류/조잡잔차/w5/recency/decile/팩터중립화/다호라이즌/Optuna튜닝/LTR·lambdarank/**US lgbm+ridge 앙상블**) | ❌ 기각 |
 
 > **공통 4개 + US 전용 1개(tb)** 채택, 나머지 전부 기각. 번들 WF IC(라벨무관 실현수익 기준):
 > KR 0.0387→**0.0440**, US 0.0289→**0.0407**(100% 양수fold). 잔존 미테스트: meta-labeling(사이징,
 > IC외 eval), uniqueness 가중 — [GAPS.md](GAPS.md) §X.
+>
+> **시장별 특화 = 정답(2026-07-10 확정, excess로 증명)**: cross-market은 "양시장 동일승자"가 아니라 각 시장 **초과수익**(베타제거 선정가치)으로 판정 — 동일 ridge가 US-최고/KR-최악이었음. 번들의 per-market 분리(US=tb/KR=mn) 구조는 원래 옳았음. US 프로덕션은 **pure LightGBM**(앙상블 기각, 시점 15).
+>
+> **별도 축 — 방어 오버레이(TREND×VOL-SPIKE, 2026-07-09 채택)**: exposure=regime×TREND_mult×VOL_mult로 drawdown 반감(buy&hold −44%→−18%, KR Calmar 0.92/US 0.80). 이는 **선택(알파)이 아니라 위험/방어 레버**라 본 채택현황(알파)과 별개(정직: EW시장 오버레이 기준·거래비용 미모델).
 
 ### Blitz 활성화 기록 (2026-06-18)
 - 배선: `features_advanced.compute_stat_features`에 resid_mom_blitz_12m/6m 추가 + ALL_FEATURE_COLS 등록(추론 자동 보유). 15h 전체 재빌드 대신 `augment_blitz.py`로 **동일 함수·동일 SPY 프록시** 사용해 캐시에 blitz만 병합(train/infer 일관).

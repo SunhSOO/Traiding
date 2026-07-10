@@ -36,7 +36,8 @@ backend/                                 # Phase 0.1에서 도메인 폴더로 �
 ├── information/                         # 정보 분석 모듈 (Phase 2)
 ├── decision/                            # 복합 결정 엔진 (Phase 4)
 │   ├── composite.py · gates.py · sizer.py · runner.py · drift.py
-├── training/                            # 학습 (Phase 3) — numpy OLS, walk-forward
+├── training/                            # 학습 (Phase 3) — 프로덕션=시장별 순수 LightGBM(US=tb/KR=mn 라벨), walk-forward
+│   └── ensemble_model.py                # EnsembleRankModel: 옵트인 shadow 툴만 (2026-07-10 US 앙상블 검증 후 기각, 기본 OFF)
 ├── analytics/                           # Pure-function 모듈
 │   ├── attribution.py                   # F/T/I per-module Pearson r + sign accuracy
 │   └── data_quality.py                  # Gap detection + freshness scoring
@@ -49,8 +50,8 @@ backend/                                 # Phase 0.1에서 도메인 폴더로 �
 │   └── engine.py
 ├── runtime/                             # 봉마감·스케줄러·WS
 │   └── scheduler.py                     # APScheduler 16+ 잡
-├── routes/                              # FastAPI 라우터 (26개)
-├── alembic/versions/                    # DB 마이그레이션 (10개)
+├── routes/                              # FastAPI 라우터 (27개)
+├── alembic/versions/                    # DB 마이그레이션 (12개)
 ├── tests/
 │   ├── unit/                            # 520+ 테스트, 41개 파일
 │   └── integration/                     # DB 필요
@@ -132,7 +133,7 @@ D. 리스크·체결·감사  size=equity×노출×(1/n) → RiskEngine → Pape
 ```
 
 - **계정 분리(D2)**: integrated = `core-kr`/`core-us`(바스켓), 레거시 composite = `default-*`, ML = `ml-*`. 레드/그린 단일종목 매매와 계정·UX 분리.
-- **노출 오버레이(D4)**: 바스켓은 능동 인덱스. regime기준 노출(위기0·회피0.4·중립0.7·선호1.0)에 breadth로 추가 축소. ETF 미사용(v1).
+- **노출 오버레이(D4) — TREND×VOL-SPIKE 방어 (2026-07-10 채택·커밋)**: 바스켓은 능동 인덱스. `target_exposure = regime기준 노출(위기0·회피0.4·중립0.7·선호1.0) × TREND_mult × VOL_mult` (`decision/selection.py`). `TREND_mult`=시장추세(mean `px_vs_sma50`>0)면 1.0, 아니면 0.4. `VOL_mult`=시장 실현변동성 백분위(`vix_pctile_252d`/`kospi_rv_pctile_252d`)≥0.8이면 0.5, 아니면 1.0. 17신호 스윕(KR+US 2016-2026) 승자 — buy&hold 대비 **drawdown 반감(−44%→−18%)**, KR Calmar 0.92/US 0.80, test 22/22. breadth는 추세 미가용 시 폴백으로만 사용(보고는 유지). ETF 미사용(v1). **정직: 이는 방어(리스크·낙폭) 개선이지 알파(선정) 개선이 아님 — EW시장 오버레이 기준·거래비용 미모델.**
 - **데이터 모델**: `market_read`(시황 일별), `selection_basket`(바스켓 일별). 감사는 기존 `decision_audit`에 `model_version=integrated_{m}_v1` + 2단계 snapshot(selection/timing).
 - **스케줄러**: `features.rebuild.daily`(20:00 UTC, 라이브캐시 재빌드) → `integrated.daily`(23:00 UTC).
 - **UX**: `통합 전략` 섹션 — 시황(`/market`)·선정(`/basket`)·실행(`/execution`). `/api/integrated/*`. 새 방향 전용 설계.

@@ -5,8 +5,9 @@ KR (KOSPI200 + KOSDAQ150) + US (S&P500 + NASDAQ-100) 주식을 대상으로
 사이즈를 결정하는 24/7 로컬 자동매매 시스템.
 
 핵심 원칙:
-- **무료 도구 전용** — DART / EDGAR / BIGKinds / GDELT / pykrx / yfinance /
+- **무료 도구 전용** — DART / EDGAR / GDELT / yfinance(KR .KS/.KQ + US) /
   FRED / BOK ECOS / Ollama / Groq 무료 티어. 유료 데이터·LLM 금지.
+  (※ pykrx·BIGKinds는 KRX/유료 전환으로 차단 → KR 시세는 yfinance로 대체, KR 뉴스는 현재 막힘)
 - **`as_of` 강제** — 모든 데이터 조회·시그널·결정에 `as_of: datetime` 의무.
   Look-ahead bias를 코드 레벨에서 차단.
 - **시장 분리** — `(market, ticker)` 복합키 + KR/US 절대 혼합 금지 + 시장별
@@ -18,18 +19,18 @@ KR (KOSPI200 + KOSDAQ150) + US (S&P500 + NASDAQ-100) 주식을 대상으로
 
 ---
 
-## 데이터 현황 (2026-06-09 기준)
+## 데이터 현황 (2026-07-10 기준)
 
 | 영역 | 적재량 |
 |---|---|
-| 일봉 가격 | **2.06M 행** (KR 350 / US 515 종목, 2016~2026 10년) |
+| 일봉 가격 | **2.06M 행** (KR 350 / US 515 종목, 2016~2026 10년; KR 시세는 pykrx KRX 로그인월 차단 → yfinance `.KS`/`.KQ`로 전환, ~2026-07-08 최신) |
 | 재무 (DART/EDGAR) | **906K 행** — F 커버리지 KR 333/350, US 503/517 (잔여는 ETF/SPAC 구조적) |
 | 공시 | 379K (EDGAR insider/8-K/10-K/10-Q) |
 | 뉴스 | **1.44M 기사** + FinBERT 1.45M 점수 + mention 1.78M (※ 현재 ~7개월치, 10년 백필은 저장공간 확보 후 예정) |
 | 매크로 | 57개 시리즈 (금리/일드커브/TIPS/VIX/FX/원자재/신용스프레드 등) |
 | 숏볼륨·옵션·센티먼트 | short_volume 17.9M, options 513종목 스냅샷, GCAM/earnings/wiki 적재 |
 | **모듈 점수 (F/T/I)** | F 282K / T 288K / **I 67K** 행 — 3축 모두 historical 시계열 보유 |
-| 피처 | 442개 (가격/기술 50, 재무 v2 55, 정보 v2 19, cross-section 78, 매크로/cross-asset 등) |
+| 피처 | 484개 (가격/기술 50, 재무 v2 55, 정보 v2 19, cross-section 78, 매크로/cross-asset 등) |
 
 > 정보(I)축 historical은 LLM 분류(기사당 ~39초로 대량 비현실) 대신 전 뉴스 FinBERT 점수를
 > 집계하는 `scripts/backfill_information_history.py`로 산출. 자세한 수집 이력은
@@ -39,11 +40,21 @@ KR (KOSPI200 + KOSDAQ150) + US (S&P500 + NASDAQ-100) 주식을 대상으로
 > 횡단면 cross-sectional 모델(`backend/scripts/train_production.py`,
 > `decision/production_inference.py`)을 다regime walk-forward로 검증 중. 현재 검증된
 > 검증·활성화된 레버 **4개**: ①시장중립 잔차 라벨(mn) ②per-date 횡단면 정규화 ③Blitz residual
-> momentum ④|label| 샘플가중. 번들 walk-forward IC: KR +0.044 / US +0.031(누적). 그 외 수십 종
-> (ridge/MLP/LSTM/XGB/CatBoost/regime류/팩터중립화/다호라이즌 등)은 IC·집중도·cross-market·bear로 전부 기각.
+> momentum ④|label| 샘플가중(+ US 전용 triple-barrier(tb) 라벨). 번들 walk-forward IC(라벨무관 실현 mn수익 기준, tb 반영 후): KR +0.044 / US +0.041. 그 외 수십 종
+> (ridge/MLP/LSTM/XGB/CatBoost/regime류/팩터중립화/다호라이즌, **lgbm+ridge 앙상블** 등)은 IC·집중도·cross-market·bear·walk-forward로 전부 기각.
 > 전 기법 battery는 [GAPS.md](GAPS.md) §X, 일자별 상세는 [WORK_LOG.md](WORK_LOG.md),
 > **검증 기준을 더할 때마다 랭킹이 뒤집힌 시간순 연대기**는 [ALPHA_CAMPAIGN.md](ALPHA_CAMPAIGN.md) 참고.
 > 캠페인 승자가 운영 결정 경로로 승격되면 본 문서의 잡/방법론 설명을 갱신.
+>
+> **(2026-07-10 갱신)** ① **방어 오버레이 채택**(`backend/decision/selection.py`, 커밋됨) — TREND×VOL-SPIKE
+> 노출 필터(exposure = 레짐base × TREND_mult × VOL_mult; 시장 추세가 음(mean px_vs_sma50>0 실패)이면 0.4, vol 백분위(vix_pctile_252d /
+> kospi_rv_pctile_252d)≥0.8이면 0.5). 17신호 포괄 스윕(KR+US 2016-26)의 승자로, buy&hold 대비 **드로다운 반감**
+> (−44%→−18%, KR Calmar 0.92 / US 0.80, test 22/22). 이는 **방어(리스크·드로다운) 개선이지 알파(선정) 개선이 아님**(EW시장 오버레이 기준·거래비용 미모델).
+> ② **시장별 특화가 정답**(방법론 판정) — 레버 평가는 시장별 **초과수익**(상위decile − 유니버스평균 = 베타 제거한 순수 선정가치)으로 봐야 하며
+> "한 시장 승자를 반대 시장에 강제"하는 검증 기준은 부적절(동일 ridge가 US=최고/KR=최악). 프로덕션 번들은 이미 시장별 분리(라벨 US=tb/KR=mn 등)라 구조는 옳았음.
+> ③ **US lgbm+ridge 앙상블 = 기각**(구현·재학습까지 갔으나 16폴드 walk-forward + 6-에이전트 적대검증에서 엣지가
+> 레짐운빨·비재현·베어독성으로 판명; `backend/training/ensemble_model.py`는 옵트인 shadow 툴로 보존, 기본 OFF 양시장).
+> **∴ US 프로덕션 = pure LightGBM 유지(양 시장), 번들 롤백(WF IC 0.246 pure lgbm).**
 
 ---
 
@@ -85,7 +96,7 @@ psql -U postgres -c "CREATE DATABASE woonam OWNER woonam;"
 # TimescaleDB 확장 (시계열 테이블용)
 psql -U postgres -d woonam -c "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;"
 
-# 스키마 마이그레이션 (11개 revision)
+# 스키마 마이그레이션 (12개 revision)
 uv run alembic upgrade head
 ```
 
@@ -236,7 +247,7 @@ backend/
 ├── scan/                       # 시그널 스캔 dry-run engine
 ├── runtime/                    # APScheduler (19개 잡)
 ├── routes/                     # FastAPI 라우터 (27개)
-├── alembic/                    # DB 마이그레이션 (11개)
+├── alembic/                    # DB 마이그레이션 (12개)
 └── tests/
     ├── unit/                   # 41개 파일, 520+ 테스트
     └── integration/            # DB 필요

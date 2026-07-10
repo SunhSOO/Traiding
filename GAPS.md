@@ -17,6 +17,22 @@
 
 이 섹션은 *지금까지 구축한 모든 것*. 카테고리별 상세는 A-W 섹션 참조.
 
+### 0.0 최신 상태 스냅샷 (2026-07-10) — 브랜치 woonam-auto-trading
+
+> 이 문서가 마지막 갱신된 이후의 변화 요약. 일자별 상세 근거는 WORK_LOG.md 2026-07-06~10 참조.
+> 전제(불변): 무료데이터 전용 · KR(KOSPI200+KOSDAQ150)+US(S&P500+NASDAQ100) · honesty-first(미측정=proposed).
+> **아직 "믿고 돈 넣는 수익기계" 아님** — 실전 전 페이퍼 관측 필수(KIS/Alpaca 미연결).
+
+- ✅ **KR 시세 피드 복구(yfinance)** — pykrx는 KRX 로그인월 차단 → yfinance(.KS=KOSPI/.KQ=KOSDAQ suffix + fallback)로 교체. KR 가격 최신(~2026-07-08, ~347종목). insert psycopg 65535 파라미터 한계 버그를 청킹(~4000행 upsert)으로 픽스. 파일: `backend/data/price/kr_prices.py`+`loader.py`. **단 KR 뉴스는 여전히 차단**(KRX/BIGKinds 유료월).
+- ✅ **파이프라인 ~10-25배 가속(값 100% 불변, 검증됨)** — `features_fundamental_v2` ~10배(per-panel attrs 캐시 + 결정론 [as_of_ts, period_end] tie-break), `features_advanced` ~25배(WMA/HMA/Coppock를 rolling.apply→np.convolve). ※전체 유니버스 빌드는 여전히 느림(타 모듈 잔존) → 소량표본/캐시 권장.
+- ✅ **방어 오버레이 채택·커밋 — TREND×VOL-SPIKE** (`backend/decision/selection.py`): exposure = regime_base × TREND_mult × VOL_mult. TREND_mult=1.0(시장추세 mean px_vs_sma50>0) else 0.4; VOL_mult=0.5(vix_pctile_252d/kospi_rv_pctile_252d ≥ 0.8) else 1.0. 17신호 포괄 스윕(KR+US 2016-2026) 승자. **drawdown 반감(buy&hold −44%→−18%)**, KR Calmar 0.92/US 0.80, test 22/22. **방어(리스크/드로다운) 개선이지 알파(선정) 개선 아님.** 정직: EW시장 오버레이 기준·거래비용 미모델.
+- ✅ **시장별 특화가 정답(방법론 판정)** — 레버 판정은 시장별 *초과수익*(상위decile−유니버스평균 = 베타제거 순수 선정가치)로 해야 함. "한 시장 승자가 반대 시장도 이겨야 한다"는 교차일반화 요구는 잘못. 증명: 동일 ridge가 US=최고/KR=최악. 프로덕션 번들은 이미 시장별 분리(라벨 US=tb/KR=mn, per-date z, top-50, |label|가중) — 구조는 맞았고 *검증 기준*만 틀렸었음.
+- ⏭️ **US 앙상블(lgbm+ridge) 구현·엄격검증 → 기각(2026-07-10)** — 단일 2022-23 split이 ridge/앙상블 우위로 보여 구현(`training/ensemble_model.py`의 `EnsembleRankModel`, `train_production.py --ensemble` 플래그)+US 재학습까지 진행. 그러나 16폴드 walk-forward(`var/_analysis/wf_deep_US.csv`)+6-에이전트 적대검증이 기각: ens−lgbm 평균 초과 +0.0010(무의미)/중앙값 −0.0071/폴드승률 44%; 양갭의 74%가 상승반등 3폴드(레짐운빨); 베어-독성(하락 폴드서 ridge IC −0.24로 반전 → ens −1.73% vs lgbm +1.41%). **판정: US 프로덕션 = pure LightGBM(양시장).** 번들 롤백(`production_US.joblib.pre_ensemble` 복원, WF IC 0.246 pure lgbm). 앙상블 코드는 **옵트인 shadow 툴로 보존**(기본 OFF 양시장), 2024-2025+실 드로다운 폴드 축적 후 재판정. confidence=medium. ⚠️ **"채택 대기 US 엣지 레버"가 아니라 기각 상태**(honesty-first).
+- ⚠️ **정직 현황 — US 알파 디케이**: 가장 최근 미지 구간(2025-26) 선정 IC≈0. 단 횡단면 dispersion은 높음(2026 ~11.6%)이라 기회는 있으나 모델이 못 잡음 = 진짜 디케이(기계적 저분산 아님). 완화=주간 재학습(`training.weekly` ON). 신규 7신호 클러스터는 in-sample(2018-24) KR 개선했으나 엄격 2025-26 holdout선 중립(일반화 미확인).
+- ⬜ **드리프트 모니터 여전히 OFF** — `mlops.drift_check`/`mlops.retrain` 비활성 → 디케이 자동감지/알림 부재, **활성화 권장**.
+- 📊 **최신 카운트 정정**: `ALL_FEATURE_COLS`=**484**(US 캐시엔 교집합 후 ~476 present), alembic 리비전=**12**, routes=**27**. (이전 문서의 442피처/11리비전 표기는 stale.)
+- 🔌 **실전 연결 상태**: PaperBroker(모의 주식)만 연결. MT5는 FX/gold 전용(dry_run/live 게이트). KIS(KR)/Alpaca(US) 어댑터 미구축. 페이퍼 관측이 실전 선결조건.
+
 ### 0.1 Phase 0 — 기반 인프라 (Sprint 2026-05-26~05-29)
 - ✅ PostgreSQL 16 + 27 테이블 + alembic 0001~0011 마이그레이션
 - ✅ FastAPI lifespan 부트스트랩 (woonam 운영자 + default-kr/-us paper account)
@@ -1576,6 +1592,7 @@ Sector 별로 다른 cross-asset 의존성:
 - ✅ **LGBM 유지 (최적)** | ⏭️ 앙상블(±15)/Ridge(기각)/MLP·wide·ens(기각)
 - ⏭️ **Wave2 기각(2026-06-17)**: XGBoost(US IC 0.019<mn_norm), CatBoost(US IC 0.030 좋으나 KR 분산±14 불안정), ExtraTrees(수익 21.7이나 IC 0.008/46%=선택능력0 함정), ENet/Lasso(선형 열세). GBDT+정규화가 모델클래스 최적 확정.
 - ⏭️ **Learning-to-rank(lambdarank) 기각(2026-06-23)**: 목적함수 정합(랭킹) 가설로 시도. US 평균 IC↑(0.0339→0.0442, 수익 45%/저분산)지만 **위험지표 전부 악화**(IC+% 49%<동전, conc5 85↑, MDD -31.8↓) + **KR IC 음수(-0.0248)/분산±11.75 파탄**. NDCG가 top-rank 공격적 베팅 → 소수fold 의존+작은 noisy KR서 anti-skill. IC+%·conc5(few-fold artifact 탐지기)가 적발. 회귀+abslabel(swabs)이 robust. *좋은 발굴이었으나 경험적 기각.*
+- ⏭️ **US 앙상블(lgbm+ridge) 기각(2026-07-10)**: 단일 2022-23 split은 ridge/앙상블 우위(excess +1.39/+0.85% vs lgbm +0.27%)였으나, 16폴드 walk-forward(`var/_analysis/wf_deep_US.csv`)+6-에이전트 적대검증서 **ens−lgbm 평균 +0.0010(무의미)/중앙값 −0.0071/폴드승률 44%** + 베어-독성(하락폴드 ridge IC −0.24 반전 → ens 0/2승). 양갭 74%가 상승반등 3폴드 = 레짐운빨. **US 프로덕션 = pure LightGBM 유지**(번들 `.pre_ensemble` 롤백, WF IC 0.246). 코드는 `train_production.py --ensemble` 옵트인 shadow로 보존(기본 OFF). `training/ensemble_model.py`. confidence=medium. (§0.0 참조)
 - ⏭️ LSTM/TFT 기각/저우선(딥 실패)
 
 ### C2. 재점검서 발굴한 미테스트 (2026-06-23, "다 찾았나?" 2차 push)
