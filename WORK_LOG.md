@@ -1477,3 +1477,27 @@ direction-test는 **breadth 하나**만 봤음(평균회귀 IC −0.14). 사용�
   - **US**: ridge **+0.071** > 앙상블 **+0.075(최고, IC_IR 0.47)** >> lgbm 0.038 > catboost −0.015 → **US는 ridge/앙상블이 현 LGBM을 이김(IC 거의 2배)!**
 - **∴ US 엣지 레버 발견: lgbm+ridge 앙상블(또는 ridge).** 단 (a)단일 split이라 walk-forward 확인 필요, (b)과거 "ridge 가짜승리"(IC≈0+수익=틸트) 교훈 있으나 여기선 IC가 진짜 양수(+0.071)라 다름 — 그래도 walk-forward로 재확인 후 채택 결정.
 - **다음 할 일 갱신**: (1)~~US 모델비교~~ 완료. (2)**US ridge/앙상블 walk-forward 검증**(backtest_integrated에 model_kind 옵션 없으면 하네스 필요; multi_trainer는 ensemble 지원) → 이기면 US 프로덕션을 앙상블로 전환. (3)라벨/호라이즌·피처서브셋 등 미시도 엣지.
+
+---
+
+## 2026-07-10 (금) — 시장별 특화 판정 + US 앙상블 엄격검증 → **기각(pure lgbm 유지)**
+
+근거: `training/ensemble_model.py`(신규 래퍼), `scripts/train_production.py`(--ensemble 옵트인), `var/_analysis/{excess_split,excess_recent_us,wf_deep_us,walk_forward_models}.py`, 검증 워크플로 `scratchpad/us_model_verdict_wf.js`(6-에이전트 적대검증), CSV `var/_analysis/wf_deep_US.csv`.
+
+### 방법론 판정 (사용자 질의: KR/US 교차일반화 요구가 잘못 아닌가?)
+- ✅ **옳음 — 시장별 특화가 정답.** 초과수익(excess=상위decile−유니버스평균, 베타제거=순수 선정가치)으로 증명: **동일 ridge 모델이 US=최고/KR=최악**. 프로덕션 번들은 이미 시장별 분리(라벨 US=tb/KR=mn, 정규화 등)라 구조는 맞았고, "한 시장 승자를 반대 시장에 대입"하는 *검증 기준*만 부적절했음.
+
+### US 앙상블(lgbm+ridge) — 구현·엄격검증·기각
+- 구현: `EnsembleRankModel`(횡단면 rank-average, joblib 피클, ridge 브랜치 `_prep`로 NaN/inf→0). 번들 `rank_model` 슬롯 그대로 → recommender 무변경. 재학습+추론 검증 통과(515종목 정상).
+- **단일 split은 상충**: 2022-23(excess_split) ridge/ens 압도(+1.39/+0.85% vs lgbm +0.27%) ↔ 최근 2026(excess_recent_us) **lgbm이 raw 초과수익·IC 최고**, ens는 Sharpe/적중률만 개선.
+- **강건검증 = 16폴드 walk-forward(2020-2023, wf_deep_US.csv) + 6-에이전트 적대검증**(레짐/비용/일관성/강건성 렌즈 → 적대 → 종합):
+  - ens−lgbm 평균 초과수익 **+0.0010(무의미)**, **중앙값 −0.0071**, 폴드승률 **7/16=44%**(동전던지기 이하).
+  - **레짐-운빨**: 양(+)갭의 74%가 상승반등 3폴드(2020-04,2020-07,2022-07). 제거 시 평균 −0.76pp로 반전.
+  - **베어-독성**: 하락 2폴드(2022-01/04)서 ridge 레그 IC가 −0.24로 반전 → ens −1.73% vs lgbm +1.41%(0/2승). 드로다운 구간서 정확히 더 나쁨.
+  - 앙상블 유일 근거(변동성/꼬리 축소)는 **2026 2개월 sweep에만 존재**하고 walk-forward에선 **반전**(ens가 오히려 std 3.65%>3.19%, 최악폴드 −4.54%<−4.11% 더 깊음, IC_IR·Exc_IR 모두 lgbm 미만).
+  - 비용렌즈는 **진짜로 앙상블 유리**(턴오버 0.888<0.908, 순-Sharpe 우위 10→60bps서 +0.011→+0.087 확대) — 단 이는 무의미한 gross 갭을 증폭할 뿐. **∴ 기각 사유는 비용아님, 레짐운빨+위험조정 비재현+꼬리리스크.**
+  - 강건성: (alpha×w) 표면은 alpha 무관 평탄(w=0.5 Sharpe 5.81-5.92) — 과적합은 아니나, 개선 자체가 재현 안 되므로 무의미. ridge 단독은 최약(60bps서 순-Sharpe 음수, 베어 IC −0.24).
+- **판정(정직, confidence=medium): US 프로덕션 = pure LightGBM 유지.** 앙상블은 "해롭다"가 아니라 "작동모델 교체 입증책임 미달 + 베어 꼬리비용" → **저후회 기각**. 배포 번들 롤백(`production_US.joblib.pre_ensemble`→복원, WF IC 0.246 pure lgbm 확인, recommend 515행 정상). KR은 애초 pure lgbm(불변).
+- **앙상블 코드는 옵트인 shadow 툴로 보존**(`train_production.py --ensemble`, 기본 OFF 양시장). 향후 2024-2025+실제 드로다운 폴드 축적 후 재판정 권장(shadow/저-ridge-weight 병행).
+
+> **세션 종합(정직): 사용자 "시장별 특화" 직관은 옳았고 초과수익으로 증명함. US 앙상블은 구현·재학습까지 갔으나 16폴드 walk-forward+적대검증에서 엣지가 레짐운빨·비재현·베어독성으로 드러나 기각 — pure lgbm 유지. 이는 "이정도면 되겠지"를 거부하고 끝까지 측정해 취사선택한 결과([[feedback_no_complacency]]). 시스템은 여전히 실전 전 페이퍼 관측 필수.**

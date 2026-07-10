@@ -33,8 +33,10 @@ import pandas as pd
 import lightgbm as lgb
 import joblib
 from scipy.stats import spearmanr
+from sklearn.linear_model import Ridge
 
 from scripts.train_lgbm import ALL_FEATURE_COLS
+from training.ensemble_model import EnsembleRankModel
 
 RANK_TARGET = "rank_fwd_21d"
 RET_TARGET = "ret_fwd_21d"
@@ -79,9 +81,24 @@ def main() -> None:
                     help="training target. Default is per-market VALIDATED choice: US=tb "
                          "(triple-barrier, bundle WF IC 0.031->0.041, 100%% +folds), KR=mn "
                          "(market-neutral; tb hurts KR 0.044->0.033). Override to force.")
+    ap.add_argument("--ensemble", dest="ensemble", action="store_true", default=None,
+                    help="wrap the rank model as a lgbm+ridge cross-sectional rank-average. "
+                         "OPT-IN / OFF by default (both markets): the robust 16-fold walk-forward "
+                         "+ adversarial review (2026-07-10) found the US ensemble edge regime-lucky "
+                         "(74%% of the gap from 3 bull folds), a wash-to-negative at the median, and "
+                         "bear-toxic (ridge IC inverts in stress) — NOT adopted. Kept for shadow eval.")
+    ap.add_argument("--no-ensemble", dest="ensemble", action="store_false",
+                    help="force pure LightGBM rank model (this is the default).")
+    ap.add_argument("--ridge-alpha", type=float, default=10.0,
+                    help="Ridge L2 strength for the ensemble branch when --ensemble (default 10.0).")
     args = ap.parse_args()
     if args.label is None:   # per-market validated label (2026-06-20, label-agnostic WF IC)
         args.label = "tb" if args.market == "US" else "mn"
+    if args.ensemble is None:   # DEFAULT OFF both markets. The 2026-07-10 robust
+        # 16-fold walk-forward + 6-agent adversarial review rejected the US ensemble
+        # (regime-lucky / non-replicated risk-adj / bear-toxic). Pure lgbm retained;
+        # --ensemble stays available for shadow evaluation only.
+        args.ensemble = False
     if args.norm_mode is None:   # zscore both markets. (A/B/C 2026-06-23: KR winsor
         # raised alpha_lab IC but bundle WF IC was a wash 0.0405<0.0440 — harness-
         # specific, not adopted. --norm-mode winsor kept for experimentation.)
@@ -166,10 +183,16 @@ def main() -> None:
         wte = df[(df["date"] > cut_tr) & (df["date"] <= blocks[i].max())]
         if len(wte) < 200:
             continue
+        wsw = np.abs(wtr[target].values) if sw_on else None
         m = lgb.LGBMRegressor(**base)
-        m.fit(wtr[topk].astype(float), wtr[target].astype(float),
-              sample_weight=np.abs(wtr[target].values) if sw_on else None)
+        m.fit(wtr[topk].astype(float), wtr[target].astype(float), sample_weight=wsw)
         p = m.predict(wte[topk].astype(float))
+        if args.ensemble:   # report the IC of what actually ships (lgbm+ridge)
+            rg = Ridge(alpha=args.ridge_alpha).fit(
+                EnsembleRankModel._prep(wtr[topk].astype(float)),
+                wtr[target].astype(float), sample_weight=wsw)
+            pr = rg.predict(EnsembleRankModel._prep(wte[topk].astype(float)))
+            p = pd.Series(p).rank().values + pd.Series(pr).rank().values
         # IC reference = realized market-neutral return (label-agnostic, tradeable),
         # NOT the training target — so the metric stays comparable across label choices.
         wf_ics.append(spearmanr(p, wte["mn_fwd_21d"].values).correlation)
@@ -183,6 +206,16 @@ def main() -> None:
     # 3) Final deployable rank model on ALL data (latest info included).
     rank_model = lgb.LGBMRegressor(**base)
     rank_model.fit(df[topk].astype(float), df[target].astype(float), sample_weight=sw_full)
+    if args.ensemble:
+        # US: rank-average with a linear Ridge — validated to add cross-sectional
+        # excess the tree misses (var/_analysis/excess_split.py). KR stays pure lgbm.
+        ridge = Ridge(alpha=args.ridge_alpha)
+        ridge.fit(EnsembleRankModel._prep(df[topk].astype(float)),
+                  df[target].astype(float), sample_weight=sw_full)
+        rank_model = EnsembleRankModel(rank_model, ridge)
+        print(f"[prod] rank model = ENSEMBLE lgbm+ridge(alpha={args.ridge_alpha})", flush=True)
+    else:
+        print("[prod] rank model = LightGBM (pure)", flush=True)
 
     # 4) Quantile models for target price + CQR conformal Q.
     qmodels = {}
@@ -207,6 +240,8 @@ def main() -> None:
         "normalize": ("cross_section_zscore" + ("_winsor" if args.norm_mode == "winsor" else "")) if normalize else None,
         "sample_weight": "abs_mn_label" if sw_on else None,
         "label": args.label,
+        "rank_model_kind": ("ensemble_lgbm_ridge" if args.ensemble else "lgbm"),
+        "ridge_alpha": (args.ridge_alpha if args.ensemble else None),
         "feature_cols": topk, "rank_model": rank_model,
         "quantile_models": qmodels, "conformal_Q": Q, "alpha": args.alpha,
         "metrics": {"rank_ic_walkfwd_mean": rank_ic, "rank_ic_walkfwd_std": rank_ic_std,
