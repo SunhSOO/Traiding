@@ -222,6 +222,15 @@ idio-vol + 다호라이즌 residual momentum를 mn_norm 위에 추가. 2-seed/�
 > **swabs_neu = winsor·ensemble과 동종 함정**: rank-IC는 진짜 올랐으나(0.0152→0.0229) **실제 롱하는 top-decile의 excess는 오히려 악화**(−71bp, 15폴드 중 4폴드만 baseline 승). IC 상승이 *전체 횡단면 순위*엔 있지만 *거래 바스켓*엔 없음. **⚠️ 번들 자체의 WF-IC(rank-IC) 지표로 판정했다면 오채택했을 것 — 채택 판정은 반드시 top-decile excess로.** mnmh는 IC조차 하락. **∴ 둘 다 기각, KR도 baseline(순수 lgbm) 유지.** 재검(harness `var/_analysis/wf_kr_levers.py`).
 > **의의**: "알파 닫힘"이 이제 *옛 교차-일반화 가정*이 아니라 *시장별 강건 excess 재검증*으로 획득됨. 시장갈림 기각의 대부분은 애초 가짜승리였고, 진짜 IC 상승(swabs_neu)조차 거래지표선 무효.
 
+### 시점 17 — 알파 성장 로드맵(4렌즈+적대가지치기) + 첫 강건 생존자 발견 · 2026-07-10
+"모델 공간은 소진, 알파의 원천은 데이터/구조"라는 §6 전제 하에 4렌즈 발산생성→적대 가지치기. **C4(US 감쇠 해부)**: 상/하위 decile + 시장중립 스프레드 분해 → US "감쇠"는 **미결론**(2025-26 top-decile excess 겉보기 +1.02%이나 2026-02~04 꼬리집중, IC≈0, 스테일 6yr모델). ⇒ 감쇠-대응 모델 미정당, 진짜 병목 = **2024-25 데이터갭**(연속 재학습 백테스트 불가). **B5(순비용 rank 평활)** = 세션 **첫 강건 생존자**:
+| B5: EWMA(rank) 평활 | grossExc | 턴오버 | netExc | winVsRaw | 판정 |
+|---|---|---|---|---|---|
+| US raw / ewma0.3 | +1.14% → +0.66% | 0.81→0.54 | +0.99% → +0.56% | **38%** | ❌ US는 평활이 신호 stale화(모멘텀-clean) |
+| **KR raw / ewma0.5** | +1.18% → **+2.21%** | 0.86→0.62 | +0.70% → **+1.86%** | **69%** | ✅ **KR 채택후보**(gross+net 동시↑) |
+> **✅ KR EWMA rank 평활(α≈0.5) = 첫 강건 생존자.** 16폴드 중 **11폴드서 raw 초과**(gross·net 모두), **best-2 폴드 제외해도 +0.45%**(C4·ensemble이 죽은 바로 그 집중검사 통과), **top-decile excess로 판정(신기루 아님)**. 기전=KR 신호가 노이지·반전성↑ → 이름별 rank를 시점간 EWMA로 **temporal 앙상블**하면 de-noise(gross↑)+턴오버↓(net↑). **US는 반대(평활이 해로움)** = 하네스가 무분별 채택 아님을 증명 + 시장별특화 재확인. 정직 유보: in-sample(2020-23), 특히 gross de-noise 효과는 라이브 확인 필요. 채택엔 **stateful 프로덕션 배선**(recommender가 사이클간 per-ticker EWMA rank 유지) 필요. harness `var/_analysis/{decay_decomp_us,wf_b5_smoothing}.py`.
+> **로드맵 나머지**: 최대 상방=뉴스 I축(데이터게이트~8-10월)+2024-25갭 채우기; 구조베팅(레짐/규모 분할모델)은 C4가 감쇠 측정불가로 판정해 보류.
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +
