@@ -230,6 +230,8 @@ idio-vol + 다호라이즌 residual momentum를 mn_norm 위에 추가. 2-seed/�
 | **KR raw / ewma0.5** | +1.18% → **+2.21%** | 0.86→0.62 | +0.70% → **+1.86%** | **69%** | ✅ **KR 채택후보**(gross+net 동시↑) |
 > **✅ KR EWMA rank 평활(α≈0.5) = 첫 강건 생존자.** 16폴드 중 **11폴드서 raw 초과**(gross·net 모두), **best-2 폴드 제외해도 +0.45%**(C4·ensemble이 죽은 바로 그 집중검사 통과), **top-decile excess로 판정(신기루 아님)**. 기전=KR 신호가 노이지·반전성↑ → 이름별 rank를 시점간 EWMA로 **temporal 앙상블**하면 de-noise(gross↑)+턴오버↓(net↑). **US는 반대(평활이 해로움)** = 하네스가 무분별 채택 아님을 증명 + 시장별특화 재확인. 정직 유보: in-sample(2020-23), 특히 gross de-noise 효과는 라이브 확인 필요. 채택엔 **stateful 프로덕션 배선**(recommender가 사이클간 per-ticker EWMA rank 유지) 필요. harness `var/_analysis/{decay_decomp_us,wf_b5_smoothing}.py`.
 > **로드맵 나머지**: 최대 상방=뉴스 I축(데이터게이트~8-10월)+2024-25갭 채우기; 구조베팅(레짐/규모 분할모델)은 C4가 감쇠 측정불가로 판정해 보류.
+>
+> **⚠️ 정정(같은 날, 배선 전 재검증): KR EWMA는 강건 생존자가 아니었음 — 미채택.** 위 "첫 강건 생존자"는 **단일 seed** 결과였고, 배선 전 **3-seed × α-스윕 재검증**(`var/_analysis/wf_b5_kr_robust.py`)서 무너짐: 위의 raw net +0.70%가 **약한 seed 뽑기**였고, 3-seed 평균 raw net은 **+1.43%**(≈ewma). α=0.5 net +1.63% vs raw +1.43% = **미미**, **winVsRaw 전 α서 ≤52%**(동전), **seed 불일치**(α0.5서 seed1은 raw보다 손해 +0.92 vs +1.39), H2선 raw가 우위. 채택바(대부분 α서 net>raw·win>50%·양 half·전 seed 동의) **전부 실패**. **∴ 미채택, 배선 취소.** 턴오버 감소(0.86→0.5-0.6)는 실재하나 순효과는 seed노이즈 내. **교훈: 단일-run "승자"도 seed 아티팩트일 수 있다 — 배선 전 seed/α/기간 재검증이 그것을 잡았다**(swabs_neu의 rank-IC 신기루 다음가는 함정 유형).
 
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·

@@ -1516,3 +1516,10 @@ direction-test는 **breadth 하나**만 봤음(평균회귀 IC −0.14). 사용�
 - **C4 — US 감쇠 해부**(`var/_analysis/decay_decomp_us.py`): 상/하위 decile+시장중립 스프레드 분해. 2025-26 top-decile excess 겉보기 +1.02%/스프레드 +1.15%이나 **월별로 2026-02~04 꼬리집중**(첫 7개월 flat/음수), IC≈0, 6yr 스테일모델. **⇒ 미결론**(감쇠가 고칠수있는 틸트인지 스킬소멸인지 불명), 감쇠-대응 모델(레짐/규모분할) **미정당**. **진짜 병목 = 2024-25 데이터갭**(연속재학습 백테스트 불가). 드리프트모니터는 rank-IC 아닌 **top-decile excess 추적**해야(IC가 오경보).
 - **B5 — 순비용 rank 평활**(`var/_analysis/wf_b5_smoothing.py`, EWMA(rank) 후 top-decile, net=gross−턴오버×2×cost): **세션 첫 강건 생존자.** **US 해로움**(gross +1.14→+0.66, winVsRaw 38%, 모멘텀신호 stale화) / **KR 강건 채택후보**: ewma0.5서 gross +1.18→**+2.21%**, net +0.70→**+1.86%**, Sharpe 0.45→1.00, **winVsRaw 69%(11/16폴드)**, **best-2 제외해도 +0.45%**(C4·ensemble 죽인 집중검사 통과), top-decile excess 판정(신기루 아님). 기전=KR 신호 노이지·반전성→temporal rank 앙상블이 de-noise+턴오버↓. US반대=하네스 discriminate 증명+시장별특화 재확인.
 - **정직 유보**: in-sample(2020-23), gross de-noise 효과 라이브확인 필요. 채택엔 **stateful 배선**(recommender가 사이클간 per-ticker EWMA rank 유지) 필요 — 아직 미배선(코드 무변경). **알파성장의 진짜 축 = 데이터프론티어(뉴스 I축 백필~8-10월 + 2024-25갭)**, 모델영리함 아님. (연대기: ALPHA_CAMPAIGN 시점 17)
+
+### 정정(2026-07-10, 배선 전 재검증): **KR EWMA 미채택 — 단일 seed 아티팩트였음**
+사용자 "모두 다 수행" 지시로 배선 전 재검증 실시. **KR EWMA는 강건하지 않았음**(`var/_analysis/wf_b5_kr_robust.py`, 3-seed×7α×16폴드):
+- 위 B5 raw net +0.70%가 **약한 seed 뽑기**. 3-seed 평균 **raw net +1.43%**(≈ewma). α=0.5 net +1.63% vs raw +1.43% = **미미**, **winVsRaw ≤52% 전 α**(동전), α=0.5서 **seed1은 손해**(+0.92<raw +1.39), H2선 raw 우위. 채택바 전부 실패 → **미채택, stateful 배선 취소.**
+- **교훈**: 단일-run "승자"도 seed 아티팩트 가능 → 배선 전 seed/α/기간 재검증 필수(이번에 그것이 오배선을 막음). swabs_neu의 rank-IC 신기루에 이은 두 번째 함정 유형.
+- **데이터갭 채우기(#2) 완료(US)**: `var/_bt_period_US_2023-06-01_2026-07-01.parquet`(388k행, ~52분). US 2018-2026 **연속 커버리지 확보** → 이제 감쇠 연속-재학습 walk-forward(C4 진짜답)+최근창 재검증 가능. KR 갭빌드 진행중.
+- **세션 순 결론(정직)**: 이 세션 실험 레버(swabs_neu·ensemble·mnmh·US평활·KR평활) **전부 강건검증서 탈락**. 알파 성장은 모델/실험이 아니라 **데이터 프론티어**(방금 US 갭 채움)에 있음이 재확인.
