@@ -1501,3 +1501,12 @@ direction-test는 **breadth 하나**만 봤음(평균회귀 IC −0.14). 사용�
 - **앙상블 코드는 옵트인 shadow 툴로 보존**(`train_production.py --ensemble`, 기본 OFF 양시장). 향후 2024-2025+실제 드로다운 폴드 축적 후 재판정 권장(shadow/저-ridge-weight 병행).
 
 > **세션 종합(정직): 사용자 "시장별 특화" 직관은 옳았고 초과수익으로 증명함. US 앙상블은 구현·재학습까지 갔으나 16폴드 walk-forward+적대검증에서 엣지가 레짐운빨·비재현·베어독성으로 드러나 기각 — pure lgbm 유지. 이는 "이정도면 되겠지"를 거부하고 끝까지 측정해 취사선택한 결과([[feedback_no_complacency]]). 시스템은 여전히 실전 전 페이퍼 관측 필수.**
+
+### 추가(2026-07-10): "시장갈림 기각" 레버 per-market 재감사 → 후보 2개도 강건바서 기각
+사용자 지적("교차기각된 레버 중 한쪽 시장선 진짜 작동한 게 있지 않나?")은 정당 — "알파 닫힘"을 옛 교차프레임으로 판단했던 오류 정정. 전수감사(~30레버, 진짜IC/excess vs 가짜raw수익 구분): **시장갈림 진짜후보 = 2개, 둘 다 KR**(US=0). 나머지는 per-market서도 정당히 닫힘(winsor/catboost/Optuna/ridge/LTR/LSTM/et=가짜or레짐운빨, resid_mom=Blitz흡수, tb=이미 US채택).
+- **KR 강건 재검증**(`var/_analysis/wf_kr_levers.py`, 15폴드 walk-forward top-decile EXCESS = ensemble 죽인 바):
+  - baseline(mn+z): excess **+1.52%**/ExcSharpe **1.29**/Exc>0% **73%**.
+  - **swabs_neu**(β중립+|label|): rank-IC는 진짜↑(0.0152→**0.0229**)이나 **top-decile excess 악화 +0.80%(−71bp)**, winVsBase 27%(4/15), Sharpe 0.66 → **기각**. = winsor·ensemble과 동종 **rank-IC 신기루**(순위개선이 거래바스켓엔 없음).
+  - **mnmh**(5/21/63d 라벨, embargo=63): IC조차↓(0.0099), excess +0.93%/win 33% → **기각**.
+- **⚠️ 메타경고**: 번들 자체 WF-IC(rank-IC) 지표로 판정했다면 swabs_neu 오채택했을 것 → **레버 채택 판정은 반드시 top-decile excess로.**
+- **∴ KR도 baseline(순수 lgbm) 유지.** "알파 닫힘"이 이제 *가정*이 아니라 *시장별 강건 excess 재검증*으로 획득됨. 프로덕션 무변경. (연대기: ALPHA_CAMPAIGN 시점 16)

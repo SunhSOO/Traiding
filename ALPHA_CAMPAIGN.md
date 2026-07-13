@@ -212,6 +212,16 @@ idio-vol + 다호라이즌 residual momentum를 mn_norm 위에 추가. 2-seed/�
 
 > **또 단일 split 승자(ridge/ens)가 함정.** 16폴드 walk-forward + 6-에이전트 적대검증이 엣지를 **레짐운빨·위험조정 비재현·베어 꼬리리스크**로 폭로. ridge 단독은 최약(과거 "ridge 가짜승리"와 동종). **판정(confidence=medium): US 프로덕션 = pure LightGBM 유지(양시장).** "해롭다"가 아니라 *작동모델 교체 입증책임 미달 + 베어 꼬리비용* → **저후회 기각**. 번들 롤백(`production_US.joblib.pre_ensemble` 복원, WF IC 0.246 pure lgbm, recommend 515행 정상). 앙상블 코드는 옵트인 **shadow 툴**로 보존(`--ensemble` 기본 OFF 양시장), 2024-25+실제 드로다운 폴드 축적 후 재판정.
 
+### 시점 16 — "시장갈림 기각" 레버 per-market 재감사 · 2026-07-10 (rank-IC 신기루 재적발)
+시장별 특화가 정답이므로, *"한쪽에선 진짜 이겼는데 다른 쪽 때문에 교차기각된"* 레버가 있는지 전수감사(~30레버). **진짜 승리(IC/excess) vs 가짜(raw수익/베타틸트) 구분** 결과 후보는 **딱 2개, 둘 다 KR**(US쪽 0). 나머지는 per-market 프레임서도 정당히 닫힘(가짜승리/레짐운빨/기채택흡수).
+| KR 후보 | 단일-pass rank-IC | **walk-forward top-decile EXCESS** (15폴드, ensemble급 바) | 판정 |
+|---|---|---|---|
+| baseline(mn+z) | 0.0152 | **+1.52%** · ExcSharpe **1.29** · Exc>0% **73%** | ✅ 유지 |
+| **swabs_neu**(β중립+\|label\|) | **0.0229(↑!)** | +0.80% · 0.66 · 60% · winVsBase **27%**(4/15) · **−71bp** | ❌ 기각 |
+| **mnmh**(5/21/63d 라벨) | 0.0099 | +0.93% · 0.60 · 60% · win 33% · −58bp | ❌ 기각 |
+> **swabs_neu = winsor·ensemble과 동종 함정**: rank-IC는 진짜 올랐으나(0.0152→0.0229) **실제 롱하는 top-decile의 excess는 오히려 악화**(−71bp, 15폴드 중 4폴드만 baseline 승). IC 상승이 *전체 횡단면 순위*엔 있지만 *거래 바스켓*엔 없음. **⚠️ 번들 자체의 WF-IC(rank-IC) 지표로 판정했다면 오채택했을 것 — 채택 판정은 반드시 top-decile excess로.** mnmh는 IC조차 하락. **∴ 둘 다 기각, KR도 baseline(순수 lgbm) 유지.** 재검(harness `var/_analysis/wf_kr_levers.py`).
+> **의의**: "알파 닫힘"이 이제 *옛 교차-일반화 가정*이 아니라 *시장별 강건 excess 재검증*으로 획득됨. 시장갈림 기각의 대부분은 애초 가짜승리였고, 진짜 IC 상승(swabs_neu)조차 거래지표선 무효.
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +

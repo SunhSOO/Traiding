@@ -5,7 +5,7 @@
 
 ## 전략 요약 (가장 중요)
 
-**알파 엣지는 "진행 중"이 아니라 "닫혔다"** — 모델/전처리/사이징/앙상블 전 레버 검증 후 기각, US는 2025-26 선정 알파 감쇠(IC≈0, dispersion은 높음). 따라서 **실매매 목표를 막는 건 알파가 아님.** 실제 관문 3가지:
+**알파 엣지는 "진행 중"이 아니라 "닫혔다"** — 모델/전처리/사이징/앙상블 전 레버 검증 후 기각, US는 2025-26 선정 알파 감쇠(IC≈0, dispersion은 높음). ※이 "닫힘"은 **시장별 특화 프레임의 강건 재검증으로 획득된 것**(옛 교차-일반화 가정 아님): 2026-07-10 "시장갈림 기각" 레버 전수 재감사 결과 진짜 per-market 후보는 KR 2개(swabs_neu/mnmh)뿐이었고, 그마저 15폴드 walk-forward top-decile **excess**서 baseline에 패(swabs_neu는 rank-IC↑였으나 거래바스켓 excess는 −71bp = rank-IC 신기루). US쪽 후보 0. → 시장별로도 baseline(순수 lgbm) 유지. 따라서 **실매매 목표를 막는 건 알파가 아님.** 실제 관문 3가지:
 1. **순수익 정직성 미구현** — 거래비용·KR세금·환전·생존편향 전부 미모델. 지금 페이퍼/백테스트 숫자는 optimistic-gross 허구라 돈 넣을 근거가 안 됨.
 2. **실행 배관 부재** — `RUNTIME_MODE=live`는 no-op, KIS/Alpaca 어댑터 미작성, live-order 경로 미배선, daily_loss/consecutive_loss/spread 게이트가 하드코딩 placeholder(절대 안 걸림), 심볼 allowlist 비어있음(아무 종목이나 거래 가능).
 3. **감쇠 안전망 OFF** — drift 모니터 비활성이라 감쇠 모델을 실자본으로 거래해도 자동감지 0.
