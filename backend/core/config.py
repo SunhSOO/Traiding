@@ -108,6 +108,14 @@ class Settings(BaseSettings):
     mt5_password: SecretStr = SecretStr("")
     mt5_server: str = ""
 
+    # ── KIS (한국투자증권 OpenAPI — real KR equity broker) ──
+    # Free: open a KIS account, apply for OpenAPI at apiportal.koreainvestment.com,
+    # create a 모의투자(paper) account first. Account format "12345678-01".
+    kis_app_key: SecretStr = SecretStr("")
+    kis_app_secret: SecretStr = SecretStr("")
+    kis_account_no: SecretStr = SecretStr("")
+    kis_paper: bool = True   # default 모의투자; real-money also needs RUNTIME_MODE=live
+
     # ── Storage paths ──
     data_dir: Path = BACKEND_DIR / "var" / "data"
     model_dir: Path = BACKEND_DIR / "var" / "models"

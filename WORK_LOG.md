@@ -1571,3 +1571,9 @@ US를 죽인 uncurated 딥테일 교차검증의 KR판 + 비용스윕:
 - **소액 최적**: micro/small 알파는 기관 용량제약→소액(10-30만원)이 온전 접근(사용자 목표 fit).
 - **유보**: 생존편향(micro↑, KRX상폐 login-wall→무료 완전보정 불가), 실비용/±30%상한/거래정지. **해소=KIS forward 페이퍼(생존편향 원천제거).**
 - **∴ 다음(A-3): KIS 어댑터→KR 소형주 페이퍼 검증→소액 라이브.** (연대기: ALPHA_CAMPAIGN 시점 19)
+
+### 추가(A-3 완료): KIS(한국투자증권) OpenAPI 브로커 어댑터 구축
+- **`brokers/kis.py` 신규**: `BrokerAdapter` 계약 4메서드(execute/close_position/get_positions/get_account) KIS REST 구현. 토큰(/oauth2/tokenP 캐시)+hashkey+tr_id(paper VTTC/live TTTC 분기)+order-cash+inquire-balance. **기본 모의투자(openapivts:29443)**; 실전은 kis_paper=False AND RUNTIME_MODE=live 이중게이트. MARKET 기본, 비용=markets.kr.tax 추정. 검증: BrokerAdapter 서브클래스·추상메서드 충족·무자격 가드·계좌파싱 OK(라이브 API는 키 필요라 미검).
+- **`core/config.py`**: kis_app_key/secret/account_no(SecretStr)+kis_paper(기본 True) 추가.
+- **활성화(user)**: KIS 계좌개설→apiportal.koreainvestment.com OpenAPI 신청→모의투자 계좌 먼저→.env에 KIS_APP_KEY/SECRET/ACCOUNT_NO. `python -m brokers.kis`로 잔고 스모크.
+- **∴ 옵션A 완료**: KR 소형주 알파 확정 + 실행 vehicle(KIS) 준비. **다음: user KIS 키 발급→모의투자 페이퍼로 KR 소형주 forward 검증(생존편향 원천제거)→소액 라이브.** 남은 배선(P0): live-order 경로에 KIS 연결·리스크게이트·킬스위치(NEXT_TASKS).
