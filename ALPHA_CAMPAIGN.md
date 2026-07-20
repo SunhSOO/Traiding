@@ -293,6 +293,18 @@ user "리스트업 가능한 모든 업무 수행". clean pykrx KR_MID/LARGE에 
 | 집중도(topN/DEC0.95) | ~ 혼조(엣지 diffuse=집중 손해). 크로스에셋베타=plumbing실패(보류). |
 > **∴ 세션 유일 강건 개선=H42.** 이것도 spectacular 아님(modest 기반의 ~2배)이나 적대검증(best-2·conc5·bear·양시장) 통과한 진짜 이득. **배포권장: 라벨/호라이즌 21d→42d + TREND×VOL 방어(bear 커버).** 남은 미실행(feasible): 거래가능유니버스·생존편향 게이트, DART펀더멘털+PEAD, 타시장(대만). 데이터게이트: 수급·뉴스I축.
 
+### 시점 22 — "미실행 업무 모두 수행": 잔여 전 게이트·프론티어 소진 · 2026-07-20
+user "미실행 업무 모두 수행+추가검토+전체 커밋". 잔여 전부 실행(`var/_analysis/{kr_realizable,kr_survivorship,kr_fundamentals,kr_betas}.py`, universe_alpha_test TW):
+| 업무 | 결과 |
+|---|---|
+| **거래가능 유니버스(H42+필터)** | ✅ **배포가능 확인·개선**: minPx≥1000+유동성floor40%+상한가no-fill → net +2.67%→**+4.05%**, best-2 +3.38%, pos 65%(단 decile 27→16명 집중). 거래불가 junk 제거가 오히려 net↑. |
+| 생존편향(FDR 상폐 PIT) | ⚪ 929상폐/2018-26(~4%/년), **pykrx가 상폐종목 OHLCV 미제공→full PIT 차단**. 상폐는 junk tail 집중→liquid mid/large는 덜 노출(잔여편향 ~4%/년 상한). |
+| 타시장 전이(대만) | 🟡 **TW 소형 IC +0.048(KR급)** = 리테일-비효율 thesis 지지. 단 yfinance(마이크로 아티팩트 caveat 재현 위험)·H2-loaded·103종목뿐→2차소스 확인 전 미배포. |
+| **DART 펀더멘털(최대 미개척축)** | ⚪ **KR_LARGE(financial_facts 177/200)에 ROE/ROA/margin/gross-prof/accruals/leverage/growth PIT조인**: delta −0.22% excess/win 51% = **무효**(IC 0.045→0.046 미미, H1/H2 더 균형이나 총이득 없음). 대형주 펀더는 이미 arbitraged(프로덕션도 사용). 소형주 펀더 프론티어는 DART 인제스트 필요(미검). |
+| 크로스에셋 베타 | ❌ macro merge 0% 커버리지+delta 음수 = 비결과. 섹터중립=섹터맵 plumbing 미해결(보류). |
+| 데이터게이트(재확인 차단) | ⛔ 수급(KRX-walled), pykrx 펀더/PIT티커리스트(KRX-walled), KR뉴스 I축(백필대기). |
+> **추가검토 결론: feasible 리서치 공간 소진.** 유일 실개선=H42(realizable +4.05%). 다음 실질 진전 3택: ①**H42를 프로덕션 반영**(라벨 21d→42d 재학습, 배포단계) ②KIS 페이퍼로 forward 검증(생존편향 원천제거) ③데이터게이트 해소(KRX 로그인=수급/PIT, DART 소형주 인제스트, 뉴스백필). **정직 총평: modest한 liquid-KR 엣지(IC~0.03-0.04)에 H42로 net~2배·realizable +4.05%가 이 캠페인의 실질 최선. 모델·포트폴리오·피처 영리함은 완전 소진.**
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +
