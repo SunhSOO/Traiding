@@ -271,6 +271,18 @@ user "A로 진행"(KR 굳히기). US를 죽인 **uncurated 딥테일 교차검�
 > **정직 유보**: ①생존편향(micro일수록↑, KRX 상폐데이터 login-wall→무료 완전보정 불가) ②실 KR 소형주 비용/유동성/±30%상한·거래정지(백테스트 미모델). **둘의 결정적 해소=KIS로 라이브 유니버스 forward 페이퍼트레이드(생존편향 원천제거+실비용실측).** harness `var/_analysis/universe_alpha_test.py`(KR_MICRO/cost sweep).
 > **∴ 실행경로: KIS 어댑터→KR 소형주 페이퍼(survivorship-free 확증)→소액 라이브.** 배포모델=풀 484피처 KR 소형(DB인제스트 후) or 검증된 린 모델.
 
+### 시점 20 — 완전성 감사 + kill-or-confirm 게이트: **KR micro는 데이터아티팩트, 진짜 엣지는 liquid KR(mid/large)** · 2026-07-20
+user "성능 불만족, 모든 가능성 닫았나 전체 체크". **완전성 감사(5-critic 워크플로)**: 시점18-19 피벗이 이전 ~30레버 기각을 "틀린 유니버스"서 한 것으로 만들어 **올바른 유니버스 기준 실탐색 ~25%뿐, ~75% 열림**. 그리고 KR_MICRO는 US승자 죽인 적대검증을 안 거침 지적. → **kill-or-confirm 게이트 실행:**
+- **게이트1 적대배터리**(캐시, best-2제외·conc5·bear): KR_MICRO **통과**(best-2 +1.90%·conc5 55%·bear +0.85%) — 캠페인 유일 완전통과. **그러나 같은 yfinance 데이터라 데이터아티팩트 못 잡음.**
+- **게이트2 2차 가격소스(pykrx, KRX직접, `get_pykrx_prices.py`)**: **KR_MICRO IC 0.046→0.017·excess +2.68%→+0.48% 대폭 디플레이션(~2/3가 yfinance 마이크로캡 stale-price 아티팩트).** winrate 68%→52%. **∴ KR micro "확정 엣지"는 대부분 데이터아티팩트 — micro 기각.**
+| 버킷 | yf IC | **pykrx IC** | pykrx excess | pykrx best-2 | pykrx bear |
+|---|---|---|---|---|---|
+| KR_MICRO | 0.046 | **0.017** ✗ | +0.48% | +0.12% | +0.11% |
+| **KR_MID** | 0.040 | **0.037** ✓ | +1.53% | +0.85% | +0.81% |
+| **KR_LARGE** | 0.042 | **0.030** ✓ | +2.15% | +1.46% | +1.26% |
+> **✅ 디플레이션은 micro-특이(데이터품질): liquid KR(mid/large)은 pykrx서 재현** — KR_MID IC 0.037/excess +1.53%(더 높음)·best-2 +0.85%·bear +0.81%, KR_LARGE IC 0.030/excess +2.15%. **진짜 데이터소스-강건 KR 엣지=liquid mid/large**(더 유동적→비용생존·거래가능). **단 clean data선 H2-loaded**(2021-26 강, 2018-21≈0)=최근레짐 편향. **그리고 IC 0.03-0.04는 대략 기존 프로덕션 수준** — "spectacular"(US큐레이션·KR micro yfinance)은 전부 아티팩트였음.
+> **완전성 정직판정**: 모델영리함 소진 확정, KR 방향 확인, 단 매그니튜드는 기존과 유사(modest). **미탐색 실개선 프론티어(liquid KR 대상)**: DART 펀더멘털+PEAD(무료·가능), 단기호라이즌(5/10d), 턴오버제어 — 전부 genuine 미테스트. **수급(foreign/institution net)=최고 mechanism prior이나 KRX-walled 재확인(DB컬럼 100% NULL, pykrx 수급 endpoint 빈값).** 남은 게이트: 생존편향(상폐 PIT)·거래가능 유니버스. harness `var/_analysis/{wf_kr_adversarial,get_pykrx_prices}.py`.
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +

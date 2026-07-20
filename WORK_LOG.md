@@ -1577,3 +1577,11 @@ US를 죽인 uncurated 딥테일 교차검증의 KR판 + 비용스윕:
 - **`core/config.py`**: kis_app_key/secret/account_no(SecretStr)+kis_paper(기본 True) 추가.
 - **활성화(user)**: KIS 계좌개설→apiportal.koreainvestment.com OpenAPI 신청→모의투자 계좌 먼저→.env에 KIS_APP_KEY/SECRET/ACCOUNT_NO. `python -m brokers.kis`로 잔고 스모크.
 - **∴ 옵션A 완료**: KR 소형주 알파 확정 + 실행 vehicle(KIS) 준비. **다음: user KIS 키 발급→모의투자 페이퍼로 KR 소형주 forward 검증(생존편향 원천제거)→소액 라이브.** 남은 배선(P0): live-order 경로에 KIS 연결·리스크게이트·킬스위치(NEXT_TASKS).
+
+### ⚠️ 중대정정(2026-07-20, 완전성 감사+무결성 게이트): **KR micro=데이터아티팩트, 진짜 엣지=liquid KR(modest)**
+user "성능 불만족, 모든 가능성 닫았나 전체 체크". 5-critic 완전성 감사→올바른 유니버스 기준 실탐색 ~25%, ~75% 열림. KR_MICRO가 US승자 죽인 적대검증 미경험 지적 → kill-or-confirm 게이트:
+- **게이트1 적대배터리**(`wf_kr_adversarial.py`, best-2제외·conc5·bear): KR_MICRO **통과**(best-2 +1.90%·conc5 55%·bear +0.85%). 단 같은 yfinance라 데이터아티팩트 못잡음.
+- **게이트2 2차소스 pykrx**(`get_pykrx_prices.py`, KRX직접): **KR_MICRO IC 0.046→0.017·excess +2.68%→+0.48% 대폭 디플레이션(2/3가 yfinance 마이크로캡 stale-price 아티팩트)**, winrate 68%→52%. **micro 기각.**
+- **✅ 디플레이션=micro특이(데이터품질). liquid KR 재현**: KR_MID pykrx IC 0.037/excess +1.53%/best-2 +0.85%/bear +0.81%, KR_LARGE IC 0.030/excess +2.15%. **진짜 데이터소스-강건 KR 엣지=liquid mid/large**(비용생존·거래가능). 단 clean data선 **H2-loaded**(최근레짐), **IC 0.03-0.04≈기존 프로덕션 수준**. "spectacular"(US큐레이션·KR micro yf)은 전부 아티팩트.
+- **미탐색 실개선(liquid KR 대상)**: DART펀더멘털+PEAD(무료·가능), 단기호라이즌, 턴오버제어. **수급(foreign/institution net)=최고 prior이나 KRX-walled 재확인**(DB컬럼 100% NULL, pykrx 수급 endpoint 빈값). 남은게이트: 생존편향·거래가능유니버스.
+- **∴ 정직현주소**: 알파성장 모든 "확정" 승자가 결국 아티팩트/modest로 귀결. 진짜 엣지는 liquid KR IC~0.03-0.04(기존수준). 남은 실레버=DART/단기호라이즌/턴오버(feasible)+수급(data-gated). (연대기: ALPHA_CAMPAIGN 시점 20)
