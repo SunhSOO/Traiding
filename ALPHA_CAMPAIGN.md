@@ -283,6 +283,16 @@ user "성능 불만족, 모든 가능성 닫았나 전체 체크". **완전성 �
 > **✅ 디플레이션은 micro-특이(데이터품질): liquid KR(mid/large)은 pykrx서 재현** — KR_MID IC 0.037/excess +1.53%(더 높음)·best-2 +0.85%·bear +0.81%, KR_LARGE IC 0.030/excess +2.15%. **진짜 데이터소스-강건 KR 엣지=liquid mid/large**(더 유동적→비용생존·거래가능). **단 clean data선 H2-loaded**(2021-26 강, 2018-21≈0)=최근레짐 편향. **그리고 IC 0.03-0.04는 대략 기존 프로덕션 수준** — "spectacular"(US큐레이션·KR micro yfinance)은 전부 아티팩트였음.
 > **완전성 정직판정**: 모델영리함 소진 확정, KR 방향 확인, 단 매그니튜드는 기존과 유사(modest). **미탐색 실개선 프론티어(liquid KR 대상)**: DART 펀더멘털+PEAD(무료·가능), 단기호라이즌(5/10d), 턴오버제어 — 전부 genuine 미테스트. **수급(foreign/institution net)=최고 mechanism prior이나 KRX-walled 재확인(DB컬럼 100% NULL, pykrx 수급 endpoint 빈값).** 남은 게이트: 생존편향(상폐 PIT)·거래가능 유니버스. harness `var/_analysis/{wf_kr_adversarial,get_pykrx_prices}.py`.
 
+### 시점 21 — "모든 업무" 개선레버 스윕(clean liquid KR): **✅ H42(42일 호라이즌)=유일 강건 개선** · 2026-07-20
+user "리스트업 가능한 모든 업무 수행". clean pykrx KR_MID/LARGE에 전 개선레버 스윕+적대검증(`var/_analysis/{kr_liquid_sweep,kr_model_levers,kr_verify}.py`):
+| 레버 | 결과 |
+|---|---|
+| **H42(42일 라벨/스텝)** | ✅ **채택**: IC 거의2배(KR_MID 0.034→0.040/KR_LARGE 0.023→0.044), net ~2배(+0.77→+2.67% / +1.96→+3.41%), **best-2 +2.14/+2.89%·conc5 46-49%(diffuse)·양시장 통과.** 단기(H5)는 실패(mid/large=모멘텀). 트레이드오프=**bear 약함**(방어 오버레이로 커버). |
+| invvol/invamihud 가중 | ❌ **집중 아티팩트**: conc5 89-92%, invamihud −2909% 블로업. 동일IC=순수가중효과=1/작은분모 집중. |
+| 모델레버(ens_ridge/regime/ewma) | ❌ 올바른 유니버스서도 약함: ens_ridge win 44%, regime=rank-IC신기루(IC↑excess↓), ewma=시장의존 marginal. **model소진 재확인.** |
+| 집중도(topN/DEC0.95) | ~ 혼조(엣지 diffuse=집중 손해). 크로스에셋베타=plumbing실패(보류). |
+> **∴ 세션 유일 강건 개선=H42.** 이것도 spectacular 아님(modest 기반의 ~2배)이나 적대검증(best-2·conc5·bear·양시장) 통과한 진짜 이득. **배포권장: 라벨/호라이즌 21d→42d + TREND×VOL 방어(bear 커버).** 남은 미실행(feasible): 거래가능유니버스·생존편향 게이트, DART펀더멘털+PEAD, 타시장(대만). 데이터게이트: 수급·뉴스I축.
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +

@@ -1585,3 +1585,11 @@ user "성능 불만족, 모든 가능성 닫았나 전체 체크". 5-critic 완�
 - **✅ 디플레이션=micro특이(데이터품질). liquid KR 재현**: KR_MID pykrx IC 0.037/excess +1.53%/best-2 +0.85%/bear +0.81%, KR_LARGE IC 0.030/excess +2.15%. **진짜 데이터소스-강건 KR 엣지=liquid mid/large**(비용생존·거래가능). 단 clean data선 **H2-loaded**(최근레짐), **IC 0.03-0.04≈기존 프로덕션 수준**. "spectacular"(US큐레이션·KR micro yf)은 전부 아티팩트.
 - **미탐색 실개선(liquid KR 대상)**: DART펀더멘털+PEAD(무료·가능), 단기호라이즌, 턴오버제어. **수급(foreign/institution net)=최고 prior이나 KRX-walled 재확인**(DB컬럼 100% NULL, pykrx 수급 endpoint 빈값). 남은게이트: 생존편향·거래가능유니버스.
 - **∴ 정직현주소**: 알파성장 모든 "확정" 승자가 결국 아티팩트/modest로 귀결. 진짜 엣지는 liquid KR IC~0.03-0.04(기존수준). 남은 실레버=DART/단기호라이즌/턴오버(feasible)+수급(data-gated). (연대기: ALPHA_CAMPAIGN 시점 20)
+
+### 추가(2026-07-20, "모든 업무 수행"): 개선레버 스윕 → **✅ H42(42일 호라이즌)=세션 유일 강건 개선**
+clean pykrx KR_MID/LARGE에 전 개선레버 스윕+적대검증(`kr_liquid_sweep.py`, `kr_model_levers.py`, `kr_verify.py`):
+- **✅ H42(42일 라벨/스텝) 채택**: IC 거의2배(KR_MID 0.034→0.040, KR_LARGE 0.023→0.044), net ~2배(+0.77→+2.67% / +1.96→+3.41%), **best-2 +2.14/+2.89%·conc5 46-49%(diffuse)·양시장 통과.** 단기(H5)는 실패(mid/large=모멘텀). 트레이드오프=bear 약함→TREND×VOL 방어로 커버.
+- ❌ **invvol/invamihud 가중=집중 아티팩트**(conc5 89-92%, invamihud −2909% 블로업, 동일IC=순수가중=1/작은분모 집중).
+- ❌ **모델레버(ens_ridge/regime/ewma) 올바른 유니버스서도 약함**(ens win 44%, regime=rank-IC신기루, ewma=시장의존 marginal)=model소진 재확인.
+- ~ 집중도(topN)=혼조(엣지 diffuse). 크로스에셋베타=plumbing실패(보류).
+- **∴ 세션 유일 강건 개선=H42(modest기반 ~2배, 적대검증 통과 진짜 이득). 배포권장: 호라이즌 21d→42d + 방어 오버레이.** 남은 미실행(feasible): 거래가능유니버스·생존편향 게이트, DART펀더멘털+PEAD, 타시장. 데이터게이트: 수급·뉴스I축. (연대기: ALPHA_CAMPAIGN 시점 21)
