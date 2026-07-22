@@ -1631,3 +1631,9 @@ H1 구멍(채택 레시피가 정작 late-gate 적대배터리 미경유) 정면
 - **T4 slow-char**(`behavioral2_slowchar.py`): 저변동/베타=raw알파 아님(방어재료만), HI52 marginal. ILLIQ standout 유지.
 - **R4 베타 재검토**(`kr_betas.py` ffill 버그수정): 커버 0%→94%(사용자 지적대로 버그였음). 공정재테스트 delta −0.86% → **진짜 근거로 재기각**.
 - **∴ 시점25**: 범용알파 프레임 폐기, KR_MICRO 오기각 인정. **유일 강건 신규후보=ILLIQ(KR_MID net +1.48%, 방어적)** — 절반 size라 **프로덕션478 직교성 관문 대기**. 다음=ILLIQ직교성·rank ex-COVID(R2)·N2/N3. (연대기: ALPHA_CAMPAIGN 시점 25)
+
+### 추가(2026-07-22, 시점25 심화 T3 통합/직교성): **정규화가 비유동성 프리미엄을 파괴 — 두 세션 통합 메커니즘**
+- **T3-lite**(`orthogonality_lite.py`, 프로덕션캐시 6컬럼만): amihud 틸트가 프로덕션 유니버스(KOSPI200+KOSDAQ150)서 net **+2.53%**·회전20%·양반기+·bear+1.58 → ILLIQ 프로덕션 적용성 확인.
+- **T3 통합**(`integration_illiq.py`, ~23피처 focused): **핵심 메커니즘** — per-date 정규화가 amihud 프리미엄 파괴(AMIHUD-ONLY 정규화 +0.25% = raw 2.53%의 90% 소멸, 이중정규화; no-norm 시 +1.23% 회복). 모델 안 정규화 amihud=노이즈(FULL-norm +1.61 < NO-AMIHUD-norm +2.45). no-norm이 FULL +1.61→+2.42·H1 0.13→2.16.
+- **정직 walk-back**: no-norm 가격모델 +2.42% ≈ amihud틸트 +2.53% → ILLIQ 단독은 모델압도 아님(step 교란 잔존). 진짜 통합레버 = **KR 정규화 제거** = 지배 프리미엄(비유동성/반전) 복원. **시점24 no-norm−blitz에 메커니즘 부여**.
+- **방법론 교훈**: 첫 통합 net +30% → `vol_adj_ret_21d`(IC 0.94 w/fwd=누출, 프로덕션 피처엔 없음) 내가 오적재. "불가능 숫자=아티팩트" 규율로 즉시 적발·제거. (연대기: ALPHA_CAMPAIGN 시점 25 심화)
