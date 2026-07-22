@@ -45,28 +45,33 @@ px["hi_252"] = gg["close"].apply(lambda s: s / (s.rolling(252).max() + 1e-9))
 BASE = ["ret_5", "ret_10", "ret_21", "ret_63", "ret_126", "ret_252", "mom_12_1", "vol_21", "vol_63",
         "vol_252", "mom_vadj", "px_vs_sma20", "px_vs_sma50", "px_vs_sma200", "sma50_200", "rsi14", "dv_21", "amihud", "hi_252"]
 
-# macro daily returns
+# macro daily returns, aligned to the KR trading-date grid (BUGFIX: ffill prices onto KR
+# dates so US-calendar macros aren't sparse → previously gave 0% coverage & a false null)
+grid = pd.DatetimeIndex(np.sort(px["date"].unique()))
 mret = {}
 for name, sym in MACRO.items():
     try:
-        raw = yf.download(sym, start="2017-06-01", end="2026-07-01", auto_adjust=True, progress=False)
+        raw = yf.download(sym, start="2017-01-01", end="2026-07-05", auto_adjust=True, progress=False)
         s = raw["Close"]
         if isinstance(s, pd.DataFrame):
             s = s.iloc[:, 0]
+        s.index = pd.to_datetime(s.index)
+        if getattr(s.index, "tz", None) is not None:
+            s.index = s.index.tz_localize(None)
+        s = s[~s.index.duplicated()].reindex(grid.union(s.index)).ffill().reindex(grid)  # ffill onto KR grid
         mret[name] = s.pct_change().rename(name)
     except Exception as e:
         print(f"macro {name} fail {e}")
-mdf = pd.concat(mret.values(), axis=1); mdf.index = pd.to_datetime(mdf.index)
-# per-stock rolling betas: cov(stock, macro)/var(macro) over W days
-mdf = mdf.reset_index(); mdf.columns = ["date"] + list(MACRO.keys())
+mdf = pd.concat(mret.values(), axis=1); mdf.index.name = "date"; mdf = mdf.reset_index()
 px = px.merge(mdf, on="date", how="left")
 gg = px.groupby("ticker", group_keys=False)   # RE-group after merge (px is new frame)
 BETAS = []
-for name in MACRO:
+for name in mret:   # only successfully-built macros
     cov = gg.apply(lambda x: x["_dret"].rolling(W).cov(x[name])).values
     var = px.groupby("ticker")[name].transform(lambda s: s.rolling(W).var()).values
     px[f"beta_{name}"] = cov / (var + 1e-12); BETAS.append(f"beta_{name}")
-print(f"[{UNI}] macro betas built: {BETAS}, coverage {px[BETAS].notna().all(1).mean():.0%}", flush=True)
+print(f"[{UNI}] macro betas built: {BETAS}, per-beta coverage: "
+      + ", ".join(f"{b.split('_')[1]}={px[b].notna().mean():.0%}" for b in BETAS), flush=True)
 
 px["fwd21"] = gg["close"].apply(lambda s: s.pct_change(21).shift(-21))
 px["mn"] = px["fwd21"] - px.groupby("date")["fwd21"].transform("mean")

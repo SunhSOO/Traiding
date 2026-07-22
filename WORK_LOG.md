@@ -1622,3 +1622,12 @@ H1 구멍(채택 레시피가 정작 late-gate 적대배터리 미경유) 정면
 - **C/D/F**: C=liquid KR full battery 강건재확인·US소형=curation아티팩트 유지; D=방어 TREND×VOL 위험레버(직교, 시점9 유지); F=베타(비결과)·DART소형(인제스트필요)·대만(yfinance caveat)=데이터게이트/비결과.
 - **하네스 교훈**: 초기 E가 step21×3seed×ET200으로 5시간 정체 → step63+40k서브+seed축소로 ~11× 가속(경량). 풀피델리티는 `full` 플래그로 맨끝 백그라운드 재실행.
 - **∴ 시점24 결론**: 재감사가 (1)인큐번트 부분실패 확정 + (2)부산물로 실측 더 나은 KR 레시피(no-norm−blitz, +0.67%p, 강건) 도출. **다음 진전=no-norm−blitz 풀피델리티 통과 시 KR train_production 반영(정규화 off+Blitz drop, per-market).** learner·|label|·US정규화는 정당 재확인. 검증-우선이 이번엔 인큐번트 자신을 걸러냄. (연대기: ALPHA_CAMPAIGN 시점 24)
+
+### 추가(2026-07-22, 사용자 2대 방법론 비판 → 효율성-구배·행동알파 재검토): **범용알파 폐기 + ILLIQ 신규후보 (시점 25)**
+사용자: ①"지표 나쁘다고 배제 금지 — 배제도 철저 검증"(gauntlet이 Type II 방치=진짜알파 오기각), ②"여러 유니버스 범용알파는 애초에 말 안 됨". **둘 다 실측 확인.** 옳은 축 = 유니버스-특정 메커니즘 + 유니버스내 시간축강건 + 효율성-구배 단조성.
+- **T1 구배**(`efficiency_gradient.py`): LOTTO 부호전환(US대형 −0.040→KR마이크로 +0.122)·ILLIQ(+0.019→+0.145)·REV(+0.002→+0.069) 구배↑. 모멘텀 KR서 죽음(마이크로 −0.031)=Blitz미정당 설명. KR_MICRO clean서 신호최대 → 시점20 아티팩트기각은 ML복합엔 맞고 행동신호엔 틀림.
+- **T2 거래가능성**(`behavioral_tradeable.py`): **ILLIQ만 생존**. KR_MID net +1.48%(회전37%)·best-2+·bear +2.81. REV/LOTTO는 회전 93/75%로 비용전멸(gross-IC 신기루).
+- **T2b ILLIQ강건**(`illiq_robust.py`): 100bps까지 net+·양반기+(H1 +1.44/H2 +1.21). 단 size중립화 시 반토막·H1 −0.17 → 절반이 size.
+- **T4 slow-char**(`behavioral2_slowchar.py`): 저변동/베타=raw알파 아님(방어재료만), HI52 marginal. ILLIQ standout 유지.
+- **R4 베타 재검토**(`kr_betas.py` ffill 버그수정): 커버 0%→94%(사용자 지적대로 버그였음). 공정재테스트 delta −0.86% → **진짜 근거로 재기각**.
+- **∴ 시점25**: 범용알파 프레임 폐기, KR_MICRO 오기각 인정. **유일 강건 신규후보=ILLIQ(KR_MID net +1.48%, 방어적)** — 절반 size라 **프로덕션478 직교성 관문 대기**. 다음=ILLIQ직교성·rank ex-COVID(R2)·N2/N3. (연대기: ALPHA_CAMPAIGN 시점 25)
