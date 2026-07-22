@@ -315,20 +315,52 @@ user "미실행 업무 모두 수행+추가검토+전체 커밋". 잔여 전부 
 > **❌ H42(및 장기호라이즌)는 프로덕션서 21d를 강건하게 못 이김.** (1)신호 상충: IC는 H42최고이나 net_ANN은 H21이 H42보다 높음, H63는 net높으나 IC=base. (2)**장기호라이즌은 bear 손실**(H42/H63 음수 vs H21 +0.35%). (3)**레짐 불안정**: 2018-23선 H63 bear +2.72%였으나 2024-26 추가하니 −0.83%로 반전. **∴ 프로덕션 라벨 무변경.** 기전=린 20피처 모델은 긴 호라이즌으로 sparse함을 보완했으나, 풀 478피처 프로덕션은 21d서 이미 신호추출 충분→호라이즌 무익. **H42는 린-모델/marcap-슬라이스 특정 개선이지 범용 아님.** 검증-우선이 또 premature 배포를 막음(세션 패턴).
 > **∴ 최종 정직 현주소**: 프로덕션 모델은 이미 achievable 지평 근처. **un-shipped 강건 개선 없음.** 진짜 다음 진전=리서치/모델 아닌 **①KIS 페이퍼 forward 검증 ②데이터게이트 해소(수급·뉴스·소형주 DART=KRX로그인/백필/인제스트).**
 
+### 시점 24 — 🔴 **전수 재감사: 인큐번트를 자기 바에 세우다 → 프로덕션 레시피 부분실패 + KR 개선레시피 도출** · 2026-07-22
+"모든 항목 전수 재시도"(H1 구멍 = *채택된 레시피는 정작 late-gate 적대배터리를 한 번도 안 거쳤다*). 통일 프로토콜: clean 연속 2018-2026 · top-decile 순초과수익(net-of-cost) 1차 · 3-seed+best-2+conc5+bear+split-half. **인큐번트 각 레버를 ablation**(빼서 손해나면 정당, 아니면 무익). `var/_analysis/wf_incumbent_kr.py {KR|US}`.
+
+**A/B — 인큐번트 ablation (제거 시 net 변화, 풀 478피처):**
+| 레버 | KR | US | 재판정 |
+|---|---|---|---|
+| **per-date 정규화** | **−1.07%p (빼면 개선)** | −0.29%p (빼면 손해) | ⚠️ **시장-분리**: US 정당·**KR 역효과**(전역채택이 KR엔 오류) |
+| **\|label\| 가중** | −0.20%p (손해) | −0.14%p (손해) | ✅ **정당(양시장)** — 유일하게 명백 |
+| **Blitz 피처** | +0.23%p (빼면 개선) | +0.10%p (빼면 개선) | 🟡 **미정당(양시장 중립~해로움)** |
+| **top-50 선택** | +0.04%p (≈all-478) | −0.07%p (중립) | ⚪ **중립** |
+| mn vs rank | rank net +0.90 | rank net +0.65(bear −2.15%) | ~ mn=bear보호(US), rank=높은 net |
+> **5개 레버 중 명백히 정당한 건 `|label|` 가중 하나뿐.** 정규화는 KR서 역효과, Blitz·top-50은 양시장서 제 몫 못 함. **우리가 운용하는 레시피가 우리가 죽인 챌린저보다 덜 검증됐었다** — H1이 예측한 그대로 실측 확인.
+
+**Payoff — KR 레시피 재도출**(`reaudit_kr_recipe.py`, split-half+50bps 게이트, adopt iff net@30·net@50·best-2·**양반기** 모두 base 초과):
+| recipe | net@30 | net@50 | best-2 | bear | H1(18~22) | H2(22~26) | 판정 |
+|---|---|---|---|---|---|---|---|
+| base mn+norm+blitz | +2.17% | +1.83% | +1.59% | +1.80% | −0.31% | +4.46% | BASE |
+| no-norm 단독 | +2.57% | +2.23% | +1.94% | +0.85% | **−0.80%** | +5.69% | ✗ H1 탈락(레짐취약) |
+| no-norm +rank | +2.24% | +1.91% | +1.62% | +0.37% | −0.75% | +5.01% | ✗ |
+| **no-norm −blitz** | **+2.84%** | **+2.50%** | **+2.41%** | +1.37% | **+0.07%** | +5.40% | ✅ **ADOPT** |
+| no-norm +rank −blitz | +2.53% | +2.19% | +1.88% | +0.41% | −0.83% | +5.62% | ✗ |
+> **`no-norm −blitz`(정규화+Blitz 동시제거)가 유일하게 전 게이트 통과** — net +2.17→**+2.84%**, 두 반기 모두↑, 50bps 생존, best-2↑. **split-half가 결정적**: no-norm *단독*은 전체샘플만 이기고 H1(2018-22)서 짐(레짐취약); Blitz까지 빼야 강건(두 레버 상호작용). **rank는 전부 H1 탈락** → ablation 헤드라인("rank +0.90")이 split-half서 해체, 엄격게이트가 제대로 걸러냄. 정직: ①bear 소폭악화(+1.37 vs +1.80, 양수유지, 게이트조건 아님) ②경량하네스(분기·40k서브) 결과라 **배포 전 풀피델리티(step21·전행) 확인이 ship-gate**(맨끝 백그라운드 배치).
+
+**E — 기각모델 재확인**(`wf_rejections_kr.py`, clean KR 전배터리): ridge/ExtraTrees/LTR/lgbm+ridge앙상블 **전부 여전히 기각**. lgbm이 IC(0.0185)·bear(+1.48) 최고 = **learner 선택은 정당**. ExtraTrees는 raw net만 높으나(+2.31) best-2·IC·bear↓·conc5 71% = 집중아티팩트를 배터리가 잡음. → **인큐번트의 learner(lgbm)는 정당·recipe 레버(정규화KR·Blitz)는 부당**, 재감사가 둘을 정확히 분리.
+
+**C/D/F — 잔여 재감사:** C(생존자) liquid KR full battery = A base로 **강건 재확인**(best-2·bear·50bps 생존); US소형=universe-curation 아티팩트 결론 유지(2차소스 무관하게 forward-curated 유니버스라 미배포). D(방어 TREND×VOL)=위험/방어 레버라 알파축과 직교, 시점9 상태 유지. F=베타(0%커버 비결과)·DART소형(인제스트 필요)·대만(yfinance아티팩트 caveat)=데이터게이트/비결과로 재시도 불가.
+
+> **시점 24 결론:** 재감사는 (1)인큐번트 recipe가 자기 바 부분통과 실패를 **확정**하고, (2)그 부산물로 **실측 더 나은 KR 레시피(no-norm −blitz, net +0.67%p, 강건)** 를 도출함. learner(lgbm)·`|label|`·US정규화는 정당 재확인. **다음 실질 진전 = no-norm−blitz 풀피델리티 확인 통과 시 KR train_production 반영**(정규화 off + Blitz drop, per-market). 검증-우선 규율이 이번엔 *인큐번트 자신*을 걸러냈다.
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +
 per-date 정규화** 두 레버만 살아남아 프로덕션에 반영됨. *숫자 크기가 아니라 검증 기준의 두께가 승자를 결정한다.*
+> ⚠️ **시점 24 갱신:** 그 "생존 2레버"조차 late-gate 재감사선 갈림 — **`|label|`·US정규화는 정당하나 KR정규화는 역효과, Blitz는 양시장 미정당.** KR 개선레시피=**no-norm −blitz**(풀피델리티 확인 대기). 재감사 규율은 인큐번트도 예외로 두지 않는다.
 
 ## 5. 최종 채택 현황
-| 레버 | 상태 |
-|---|---|
-| **mn (시장중립 잔차 라벨)** | ✅ 프로덕션 |
-| **per-date 횡단면 정규화** | ✅ 프로덕션 |
-| **Blitz residual momentum (신규 피처)** | ✅ **활성화 완료 (2026-06-18)** |
-| **\|label\| 샘플가중 (mn_swabs)** | ✅ **활성화 완료 (2026-06-19)** |
-| **triple-barrier 라벨** | ✅ **US만 활성화 (per-market, 2026-06-20)** |
-| 그 외 전부(ridge/MLP/LSTM/xgb/cat/et/rank/winsor/conv/regime류/조잡잔차/w5/recency/decile/팩터중립화/다호라이즌/Optuna튜닝/LTR·lambdarank/**US lgbm+ridge 앙상블**) | ❌ 기각 |
+| 레버 | 상태 | 시점24 재감사 |
+|---|---|---|
+| **mn (시장중립 잔차 라벨)** | ✅ 프로덕션 | ~ US=bear보호로 정당·KR=rank가 높은net(단 rank는 split-half 탈락→mn 유지) |
+| **per-date 횡단면 정규화** | ✅ 프로덕션(양시장) | ⚠️ **US 정당·KR 역효과** — KR은 off 권고(풀피델리티 확인 대기) |
+| **Blitz residual momentum (신규 피처)** | ✅ 활성화 (2026-06-18) | 🟡 **양시장 미정당** — KR은 drop 권고(no-norm과 동시) |
+| **\|label\| 샘플가중 (mn_swabs)** | ✅ 활성화 (2026-06-19) | ✅ **정당 재확인(양시장, 제거 시 손해)** |
+| **triple-barrier 라벨** | ✅ US만 활성화 (per-market, 2026-06-20) | (재감사 미포함) |
+| **learner=LightGBM** | ✅ 프로덕션 | ✅ **정당 재확인** — ridge/ET/LTR/앙상블 clean 전배터리서 전부 재기각, lgbm IC·bear 최고 |
+| **★ KR: no-norm −blitz (개선 후보)** | 🔬 **제안(proposed)** — 경량하네스 net +2.17→+2.84%·양반기·50bps 통과 | 풀피델리티(step21) 확인 통과 시 KR train_production 반영 |
+| 그 외 전부(ridge/MLP/LSTM/xgb/cat/et/rank/winsor/conv/regime류/조잡잔차/w5/recency/decile/팩터중립화/다호라이즌/Optuna튜닝/LTR·lambdarank/**US lgbm+ridge 앙상블**) | ❌ 기각 | ridge/ET/LTR/앙상블 시점24 clean 재기각 확인 |
 
 > **공통 4개 + US 전용 1개(tb)** 채택, 나머지 전부 기각. 번들 WF IC(라벨무관 실현수익 기준):
 > KR 0.0387→**0.0440**, US 0.0289→**0.0407**(100% 양수fold). 잔존 미테스트: meta-labeling(사이징,

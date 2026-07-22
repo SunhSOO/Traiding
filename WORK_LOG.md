@@ -1613,3 +1613,12 @@ clean pykrx KR_MID/LARGE에 전 개선레버 스윕+적대검증(`kr_liquid_swee
 - **❌ H42/장기호라이즌은 프로덕션서 21d 강건하게 못 이김**: 신호상충(IC는 H42최고이나 net_ANN H21>H42, H63는 net↑ but IC=base), **장기=bear 손실**(H42/H63 음수 vs H21 +0.35%), **레짐불안정**(2018-23 H63 bear +2.72%→2024-26 −0.83% 반전).
 - **∴ 프로덕션 라벨 무변경.** 기전=린 20피처는 긴호라이즌으로 sparse 보완했으나 풀 478피처 프로덕션은 21d서 이미 신호추출 충분→호라이즌 무익. H42=린모델/marcap슬라이스 특정, 범용아님. **검증-우선이 또 premature 배포 차단.**
 - **최종 정직 현주소**: 프로덕션 모델은 이미 achievable 지평 근처, un-shipped 강건개선 없음. 진짜 다음 진전=모델 아닌 **KIS 페이퍼 forward 검증 + 데이터게이트 해소.** (연대기: ALPHA_CAMPAIGN 시점 23)
+
+### 추가(2026-07-22, "모든 항목 전수 재시도" = 인큐번트를 자기 바에): **프로덕션 레시피 부분실패 + KR 개선레시피 도출 (시점 24)**
+H1 구멍(채택 레시피가 정작 late-gate 적대배터리 미경유) 정면 재감사. 통일 프로토콜: clean 연속 2018-2026·top-decile 순초과수익 1차·3-seed+best-2+conc5+bear+**split-half**.
+- **A/B 인큐번트 ablation**(`wf_incumbent_kr.py {KR|US}`, 제거 시 net 변화): **정규화=시장분리**(KR −1.07%p 빼면개선/US −0.29%p 빼면손해 → US정당·KR역효과), **|label|=양시장 정당**(−0.20/−0.14), **Blitz=양시장 미정당**(+0.23/+0.10 빼면개선), **top-50=중립**. → 5레버 중 명백정당은 |label| 하나뿐.
+- **★Payoff KR 레시피 재도출**(`reaudit_kr_recipe.py`, adopt iff net@30·net@50·best-2·양반기 모두 base초과): **`no-norm −blitz`가 유일 통과**(net@30 +2.17→**+2.84%**, net@50 +1.83→+2.50%, best-2 +1.59→+2.41%, H1 −0.31→+0.07·H2 +4.46→+5.40, 50bps 생존). **split-half가 결정**: no-norm 단독은 H1(18-22) 짐(레짐취약), Blitz까지 빼야 강건(상호작용). rank 라벨 전부 H1 탈락(ablation "rank +0.90" 신기루 해체). 정직: bear 소폭악화(+1.37 vs +1.80 양수유지)·경량하네스라 **풀피델리티(step21) ship-gate 대기**.
+- **E 기각모델 재확인**(`wf_rejections_kr.py`): ridge/ExtraTrees/LTR/lgbm+ridge앙상블 clean 전배터리서 **전부 재기각**, lgbm IC(0.0185)·bear(+1.48) 최고=**learner 정당**. ET는 raw net만↑(+2.31)=집중아티팩트(conc5 71%·best-2/IC/bear↓) 배터리가 잡음.
+- **C/D/F**: C=liquid KR full battery 강건재확인·US소형=curation아티팩트 유지; D=방어 TREND×VOL 위험레버(직교, 시점9 유지); F=베타(비결과)·DART소형(인제스트필요)·대만(yfinance caveat)=데이터게이트/비결과.
+- **하네스 교훈**: 초기 E가 step21×3seed×ET200으로 5시간 정체 → step63+40k서브+seed축소로 ~11× 가속(경량). 풀피델리티는 `full` 플래그로 맨끝 백그라운드 재실행.
+- **∴ 시점24 결론**: 재감사가 (1)인큐번트 부분실패 확정 + (2)부산물로 실측 더 나은 KR 레시피(no-norm−blitz, +0.67%p, 강건) 도출. **다음 진전=no-norm−blitz 풀피델리티 통과 시 KR train_production 반영(정규화 off+Blitz drop, per-market).** learner·|label|·US정규화는 정당 재확인. 검증-우선이 이번엔 인큐번트 자신을 걸러냄. (연대기: ALPHA_CAMPAIGN 시점 24)
