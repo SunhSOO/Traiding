@@ -1666,3 +1666,12 @@ H1 구멍(채택 레시피가 정작 late-gate 적대배터리 미경유) 정면
 - **R2 rank 라벨 ex-COVID**(`r2_rank_excovid.py`): rank(no-norm+rank−blitz) H1_all −0.31%→H1_exCOVID −0.13%, **여전히 음수·base(+0.93%) 미달** → H1 탈락은 2020 특정 아닌 2018-22 전반 약세. **rank 공정 기각 확정.** 부수: no-norm−blitz는 H1_all(+0.60)>exCOVID(+0.21)=COVID 크래시서도 강건.
 - **R1 ExtraTrees**(해석적): E-light서 conc5 71%뿐 아니라 best-2·IC·bear 전부 lgbm 열위. best-2가 상위폴드 제거해도 ET<lgbm → 집중 episodic이라도 기각 견고. 다중지표 열위라 정당 기각.
 - **"배제 전 검증" 총결**: 베타(ffill후 재기각)·rank(ex-COVID 재기각)·ET(다중지표)=정당 기각 확인. 반면 KR_MICRO(오기각)·KR정규화(인큐번트 부당)=재검증서 뒤집힘. → 사용자 point1(배제도 검증) 완수: 대부분 정당했으나 2건은 실제 오기각/부당이었음.
+
+### 추가(2026-07-23, "거래가능 유니버스 내 신호 특화 + gauntlet·비용·용량"): **ILLIQ이 전 KR 유니버스 지배 특화신호 (시점 27)**
+전 방법 리스트업(A-F: 신호15+펀더13·결합·라벨·전처리·gauntlet·비용·용량·2차소스) 후 9유니버스 전수.
+- **하네스**(`universe_specialize.py`): 15 price신호 단일 + lgbm결합, full gauntlet(net@유니버스비용·best-2·conc5·bear·split-half)+turnover+용량($ADV). 버그수정: ILLIQ가 apply+reset_index로 misalign→transform으로 교정(smoke서 KR_MID ILLIQ +0.36%→+1.48% 복원, 이전 검증치와 일치).
+- **결과**: **ILLIQ(비유동, 장기 63/126d)이 전 KR 유니버스 지배**. KR_LARGE ILLIQ63 net **+2.13%·용량 $1.4B·bear+2.33·회전17%**(알파×용량×방어 최적), KR_MID ILLIQ126 +1.88%($236M), KR_MICRO ILLIQ126 +1.64%@120bps($52M). 장기window가 회전↓net↑. lgbm결합은 회전80%로 비용전멸.
+- **2차소스**(yfinance 재현): KR_LARGE +2.13→+1.88, KR_MID +1.88→+1.87, KR_MICRO +1.64→+1.47 → **ILLIQ 데이터소스 강건**(KR_MICRO ML복합은 아티팩트였으나 ILLIQ는 양소스 real=오기각 최종해소).
+- **펀더멘털**(`fundamental_specialize.py`, DART): liquid KR서 밸류/퀄=음수/약(arbitraged), 성장/LEV(KR_LARGE)·EP/CFP(KR_MID)만 mild통과, **전부 ILLIQ 미달**. 단 성장/LEV는 용량 $10-20B=대용량 다변화 sleeve. SUE KR_MID 음수=PEAD반전 재확인.
+- **아티팩트 규명**: US_MID +12%=GME/CELH/ARWR 밈집중(best-2 +0.35%로 붕괴·conc5 92%, gauntlet이 기각). US_BROAD 용량~$0=거래불가. US_SMALL 큐레이션+$2.7M.
+- **∴ 시점27 결론**: "유니버스 특화"의 답=**ILLIQ를 유니버스 용량에 맞춰 사이징**(KR_LARGE sweet-spot). US는 기존 478모델이 엣지. 다중검정: ILLIQ는 다유니버스+2소스+gauntlet 동시통과라 강건, 산발단일통과는 미확인. caveat: ILLIQ 절반 size·비유동성위험 보상·backtest뿐. (연대기: ALPHA_CAMPAIGN 시점 27)
