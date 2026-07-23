@@ -367,6 +367,23 @@ user "미실행 업무 모두 수행+추가검토+전체 커밋". 잔여 전부 
 - **코드 변경**(`train_production.py`): `normalize` per-market 기본값(**KR off·US on**) + **KR Blitz drop**(선택 전 후보풀서 제거) + `--out`(안전 검증). `--normalize`/`--keep-blitz`로 구 동작 복원 가능(가역). 추론(`production_inference.py`)은 `normalize=None`/feature_cols를 이미 올바르게 처리 → **추론 코드 무변경**. 구 "정규화 validated ON" 주석을 재감사 결과(시장분리·비유동성 파괴 메커니즘)로 갱신.
 > **시점 26 상태**: 코드 반영 완료(가역). **라이브 배포(production_KR.joblib 리트레인 교체)는 미실행** — 실매매 모델 교체라 사용자 승인 대기. US는 무변경(정규화 유지).
 
+### 시점 27 — 🔵 **유니버스 특화: ILLIQ(비유동성)이 전 KR 유니버스 지배 거래가능 신호** · 2026-07-23
+"거래가능 유니버스 내 신호 특화 + 각 gauntlet·비용·용량 검증"(사용자). 전 방법 리스트업(A신호15+펀더13·B결합·C라벨·D전처리·E검증·F유니버스별) 후 9유니버스 전수(`universe_specialize.py`, full gauntlet+비용+용량+2차소스).
+| 유니버스 | 특화신호 | net | 용량$ADV | 2차소스 | 판정 |
+|---|---|---|---|---|---|
+| **KR_LARGE** | **ILLIQ63** | **+2.13%** | **$1.4B** | ✅재현 | ✅**최적(알파×용량×방어)** |
+| KR_MID | ILLIQ126 | +1.88% | $236M | ✅재현 | ✅강함·bear+3.1 |
+| KR_MICRO | ILLIQ126 | +1.64%@120bps | $52M | ✅재현 | ✅real·극소용량 |
+| KR_SMALL | SIZE/ILLIQ | +1.48% | $56M | ⚠️yf만 | 🟡2차소스대기 |
+| US_LARGE | (478 밸류/퀄/센티) | ILLIQ +1.12%(bear음수) | 거대 | — | 🟡엣지=기존478 |
+| US_SMALL | ILLIQ | +1.92% | $2.7M | ⚠️큐레이션 | 🟡용량극소 |
+| US_MID | 없음 | best-2 +0.35% | — | — | 🔴밈집중(GME/CELH/ARWR) |
+| US_BROAD | 없음 | — | ~$0 | — | 🔴제로거래량 |
+| TW_SMALL | HI52 | +0.64% | $22M | ⚠️yf만 | 🟡약함·미확인 |
+> **버그수정**: ILLIQ가 `g.apply().reset_index(drop)`로 인덱스 misalign→`transform`으로 교정(smoke서 KR_MID +0.36%→+1.48% 복원, 이전 검증치 일치). smoke+과거대조가 버그 적발.
+> **핵심**: **ILLIQ(장기 63/126d window)이 전 KR 유니버스서 지배·2소스 재현·full gauntlet 통과.** 특화=유니버스 용량에 맞춘 사이징(KR_LARGE $1.4B sweet-spot→micro $52M). 장기window가 회전↓net↑. **lgbm 결합은 회전80%로 비용전멸** → 저회전 단일틸트가 net 승. **2차소스 재현이 KR_MICRO 최종해소**: ML복합은 아티팩트였으나 mechanism ILLIQ는 양소스 real(오기각 인정 확정). **펀더멘털(DART)**: liquid KR서 밸류/퀄=arbitraged, 성장/LEV mild(ILLIQ 미달)이나 대용량 다변화 sleeve.
+> **시점27 결론**: 유니버스 특화의 답=**ILLIQ를 용량에 사이징**. US는 price-ILLIQ 약함→기존 478모델이 엣지. **다중검정 haircut**: ILLIQ는 다유니버스+2소스+gauntlet 동시통과라 위양성 불가(강건), 산발단일통과(TW HI52 등)=미확인. caveat: ILLIQ 절반 size·비유동성위험 보상·backtest뿐.
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +
