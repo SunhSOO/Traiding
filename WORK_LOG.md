@@ -1675,3 +1675,11 @@ H1 구멍(채택 레시피가 정작 late-gate 적대배터리 미경유) 정면
 - **펀더멘털**(`fundamental_specialize.py`, DART): liquid KR서 밸류/퀄=음수/약(arbitraged), 성장/LEV(KR_LARGE)·EP/CFP(KR_MID)만 mild통과, **전부 ILLIQ 미달**. 단 성장/LEV는 용량 $10-20B=대용량 다변화 sleeve. SUE KR_MID 음수=PEAD반전 재확인.
 - **아티팩트 규명**: US_MID +12%=GME/CELH/ARWR 밈집중(best-2 +0.35%로 붕괴·conc5 92%, gauntlet이 기각). US_BROAD 용량~$0=거래불가. US_SMALL 큐레이션+$2.7M.
 - **∴ 시점27 결론**: "유니버스 특화"의 답=**ILLIQ를 유니버스 용량에 맞춰 사이징**(KR_LARGE sweet-spot). US는 기존 478모델이 엣지. 다중검정: ILLIQ는 다유니버스+2소스+gauntlet 동시통과라 강건, 산발단일통과는 미확인. caveat: ILLIQ 절반 size·비유동성위험 보상·backtest뿐. (연대기: ALPHA_CAMPAIGN 시점 27)
+
+### 추가(2026-07-23, A/B/C/D 심화): **특화가 KR_LARGE 단일 ILLIQ63으로 수렴 (시점 28)**
+사용자 "A,B,C,D 모두 수행·비교". `specialize_v2.py`(A직교성+B신규)·`illiq_sleeve.py`(C)·`specialize_D.py`(D).
+- **A 직교성**(size-중립 ILLIQ): **유니버스별 상이** — 대형(KR_LARGE size중립 ILLIQ63 +0.72/126 +1.17·US_LARGE +1.20/+1.49)선 **진짜 구별되는 비유동 프리미엄**, 소형/마이크로(KR_MID −0.69·MICRO −2.57·SMALL/US_SMALL 붕괴)선 **=size**. 앞선 "ILLIQ=size"는 KR_MID 특정이었음(정정). **KR_LARGE ILLIQ=size 아닌 진짜 비유동 알파.**
+- **B 신규신호**(Corwin-Schultz·coskew·voltrend·HL-range·52저): **ILLIQ 불패.** HLRANGE 최강(KR_LARGE +1.96%)이나 bear음수=비방어라 gauntlet 실패. 나머지 약함/실패.
+- **C sleeve**(KR_LARGE ILLIQ63): alpha ann +25.5%·**Sharpe 1.70·MDD −7.2%**·hit 69%, 배포가능 **≈$5.1B AUM**(19종목 median $ADV $1.4B). ⚠️생존편향(현재멤버 백필=비유동decile 부풀림)로 크기 낙관·KR공매도제약으로 롱only.
+- **D 결합+deflated Sharpe**: 결합(ILLIQ63+126+SIZE)<단일ILLIQ63(전유니버스) → **단일이 최적**. **deflated Sharpe N=400서 DSR 97.9%>0.95 = 다중검정 생존**(위양성 아님).
+- **∴ 시점28 결론**: 특화탐색이 **KR_LARGE 단일 ILLIQ63**으로 수렴(구별·불패·$5B배포·Sharpe1.7·다중검정생존)=캠페인 최강 실현가능 후보. **최대 미해결=생존편향**(DSR은 다중검정만 잡음, 크기 낙관). (연대기: ALPHA_CAMPAIGN 시점 28)
