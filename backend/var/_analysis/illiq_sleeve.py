@@ -12,8 +12,11 @@ warnings.filterwarnings("ignore")
 import numpy as np, pandas as pd
 
 UNI = sys.argv[1] if len(sys.argv) > 1 else "KR_LARGE"
-PATH = {"KR_LARGE": "px_KR_LARGE_PYKRX", "KR_MID": "px_KR_MID_PYKRX", "KR_MICRO": "px_KR_MICRO_PYKRX"}[UNI]
-COST = {"KR_LARGE": 30, "KR_MID": 40, "KR_MICRO": 120}[UNI]
+PATH = {"KR_LARGE": "px_KR_LARGE_PYKRX", "KR_MID": "px_KR_MID_PYKRX", "KR_MICRO": "px_KR_MICRO_PYKRX",
+        "KR_SMALL": "px_KR_SMALL", "US_LARGE": "px_US_LARGE", "US_MID": "px_US_MID",
+        "US_SMALL": "px_US_SMALL", "US_BROAD": "px_US_BROAD", "TW_SMALL": "px_TW_SMALL"}[UNI]
+COST = {"KR_LARGE": 30, "KR_MID": 40, "KR_MICRO": 120, "KR_SMALL": 60,
+        "US_LARGE": 15, "US_MID": 20, "US_SMALL": 25, "US_BROAD": 25, "TW_SMALL": 60}[UNI]
 STEP, DEC, PART = 21, 0.9, 0.05           # participation cap 5% of ADV/day, build over ~4 days
 PPY = 252 / STEP
 

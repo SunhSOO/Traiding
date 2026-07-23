@@ -19,14 +19,17 @@ from sqlalchemy import text
 from core.db import session_scope
 
 UNI = sys.argv[1] if len(sys.argv) > 1 else "KR_MID"
-PATH = {"KR_LARGE": "px_KR_LARGE_PYKRX", "KR_MID": "px_KR_MID_PYKRX"}[UNI]
-COST = {"KR_LARGE": 30, "KR_MID": 40}[UNI]
+MKT = "US" if UNI.startswith("US") else "KR"
+PATH = {"KR_LARGE": "px_KR_LARGE_PYKRX", "KR_MID": "px_KR_MID_PYKRX",
+        "US_LARGE": "px_US_LARGE", "US_MID": "px_US_MID", "US_SMALL": "px_US_SMALL"}[UNI]
+COST = {"KR_LARGE": 30, "KR_MID": 40, "US_LARGE": 15, "US_MID": 20, "US_SMALL": 25}[UNI]
+ZF = (lambda s: s.astype(str).str.zfill(6)) if MKT == "KR" else (lambda s: s.astype(str))
 STEP, DEC = 21, 0.9
 CONC = ["NET_INCOME", "EPS_BASIC", "TOTAL_EQUITY", "TOTAL_ASSETS", "REVENUE", "GROSS_PROFIT", "CFO", "TOTAL_LIABILITIES"]
 VALSIG = ["EP", "BM", "SP", "CFP", "ROE", "ROA", "GPA", "MARGIN", "ACCRUAL", "LEV", "NIGROWTH", "REVGROWTH", "SUE"]
 
 px = pd.read_parquet(f"var/_analysis/{PATH}.parquet")
-px["date"] = pd.to_datetime(px["date"]); px["ticker"] = px["ticker"].astype(str).str.zfill(6)
+px["date"] = pd.to_datetime(px["date"]); px["ticker"] = ZF(px["ticker"])
 px = px.sort_values(["ticker", "date"])
 g = px.groupby("ticker", group_keys=False)
 px["dv"] = (px["close"] * px["volume"]).astype(float)
@@ -37,14 +40,14 @@ codes = px["ticker"].unique().tolist()
 with session_scope() as s:
     A = pd.DataFrame(s.execute(text(
         "SELECT ticker, concept, value, as_of_ts, period_end FROM financial_facts "
-        "WHERE market='KR' AND period_kind='A' AND concept = ANY(:c) AND ticker = ANY(:t)"),
-        {"c": CONC, "t": codes}).all(), columns=["ticker", "concept", "value", "as_of", "pe"])
+        "WHERE market=:m AND period_kind='A' AND concept = ANY(:c) AND ticker = ANY(:t)"),
+        {"m": MKT, "c": CONC, "t": codes}).all(), columns=["ticker", "concept", "value", "as_of", "pe"])
     Q = pd.DataFrame(s.execute(text(
         "SELECT ticker, value, as_of_ts, period_end FROM financial_facts "
-        "WHERE market='KR' AND period_kind='Q' AND concept='NET_INCOME' AND ticker = ANY(:t)"),
-        {"t": codes}).all(), columns=["ticker", "ni", "as_of", "pe"])
+        "WHERE market=:m AND period_kind='Q' AND concept='NET_INCOME' AND ticker = ANY(:t)"),
+        {"m": MKT, "t": codes}).all(), columns=["ticker", "ni", "as_of", "pe"])
 for D in (A, Q):
-    D["ticker"] = D["ticker"].astype(str).str.zfill(6)
+    D["ticker"] = ZF(D["ticker"])
     D["as_of"] = pd.to_datetime(D["as_of"]).dt.tz_localize(None)
 A["value"] = pd.to_numeric(A["value"], errors="coerce")
 Q["ni"] = pd.to_numeric(Q["ni"], errors="coerce")

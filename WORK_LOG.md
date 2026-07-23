@@ -1683,3 +1683,11 @@ H1 구멍(채택 레시피가 정작 late-gate 적대배터리 미경유) 정면
 - **C sleeve**(KR_LARGE ILLIQ63): alpha ann +25.5%·**Sharpe 1.70·MDD −7.2%**·hit 69%, 배포가능 **≈$5.1B AUM**(19종목 median $ADV $1.4B). ⚠️생존편향(현재멤버 백필=비유동decile 부풀림)로 크기 낙관·KR공매도제약으로 롱only.
 - **D 결합+deflated Sharpe**: 결합(ILLIQ63+126+SIZE)<단일ILLIQ63(전유니버스) → **단일이 최적**. **deflated Sharpe N=400서 DSR 97.9%>0.95 = 다중검정 생존**(위양성 아님).
 - **∴ 시점28 결론**: 특화탐색이 **KR_LARGE 단일 ILLIQ63**으로 수렴(구별·불패·$5B배포·Sharpe1.7·다중검정생존)=캠페인 최강 실현가능 후보. **최대 미해결=생존편향**(DSR은 다중검정만 잡음, 크기 낙관). (연대기: ALPHA_CAMPAIGN 시점 28)
+
+### 추가(2026-07-23, "모든 유니버스에 모든 방법?" 완전성 감사): GAP 채움 + 정정 (시점 29)
+사용자 완전성 도전 → 정직 커버리지 매트릭스 제시(건너뛴 셀 노출) 후 fillable gap 전수 채움.
+- **채움**: 신규5신호+size중립 → US_MID/BROAD/TW 추가(9/9). US 펀더멘털(하네스 US일반화, financial_facts market=US 503종목) US_LARGE. sleeve US_LARGE/US_SMALL/KR_SMALL(하네스 일반화).
+- **결과**: US_MID=밈아티팩트/US_BROAD=용량0/TW=약함 **실측 확인**(건너뜀이 방향은 맞았으나 이제 검증). US_LARGE 펀더=mild(REVGROWTH +0.85·SP +0.55, 나머지 +0.1~0.35) → **"US엣지=478모델" 미검 단정 정정**(강한 펀더엣지 없음). sleeve: US_SMALL Sharpe 2.02나 용량 $0.02B·US_LARGE $0.38B·KR_SMALL $0.42B → **KR_LARGE $5.1B 여전히 10배+ sweet-spot**.
+- **데이터불가 확정**: sector중립(securities.sector=KRX board-tier 87%NaN)·survivorship보정(delisted_date 전NULL·deleted가격 pykrx게이트)·US/TW 2차소스(stooq fetch필요). universe_membership=현재스냅샷(PIT아님).
+- **미실행 저가치**: beta중립·US stooq·호라이즌 유니버스별.
+- **∴ 결론 불변**: KR_LARGE ILLIQ63 유일 sweet-spot, 최대 미해결=생존편향(데이터게이트). (연대기: ALPHA_CAMPAIGN 시점29 요약)

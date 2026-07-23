@@ -19,7 +19,8 @@ from scipy.stats import spearmanr
 
 UNIS = [("KR_LARGE", "px_KR_LARGE_PYKRX", 30), ("KR_MID", "px_KR_MID_PYKRX", 40),
         ("KR_MICRO", "px_KR_MICRO_PYKRX", 120), ("US_LARGE", "px_US_LARGE", 15),
-        ("US_SMALL", "px_US_SMALL", 25), ("KR_SMALL", "px_KR_SMALL", 60)]
+        ("US_SMALL", "px_US_SMALL", 25), ("KR_SMALL", "px_KR_SMALL", 60),
+        ("US_MID", "px_US_MID", 20), ("US_BROAD", "px_US_BROAD", 25), ("TW_SMALL", "px_TW_SMALL", 60)]
 NEW = ["CS", "COSKEW", "VOLTREND", "HLRANGE", "LO52"]
 REF = ["ILLIQ63", "ILLIQ126", "SIZE"]                 # references to compare against
 SN = ["ILLIQ63_SN", "ILLIQ126_SN"]                    # size-neutral variants
