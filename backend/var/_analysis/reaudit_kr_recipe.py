@@ -17,10 +17,11 @@ import numpy as np, pandas as pd, lightgbm as lgb
 from scipy.stats import spearmanr
 from scripts.train_lgbm import ALL_FEATURE_COLS
 
-FULL = len(sys.argv) > 1 and sys.argv[1] == "full"   # `full` = ship-gate fidelity (step21, all rows)
-STEP, TRAIN_MIN, TRAIL, EMB, DEC = (21 if FULL else 63), 504, 756, 21, 0.9
+MODE = sys.argv[1] if len(sys.argv) > 1 else "light"  # full=step21/no-sub(all 5) · lean=step21/80k(base+no-norm−blitz) · light=step63/40k
+FULL = MODE == "full"; LEAN = MODE == "lean"
+STEP, TRAIN_MIN, TRAIL, EMB, DEC = (21 if (FULL or LEAN) else 63), 504, 756, 21, 0.9
 SEEDS = [0, 1, 2]
-SUBSAMPLE = None if FULL else 40000   # cap train rows/fold for speed (per-date structure preserved)
+SUBSAMPLE = None if FULL else (80000 if LEAN else 40000)   # cap train rows/fold for speed (per-date structure preserved)
 LGB = dict(n_estimators=400, num_leaves=31, learning_rate=0.03, min_child_samples=100,
            subsample=0.7, colsample_bytree=0.6, reg_lambda=5.0, n_jobs=-1, verbose=-1)
 RET = "ret_fwd_21d"
@@ -36,7 +37,7 @@ feats_nb = [c for c in feats_all if "blitz" not in c.lower()]
 df["mn"] = df[RET] - df.groupby("date")[RET].transform("mean")
 dates = np.sort(df["date"].unique()); reb = list(range(TRAIN_MIN, len(dates) - EMB, STEP))
 mid = reb[len(reb) // 2]
-print(f"KR recipe re-derivation [{'FULL' if FULL else 'light'}]: {len(df)} rows, {len(feats_all)} feats, "
+print(f"KR recipe re-derivation [{MODE}]: {len(df)} rows, {len(feats_all)} feats, "
       f"step={STEP} subsample={SUBSAMPLE}, {len(reb)} folds (split @ fold {len(reb)//2})", flush=True)
 
 
@@ -81,6 +82,8 @@ VARS = [
     ("no-norm −blitz", dict(norm=False, feats=feats_nb)),
     ("no-norm +rank −blitz", dict(norm=False, label="rank", feats=feats_nb)),
 ]
+if LEAN:
+    VARS = [VARS[0], VARS[3]]   # ship-gate pair only: base vs no-norm −blitz
 print(f"\n===== KR RECIPE RE-DERIVATION (3-seed) — adoptable iff net↑ & best-2↑ & BOTH halves↑ & survives 50bps =====")
 print(f"{'recipe':22s} {'net@30':>7s} {'net@50':>7s} {'best-2':>8s} {'bear':>7s} {'H1net':>7s} {'H2net':>7s} {'verdict':>9s}")
 base = None
