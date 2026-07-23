@@ -1637,3 +1637,20 @@ H1 구멍(채택 레시피가 정작 late-gate 적대배터리 미경유) 정면
 - **T3 통합**(`integration_illiq.py`, ~23피처 focused): **핵심 메커니즘** — per-date 정규화가 amihud 프리미엄 파괴(AMIHUD-ONLY 정규화 +0.25% = raw 2.53%의 90% 소멸, 이중정규화; no-norm 시 +1.23% 회복). 모델 안 정규화 amihud=노이즈(FULL-norm +1.61 < NO-AMIHUD-norm +2.45). no-norm이 FULL +1.61→+2.42·H1 0.13→2.16.
 - **정직 walk-back**: no-norm 가격모델 +2.42% ≈ amihud틸트 +2.53% → ILLIQ 단독은 모델압도 아님(step 교란 잔존). 진짜 통합레버 = **KR 정규화 제거** = 지배 프리미엄(비유동성/반전) 복원. **시점24 no-norm−blitz에 메커니즘 부여**.
 - **방법론 교훈**: 첫 통합 net +30% → `vol_adj_ret_21d`(IC 0.94 w/fwd=누출, 프로덕션 피처엔 없음) 내가 오적재. "불가능 숫자=아티팩트" 규율로 즉시 적발·제거. (연대기: ALPHA_CAMPAIGN 시점 25 심화)
+
+---
+## ⚡ RESUME AFTER OUTAGE (2026-07-23, 정전 인터럽트) — 재개 시 여기부터
+**계획 정전으로 실행중 배치 중단.** 소실된 것 = 도는 배치(buylr2z4f, 풀피델리티 레시피+풀E step21)의 미완 compute뿐(중간저장 없음). **모든 발견·문서·스크립트는 커밋·푸시 완료(HEAD 1c3093f, 원격 동기화).** 디스크/git은 정전 무관 생존.
+
+**현재 상태 요약 (시점24-25):**
+- 인큐번트 재감사(시점24): 프로덕션 레시피 부분실패. `|label|`·lgbm·US정규화만 정당. **KR 정규화 역효과·Blitz 미정당.** KR 개선후보=**no-norm−blitz**(step63 net +2.17→+2.84%, 양반기·50bps 통과).
+- 행동알파 재검토(시점25): 범용알파 폐기(효율성구배 확인)·KR_MICRO 오기각 인정. **비유동성(amihud) 프리미엄이 KR 지배알파(틸트 +2.53%)인데 정규화가 90% 파괴** → no-norm−blitz의 메커니즘. ILLIQ 단독은 모델과 대등(마법아님).
+
+**재개 시 남은 heavy 작업 (478캐시 필요, 정전으로 미완):**
+1. **no-norm−blitz step21 풀피델리티 확증** — `reaudit_kr_recipe.py full`(무거움 ~3-5h) 또는 린(base vs no-norm−blitz만, 80k서브, ~30min). 통과 시 → **KR train_production 정규화 off + Blitz drop 반영**(per-market, US는 정규화 유지).
+2. **R2 rank라벨 ex-COVID 재판정** — rank가 split-half H1 실패한 게 2020 특정인가.
+3. **N3 PEAD**(post-earnings drift, DART as_of_ts 이벤트+YoY surprise, 정보확산 thesis).
+4. **R1 ExtraTrees 집중=레짐정렬 분석** — conc5 폴드가 vol/위기에 정렬되면 episodic 알파.
+5. (풀 E 재확인은 저가치 — 경량판서 이미 전부 재기각 확인됨. 필요시 `wf_rejections_kr.py full`.)
+
+**신규 스크립트(전부 tracked):** efficiency_gradient · behavioral_tradeable · illiq_robust · behavioral2_slowchar · orthogonality_lite · integration_illiq · kr_betas(ffill수정). 연대기=ALPHA_CAMPAIGN 시점24-25.
