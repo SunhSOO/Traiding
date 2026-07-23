@@ -1661,3 +1661,8 @@ H1 구멍(채택 레시피가 정작 late-gate 적대배터리 미경유) 정면
 - **실 파이프라인 검증**(top-50 재선택+WF, temp출력): OLD(norm+blitz) rank-IC +0.0335/decile-LS +0.0218 vs NEW(no-norm−blitz) rank-IC +0.0223(std↓)/**decile-LS +0.0507(2.3배↑)**. IC 신기루의 역상 — IC↓이나 거래하는 decile-LS 2.3배↑. 거래-우선 도리상 NEW 우수(best-2·양반기·bear+로 아티팩트 아님 확인). caveat=headline rank_ic↓라 IC모니터링 오독 위험.
 - **코드**: `normalize` per-market 기본값(KR off/US on)+KR Blitz drop(선택 전 제거)+`--out`. `--normalize`/`--keep-blitz`로 복원 가능. 추론 무변경(normalize=None/feature_cols 이미 처리). 구 "validated ON" 주석 갱신.
 - **상태**: 코드 반영 완료. **라이브 배포(production_KR.joblib 리트레인)는 미실행, 사용자 승인 대기.** US 무변경. (연대기: ALPHA_CAMPAIGN 시점 26)
+
+### 추가(2026-07-23, "배제 전 검증" 완결 R2/R1): 기각 레버 공정성 재판정
+- **R2 rank 라벨 ex-COVID**(`r2_rank_excovid.py`): rank(no-norm+rank−blitz) H1_all −0.31%→H1_exCOVID −0.13%, **여전히 음수·base(+0.93%) 미달** → H1 탈락은 2020 특정 아닌 2018-22 전반 약세. **rank 공정 기각 확정.** 부수: no-norm−blitz는 H1_all(+0.60)>exCOVID(+0.21)=COVID 크래시서도 강건.
+- **R1 ExtraTrees**(해석적): E-light서 conc5 71%뿐 아니라 best-2·IC·bear 전부 lgbm 열위. best-2가 상위폴드 제거해도 ET<lgbm → 집중 episodic이라도 기각 견고. 다중지표 열위라 정당 기각.
+- **"배제 전 검증" 총결**: 베타(ffill후 재기각)·rank(ex-COVID 재기각)·ET(다중지표)=정당 기각 확인. 반면 KR_MICRO(오기각)·KR정규화(인큐번트 부당)=재검증서 뒤집힘. → 사용자 point1(배제도 검증) 완수: 대부분 정당했으나 2건은 실제 오기각/부당이었음.
