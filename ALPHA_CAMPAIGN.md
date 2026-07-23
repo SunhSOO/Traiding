@@ -384,6 +384,14 @@ user "미실행 업무 모두 수행+추가검토+전체 커밋". 잔여 전부 
 > **핵심**: **ILLIQ(장기 63/126d window)이 전 KR 유니버스서 지배·2소스 재현·full gauntlet 통과.** 특화=유니버스 용량에 맞춘 사이징(KR_LARGE $1.4B sweet-spot→micro $52M). 장기window가 회전↓net↑. **lgbm 결합은 회전80%로 비용전멸** → 저회전 단일틸트가 net 승. **2차소스 재현이 KR_MICRO 최종해소**: ML복합은 아티팩트였으나 mechanism ILLIQ는 양소스 real(오기각 인정 확정). **펀더멘털(DART)**: liquid KR서 밸류/퀄=arbitraged, 성장/LEV mild(ILLIQ 미달)이나 대용량 다변화 sleeve.
 > **시점27 결론**: 유니버스 특화의 답=**ILLIQ를 용량에 사이징**. US는 price-ILLIQ 약함→기존 478모델이 엣지. **다중검정 haircut**: ILLIQ는 다유니버스+2소스+gauntlet 동시통과라 위양성 불가(강건), 산발단일통과(TW HI52 등)=미확인. caveat: ILLIQ 절반 size·비유동성위험 보상·backtest뿐.
 
+### 시점 28 — 🔵 **A/B/C/D 심화: 특화가 KR_LARGE 단일 ILLIQ63으로 수렴** · 2026-07-23
+사용자 "A,B,C,D 모두 수행·비교". (`specialize_v2.py`·`illiq_sleeve.py`·`specialize_D.py`)
+- **A 직교성**(size-중립 ILLIQ): **유니버스별 상이** — **대형(KR_LARGE ILLIQ63_SN +0.72/126 +1.17·US_LARGE +1.20/+1.49)선 size 제거 후에도 통과 = 진짜 구별되는 비유동 프리미엄**; 소형/마이크로(KR_MID −0.69·MICRO −2.57·SMALL 붕괴)선 **=size 틸트**. → 앞선(시점27) "ILLIQ=size" 뉘앙스는 KR_MID 특정, **KR_LARGE ILLIQ은 진짜 비유동 알파**로 정정.
+- **B 신규신호**(Corwin-Schultz 스프레드·coskew·volume-trend·HL-range·52주저): **ILLIQ 불패**. HLRANGE 최강(KR_LARGE +1.96%)이나 **bear 음수=비방어**로 gauntlet 실패. 나머지 약함/실패.
+- **C sleeve**(KR_LARGE ILLIQ63 실배포): alpha ann +25.5%·**Sharpe 1.70·MDD −7.2%**·hit 69%, **배포가능 ≈$5.1B AUM**(19종목 median $ADV $1.4B, 5% 참여). ⚠️**생존편향**(pykrx=현재멤버 백필 → 비유동 decile 부풀림)로 크기 낙관·KR 공매도제약으로 롱only 실현.
+- **D 결합+deflated Sharpe**: 결합(ILLIQ63+126+SIZE rank-avg)<단일ILLIQ63(전유니버스, 상관신호라 희석) → **단일이 최적**. **deflated Sharpe(Bailey-LdP) N=400 trials서 DSR 97.9%>0.95** = 다중검정 위양성 아님(null-max-SR +1.00 vs 관측 +1.69).
+> **시점28 결론**: 특화탐색이 **KR_LARGE 단일 ILLIQ63**으로 수렴 — (A)size 아닌 진짜 비유동, (B)신규신호 불패, (C)$5B 배포·Sharpe 1.7, (D)단일최적·다중검정생존 = **캠페인 최강 실현가능 후보**. **최대 미해결 관문 = 생존편향**(DSR은 다중검정만 잡고 survivorship 못 잡음→크기 낙관; pykrx 상폐 OHLCV 미제공으로 무료 보정 불가). 다음 실진전=①KIS 페이퍼 forward(생존편향 원천제거) ②상폐포함 유니버스 확보.
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +
