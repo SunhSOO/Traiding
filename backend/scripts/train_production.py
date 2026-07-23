@@ -71,9 +71,19 @@ def main() -> None:
     ap.add_argument("--cache", type=str, default=None,
                     help="explicit feature-matrix parquet (e.g. multi-regime 2018-2024)")
     ap.add_argument("--no-normalize", action="store_true",
-                    help="disable per-date cross-sectional z-score (validated ON by default)")
+                    help="force per-date z-score OFF (per-market default: KR OFF, US ON).")
+    ap.add_argument("--normalize", dest="force_normalize", action="store_true",
+                    help="force per-date z-score ON (overrides the per-market default).")
+    ap.add_argument("--drop-blitz", dest="drop_blitz", action="store_true", default=None,
+                    help="drop Blitz residual-momentum feats from the candidate pool "
+                         "(per-market default: KR drops, US keeps).")
+    ap.add_argument("--keep-blitz", dest="drop_blitz", action="store_false",
+                    help="keep Blitz feats (overrides the per-market default).")
     ap.add_argument("--no-sample-weight", action="store_true",
                     help="disable |mn-label| sample weighting (validated ON by default)")
+    ap.add_argument("--out", type=str, default=None,
+                    help="output bundle path (default var/models/production_{market}.joblib). "
+                         "Use a temp path to validate a config without overwriting the live model.")
     ap.add_argument("--norm-mode", choices=["zscore", "winsor"], default=None,
                     help="per-date normalization. Default per-market: KR=winsor (clip ±3, "
                          "raises KR IC on full stack), US=zscore.")
@@ -129,12 +139,32 @@ def main() -> None:
     df = df.sort_values("date")
     feats_all = [c for c in ALL_FEATURE_COLS if c in df.columns]
 
-    # VALIDATED preprocessing: per-date cross-sectional z-score of features.
-    # A/B (2026-06-17): mn_norm beat raw mn_rs on 3/4 market×step cuts, stayed
-    # positive in bear (US hi-vix +0.80 vs mn_rs -0.94), cut MDD (-22 vs -34%),
-    # kept IC (=> stabilization, not factor tilt). Applied to ALL feature models;
-    # inference reproduces it across the daily cross-section (point-in-time safe).
-    normalize = not args.no_normalize
+    # Blitz residual-momentum: per-market. RE-AUDIT 2026-07-23 (ALPHA_CAMPAIGN 시점24-25):
+    # momentum is dead in KR (reversal-dominated market; MOM rank-IC ~0 / negative in
+    # KR micro), so Blitz is unjustified on KR and the incumbent-ablation + step21
+    # ship-gate confirmed dropping it improves KR (no-norm−blitz net +1.75->+2.19%,
+    # both split-halves, bear+). US keeps Blitz pending its own test. Drop BEFORE
+    # selection so it can't enter top-K; inference is unaffected (not in feature_cols).
+    drop_blitz = args.drop_blitz if args.drop_blitz is not None else (args.market == "KR")
+    if drop_blitz:
+        n0 = len(feats_all)
+        feats_all = [c for c in feats_all if "blitz" not in c.lower()]
+        print(f"[prod] dropped {n0 - len(feats_all)} Blitz feat(s) (KR: momentum dead) "
+              f"-> {len(feats_all)} feats", flush=True)
+
+    # Per-date cross-sectional z-score — PER-MARKET (RE-AUDIT 2026-07-23). Originally
+    # adopted ON both markets (A/B 2026-06-17: stabilized bear/MDD). The 시점24
+    # incumbent-ablation held it to the same late-gate bar and found it market-split:
+    # US legit (removing it hurts), but on KR it is COUNTERPRODUCTIVE — the per-date
+    # z-score DOUBLE-normalizes already-z'd features and washes out the illiquidity/
+    # reversal premium that actually drives KR (amihud tilt +2.53% -> +0.25% once
+    # normalized; 시점25 T3). So: KR OFF, US ON. Overridable with --normalize/--no-normalize.
+    if args.no_normalize:
+        normalize = False
+    elif args.force_normalize:
+        normalize = True
+    else:
+        normalize = (args.market != "KR")   # per-market default: KR off, US on
     if normalize:
         g = df.groupby("date")
         df[feats_all] = ((df[feats_all] - g[feats_all].transform("mean"))
@@ -238,6 +268,7 @@ def main() -> None:
     bundle = {
         "market": args.market, "target": target,
         "normalize": ("cross_section_zscore" + ("_winsor" if args.norm_mode == "winsor" else "")) if normalize else None,
+        "blitz_dropped": drop_blitz,
         "sample_weight": "abs_mn_label" if sw_on else None,
         "label": args.label,
         "rank_model_kind": ("ensemble_lgbm_ridge" if args.ensemble else "lgbm"),
@@ -249,7 +280,7 @@ def main() -> None:
                      "band_coverage_test": cov, "n_rows": len(df)},
         "built": str(date.today()),
     }
-    out = Path(f"var/models/production_{args.market}.joblib")
+    out = Path(args.out) if args.out else Path(f"var/models/production_{args.market}.joblib")
     out.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(bundle, out)
 

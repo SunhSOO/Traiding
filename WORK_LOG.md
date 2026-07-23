@@ -1654,3 +1654,10 @@ H1 구멍(채택 레시피가 정작 late-gate 적대배터리 미경유) 정면
 5. (풀 E 재확인은 저가치 — 경량판서 이미 전부 재기각 확인됨. 필요시 `wf_rejections_kr.py full`.)
 
 **신규 스크립트(전부 tracked):** efficiency_gradient · behavioral_tradeable · illiq_robust · behavioral2_slowchar · orthogonality_lite · integration_illiq · kr_betas(ffill수정). 연대기=ALPHA_CAMPAIGN 시점24-25.
+
+### 추가(2026-07-23, 재감사의 프로덕션 반영): **KR = no-norm − blitz 코드화 (시점 26)**
+시점24-25 결론을 `train_production.py`에 반영(가역·라이브 무터치).
+- **ship-gate**(`reaudit_kr_recipe.py lean`, step21 풀피델리티): no-norm−blitz가 base를 net@30(+1.75→+2.19%)·net@50·best-2(+1.94→+2.34)·양반기·bear(+0.64→+0.77) 전부 초과 → ADOPT.
+- **실 파이프라인 검증**(top-50 재선택+WF, temp출력): OLD(norm+blitz) rank-IC +0.0335/decile-LS +0.0218 vs NEW(no-norm−blitz) rank-IC +0.0223(std↓)/**decile-LS +0.0507(2.3배↑)**. IC 신기루의 역상 — IC↓이나 거래하는 decile-LS 2.3배↑. 거래-우선 도리상 NEW 우수(best-2·양반기·bear+로 아티팩트 아님 확인). caveat=headline rank_ic↓라 IC모니터링 오독 위험.
+- **코드**: `normalize` per-market 기본값(KR off/US on)+KR Blitz drop(선택 전 제거)+`--out`. `--normalize`/`--keep-blitz`로 복원 가능. 추론 무변경(normalize=None/feature_cols 이미 처리). 구 "validated ON" 주석 갱신.
+- **상태**: 코드 반영 완료. **라이브 배포(production_KR.joblib 리트레인)는 미실행, 사용자 승인 대기.** US 무변경. (연대기: ALPHA_CAMPAIGN 시점 26)

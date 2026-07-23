@@ -354,6 +354,19 @@ user "미실행 업무 모두 수행+추가검토+전체 커밋". 잔여 전부 
 **T3 통합/직교성**(`orthogonality_lite.py`+`integration_illiq.py`): ILLIQ가 **프로덕션 유니버스(KOSPI200+KOSDAQ150)서도 강함** — amihud raw 틸트 net **+2.53%**(회전20%·양반기+·bear+1.58). *결정적 메커니즘 발견*: **per-date 정규화가 비유동성 프리미엄을 파괴** — AMIHUD-ONLY 모델이 정규화 시 +0.25%(raw 2.53%의 **90% 소멸**, amihud_illiq_z가 이미 z인데 이중정규화), no-norm 시 +1.23% 회복. 모델 안 정규화된 amihud는 노이즈(FULL-norm +1.61 < NO-AMIHUD-norm +2.45). no-norm이 FULL 개선(+1.61→+2.42)·H1 극적(0.13→2.16). **⚠️ 정직 walk-back**: 잘설정(no-norm) 가격모델 +2.42% ≈ amihud틸트 +2.53% → **ILLIQ는 모델압도 단독알파 아님**(step21/63 교란 잔존). **∴ 진짜 통합레버 = "KR 정규화 제거"** = 지배적 실제프리미엄(비유동성/반전) 복원. **⚠️ 방법론 교훈**: 첫 통합테스트서 net +30% 나옴 → `vol_adj_ret_21d`(IC 0.94 w/fwd=누출컬럼, 프로덕션 ALL_FEATURE_COLS엔 없음)를 내가 오적재. "불가능한 숫자=아티팩트" 규율로 즉시 적발·제거.
 > **시점 25 결론:** 사용자의 두 방법론 비판 **모두 실측 확인**. (1)유니버스-특정·효율성구배 프레임이 옳음(범용알파 폐기). (2)KR_MICRO는 잘못 기각했었음(행동신호 real). **비유동성(amihud) 프리미엄이 KR 지배적 실제알파**(틸트 +2.53%, 방어적)이나 — **핵심은 프로덕션 정규화가 이걸 90% 파괴**한다는 것 → **시점24 no-norm−blitz에 메커니즘 부여**: 정규화 제거 = 비유동성/반전 복원(틸트/모델 무관 동일방향). ILLIQ 단독은 모델과 대등(마법아님). REV/LOTTO=회전비용사망(피처후보), 저변동=방어재료, 베타=공정기각. **다음: no-norm 풀피델리티 확증(배치중) + rank ex-COVID(R2) + N2/N3.**
 
+### 시점 26 — ✅ **재감사의 프로덕션 반영: KR = no-norm − blitz (per-market) 코드화** · 2026-07-23
+시점24-25 결론을 실제 학습코드에 반영. 절차:
+- **ship-gate(step21 풀피델리티, `reaudit_kr_recipe.py lean`)**: no-norm−blitz가 base를 net@30(+1.75→**+2.19%**)·net@50·best-2(+1.94→+2.34)·**양 반기**·**bear(+0.64→+0.77)** 전부 초과 → ADOPT. (step63 재도출이 step21서 확증, bear 우려도 해소.)
+- **실 파이프라인 검증**(`train_production.py`, top-50 재선택+WF, temp출력·라이브 무터치): OLD(norm+blitz) vs NEW(no-norm−blitz), 동일 2018-24 캐시 →
+  | metric | OLD | NEW |
+  |---|---|---|
+  | rank-IC (WF) | +0.0335 | +0.0223 (std↓ 0.037→0.026) |
+  | **decile long-short (WF)** | +0.0218 | **+0.0507 (2.3배↑)** |
+  | band coverage | 0.837 | 0.813 |
+  > **IC 신기루의 역상**: IC는 하락하나 **거래하는 decile long-short는 2.3배**. 시스템은 top-decile을 거래하므로(inference rank_pct≥0.9→BUY) 거래-우선 도리(decile>IC, 다시점 확립)상 NEW 우수. best-2·양반기·bear+로 concentration 아티팩트 아님 확인. **정직 caveat**: 번들 headline rank_ic가 떨어져 IC 모니터링 시 오독 위험(단 캠페인이 기각한 metric).
+- **코드 변경**(`train_production.py`): `normalize` per-market 기본값(**KR off·US on**) + **KR Blitz drop**(선택 전 후보풀서 제거) + `--out`(안전 검증). `--normalize`/`--keep-blitz`로 구 동작 복원 가능(가역). 추론(`production_inference.py`)은 `normalize=None`/feature_cols를 이미 올바르게 처리 → **추론 코드 무변경**. 구 "정규화 validated ON" 주석을 재감사 결과(시장분리·비유동성 파괴 메커니즘)로 갱신.
+> **시점 26 상태**: 코드 반영 완료(가역). **라이브 배포(production_KR.joblib 리트레인 교체)는 미실행** — 실매매 모델 교체라 사용자 승인 대기. US는 무변경(정규화 유지).
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +
@@ -369,7 +382,7 @@ per-date 정규화** 두 레버만 살아남아 프로덕션에 반영됨. *숫�
 | **\|label\| 샘플가중 (mn_swabs)** | ✅ 활성화 (2026-06-19) | ✅ **정당 재확인(양시장, 제거 시 손해)** |
 | **triple-barrier 라벨** | ✅ US만 활성화 (per-market, 2026-06-20) | (재감사 미포함) |
 | **learner=LightGBM** | ✅ 프로덕션 | ✅ **정당 재확인** — ridge/ET/LTR/앙상블 clean 전배터리서 전부 재기각, lgbm IC·bear 최고 |
-| **★ KR: no-norm −blitz (개선 후보)** | 🔬 **제안(proposed)** — 경량하네스 net +2.17→+2.84%·양반기·50bps 통과 | 풀피델리티(step21) 확인 통과 시 KR train_production 반영 |
+| **★ KR: no-norm −blitz** | ✅ **코드 반영(시점26, 가역)** — step21 ship-gate PASS·실파이프라인 decile-LS 2.3배↑ | `train_production.py` per-market 기본값. **라이브 리트레인/배포는 사용자 승인 대기.** US 무변경 |
 | 그 외 전부(ridge/MLP/LSTM/xgb/cat/et/rank/winsor/conv/regime류/조잡잔차/w5/recency/decile/팩터중립화/다호라이즌/Optuna튜닝/LTR·lambdarank/**US lgbm+ridge 앙상블**) | ❌ 기각 | ridge/ET/LTR/앙상블 시점24 clean 재기각 확인 |
 
 > **공통 4개 + US 전용 1개(tb)** 채택, 나머지 전부 기각. 번들 WF IC(라벨무관 실현수익 기준):
