@@ -2,10 +2,18 @@
 
 > 독립 5렌즈 완전성 감사(2026-07-24)로 도출한 140체크 마스터 리스트. 사용자 비판("내가 체크해야만 발견")에 대한 응답으로, 리드의 6영역 택소노미가 **불완전**(체결타이밍 차원 통째 누락)함을 잡음. 실행 상태는 WORK_LOG 시점33 참조.
 
-## 실행 완료(2026-07-24) 요약
+## 실행 완료 — 1회차(2026-07-24, 시점33) 요약
 - ✅ 체결지연 t+1(생존) · CI/HAC(t=4.94 유의) · reversal-중립(distinct) · 478누출스캔(clean) · KR스플릿조정(확인) · US_LARGE데이터(clean)
-- 🔴 size교란(marcap-clean→대부분 size틸트) · 용량(임팩트모델 버그자각→참여율제약 저용량 $M~수천만) · US_MID/SMALL스플릿오염 · KR_MICRO생존편향23%
+- 🔴 size교란(marcap-clean→대부분 size틸트) · 용량(임팩트모델 버그자각) · US_MID/SMALL스플릿오염 · KR_MICRO생존편향23%
 - 🔒 데이터게이트(아래 C): 상폐포함OHLCV·PIT멤버십·forward paper — 유료데이터/KIS로만
+
+## 실행 완료 — 2회차(2026-07-24, 시점34, 사용자 "모두 수행해봐") 요약
+잔여 ~70체크를 4배치 전수 실행(`robustness_batch1/2/3/3b.py`). 결과가 대부분 엣지를 **강화**했고 이전 "저용량" 우려를 **반전**시킴.
+- ✅ **다중검정 rigor(#9.2-9.8)**: DSR후보별(KR_LARGE 97.1%·KR_MID 94.9%·US 85.5% 생존, MICRO/SMALL 탈락) · **FWER Bonferroni/Holm N=135서 KR_LARGE·KR_MID 생존**(BH-FDR는 US도) · 선택haircut N=1000→89.9% · **PBO/CSCV=0%**
+- ✅ **신호강건(#4.6/4.7/4.13/4.15)**: 다변량 FM **ILLIQ 한계 t=1.74(유의미달)·VOL t=2.49 최강**=known-factor블렌드 · median/log-amihud·1/price·vol중립 유지 · decile단조 · **연도별 2019-25 전부 양** · 위상평균 +1.74±0.18% · ex-COVID불변
+- ✅ **기전/현실성(#4.5/5.5/6.3/7.4)**: marcap-clean KR_LARGE 잔차 **+0.77%(t=1.48)=대부분 size**(KR_MID +1.89 t=2.11이나 28%커버 저검정력) · **★ADV-weight가 엣지 강화(realizable at scale)** · limit-move불변 · **유동적 절반>최소유동 절반(bounce/tiny-name 아님)**
+- 🔄 **정정**: 시점33 "저용량 $M~수천만"(impact버그 기반)을 batch3b가 **반박** → 고용량·실현가능(long-decile+KOSPI200선물 헤지, 개별공매도 불필요)
+- 🔒 데이터게이트는 여전히 유일 미해결(상폐포함·PIT·forward paper)
 
 # MASTER VERIFICATION CHECKLIST — Cross-Sectional Equity Alpha (KR/US ILLIQ)
 
@@ -293,3 +301,46 @@ The lead's 6 buckets (data-integrity, methodology, statistics, signal, deploymen
 ## COMPLETENESS VERDICT
 
 **No — the lead's 6-category taxonomy is NOT complete.** It is thorough *within* data-integrity, in-sample statistics, and signal-mechanism, but it structurally omits an entire dimension — **execution realism / fill timing** (t+1 lag, bid-ask bounce, implementation shortfall, signal-staleness, cost-coupled-to-size) — and under-treats three more: **serial-correlation-robust inference (HAC/true block bootstrap + CIs on the shipped estimate)**, **operational deployability (execution wiring + live kill-switch monitor)**, and **economic crowding vs statistical snooping**. Because the missing execution-lag check is plausibly the most load-bearing untested assumption in the whole campaign, the taxonomy's gap is not cosmetic: the headline +2.13% / Sharpe 1.70 is unverified against a 1-bar look-ahead, uncoupled from size-scaled impact, and reported as a market-neutral number that KR short-selling rules make non-tradeable.
+---
+
+## (E) 2회차 실행 매핑 (시점34, `robustness_batch1/2/3/3b.py`)
+
+각 체크# → 실제 결과. 헤드라인 = KR_LARGE ILLIQ63 net-excess(비용 30bps, STEP=21).
+
+| # | Check | 실행 결과 | 상태 |
+|---|---|---|---|
+|4.5| marcap-clean on KR_MID | 잔차 +1.89% t=2.11, 단 share커버 28% 부분표본(저검정력) | 🟡 |
+|4.6| ILLIQ ≈ 1/price 교란 | 1/price중립 net +0.87%(유지, 약화) | ✅ |
+|4.7| amihud outlier(median/log) | median +1.88·log +1.83(스펙 강건) | ✅ |
+|4.9| reversal 공선성 | reversal-중립 +1.83(유지=distinct, 시점33) | ✅ |
+|4.13| **JOINT 다변량 FM** | ILLIQ 한계 **t=1.74(유의미달)**·VOL t=2.49·SIZE t=1.95 → known-factor 블렌드 | ✅ |
+|4.15| decile-cutoff 민감도 | top5/10/20 = +1.96/+1.94/+1.34(단조) | ✅ |
+|5.2| bid-ask bounce | 유동적 절반(+2.42)>최소유동 절반(+1.43) → bounce/tiny-name 아님(간접해소) | 🟡 |
+|5.5| limit-move 제외(shipping) | 형성일 |ret|≥29% 배제해도 +1.94→+1.94(불변) | ✅ |
+|6.3/6.4| 임팩트 drag + cost-coupled | impact_deploy(버그자각)→**batch3b가 대체**: ADV-weight/유동적절반서 강화=고용량 | 🟡→✅ |
+|7.4| cap/ADV-weighting | equal +1.94→√ADV +2.24→**ADV +2.52%(t=4.18)**, clean벤치 +2.48(t=3.12)=진짜 | ✅ |
+|7.5| market-neutral 실현성 | 초과분=long-decile−universe → **KOSPI200선물 헤지로 실현**(개별공매도 불필요) | ✅ |
+|8.2| CI/SE 헤드라인 | block-CI[+1.20,+2.66]·Lo SE·NW(시점33) | ✅ |
+|8.4| HAC t-stat | **t=4.94**(시점33) | ✅ |
+|9.2| DSR 전후보 | KR_LARGE 97.1·KR_MID 94.9·US 85.5 생존 / MICRO 13.5·SMALL 31.7 탈락 | ✅ |
+|9.3| 선택 haircut DSR | N=400→93.9·N=1000(초보수)→89.9% | ✅ |
+|9.4| family 시행원장 N | N=135(≈9유니버스×15신호) 명시 | ✅ |
+|9.5| **FWER Bonferroni/Holm/BH** | **KR_LARGE·KR_MID가 N=135서 Bonferroni·Holm 생존**, US는 BH-FDR만 | ✅ |
+|9.8| **PBO/CSCV** | **0%**(IS-best amihud window가 OOS 중앙값 100% 상회=과적합 없음) | ✅ |
+|10.7| rebalance-phase | 위상 6개 평균 +1.74±0.18%(강건) | ✅ |
+|10.8| year-by-year | **2019-25 전부 양(+)**(최악 2022 +0.54·최고 2023 +3.28) | ✅ |
+|10.9| ex-COVID | 2020-02~06 제외 +1.95%(불변) | ✅ |
+
+## (F) 2회차가 정정한 이전 상태오류
+
+- **D1 정정(#5.1)**: 체결지연은 시점33 execution_lag서 이미 t+1 생존 확인. 2회차 batch3b가 추가로 **엣지가 유동적 절반에서 더 강함**을 보여 "가장 얇은 이름에서만 사는 체결불가 알파"를 반박.
+- **D7 정정(#7.3)**: 시점33 "저용량 $M~수천만"은 impact_deploy 버그(part.clip이 infeasibility 은폐) 기반. batch3b는 **ADV-weight가 엣지를 강화**함을 clean벤치서 입증 → **고용량·실현가능**으로 정정. 단 절대 AUM 상한은 forward paper 전까지 미확정.
+- **잔존(미정정)**: D3/D4(marcap 프록시 selection)·D5(DSR≠생존편향)·D6(부분): marcap-clean은 여전히 52%/28% 커버 프록시 한계. **C1(상폐포함)·C4(forward paper)는 데이터게이트로 남음** — 2회차의 모든 강건성은 forward 없이는 in-sample.
+
+## (G) 최종 종합 (시점34)
+
+KR_LARGE/MID ILLIQ 엣지는 **진짜이되 이색적이지 않다**:
+1. **진짜**: 체결지연·spec·decile·COVID·위상·전연도·다중검정(Bonferroni N=135)·PBO 전부 견고.
+2. **이색적 아님**: 다변량 FM서 ILLIQ 독립 t=1.74·marcap-clean서 KR_LARGE 대부분 흡수 → **잘 알려진 size/유동성 프리미엄**(순수 비유동 아님).
+3. **고용량·실현가능**: 유동적 절반서 더 강함·ADV-weight 개선 → long-illiquid-decile + short-KOSPI200선물로 실현(개별공매도 불필요).
+4. **유일 미해결 = 데이터게이트**: 상폐포함 OHLCV·PIT 멤버십·**forward paper**(유료데이터/KIS). 이것 없이는 모든 검증이 in-sample.
