@@ -1697,3 +1697,10 @@ H1 구멍(채택 레시피가 정작 late-gate 적대배터리 미경유) 정면
 - **정정된 배포용량(USD)**: US_LARGE **$382M** ≫ US_SMALL $18M > KR_LARGE **$3.8M**(~~$5.1B~~) > KR_MID $0.9M > KR_MICRO/SMALL <$0.5M. TW 알파 음수.
 - **핵심 결론 정정**: 시점27-28 "KR_LARGE $5.1B 용량 sweet-spot"은 **통화버그 아티팩트**. 알파(net%)는 currency-무관이라 불변(KR_LARGE +2.13%·Sharpe 1.70 유효)이나 **용량은 마이크로($3.8M)**. → 진짜는 **알파 vs 용량 트레이드오프**: KR=알파최고·용량마이크로(소액계좌만), **US_LARGE=알파낮음(+1.12%·Sharpe1.33)이나 용량 real($382M)+size아닌 진짜비유동(SN+1.49%)+MDD−5.1% = 기관급 유일**. sweet-spot은 AUM 의존.
 - **하네스 수정**: illiq_sleeve·universe_specialize·specialize_v2 cap을 FX(KR1350·TW31.5·US1)로 USD 환산. (연대기: ALPHA_CAMPAIGN 시점30)
+
+### 추가(2026-07-24, 사용자 "높음=반사적 기각" 비판 → 전캠페인 편향 감사 + 재정량화): (시점 31)
+독립 5에이전트 workflow로 시점0-30 전 결론(93개) 감사 → 12개 "높은수 기각인데 flaw 미정량". 대부분 최종결론은 별도 정당화되나 **기각 근거 자체가 편향**. 패턴: 양시장 IC로 이긴 챌린저를 수치없는 분산/conc5/cross-market 규칙으로 킬.
+- **#1 LIVE 재정량화(bear_bootstrap.py)**: HLRANGE(KR_LARGE +1.96%, 승자 ILLIQ63 +2.13%와 동률)를 죽인 근거 **bear −0.25%는 부트스트랩 90%CI [−1.87,+1.39]=0과 구별불가**(노이즈 기각). **게이트 역적용 적발**: 죽인 HLRANGE보다 승격한 **US_LARGE ILLIQ63_SN(bear −0.94%, CI[−1.90,−0.00]=진짜 음수)이 방어력 더 나쁨**.
+- **정정**: HLRANGE bear-기각 무효(회전65%로 ILLIQ 선호는 유지, 단 이유가 bear아닌 turnover). **US_LARGE ILLIQ "방어적" 철회**(bear~0/음수; MDD−5%는 excess시계열 MDD일 뿐, bear-tercile은 KR_LARGE(+2.33)와 달리 방어 안 됨). 용량·순수비유동 주장은 유지.
+- **방법론 수정**: 게이트(bear/best-2/conc5)를 **점추정 아닌 부트스트랩 CI/유의성**으로 판정 — 0과 구별안되는 점수로 킬한 게 과잉기각의 근원.
+- **잔여 재정량화 대기(진단·비-LIVE)**: mn_cat(최고 US IC 0.0297 killed on bare 분산·KR mean 은폐), uniqabs(양시장 IC↑ conc5 수치없이 킬), H63(두 주지표 우위·8폴드 bear로 킬), winsor US-only. (연대기: ALPHA_CAMPAIGN 시점31)
