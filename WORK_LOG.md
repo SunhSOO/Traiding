@@ -1704,3 +1704,7 @@ H1 구멍(채택 레시피가 정작 late-gate 적대배터리 미경유) 정면
 - **정정**: HLRANGE bear-기각 무효(회전65%로 ILLIQ 선호는 유지, 단 이유가 bear아닌 turnover). **US_LARGE ILLIQ "방어적" 철회**(bear~0/음수; MDD−5%는 excess시계열 MDD일 뿐, bear-tercile은 KR_LARGE(+2.33)와 달리 방어 안 됨). 용량·순수비유동 주장은 유지.
 - **방법론 수정**: 게이트(bear/best-2/conc5)를 **점추정 아닌 부트스트랩 CI/유의성**으로 판정 — 0과 구별안되는 점수로 킬한 게 과잉기각의 근원.
 - **잔여 재정량화 대기(진단·비-LIVE)**: mn_cat(최고 US IC 0.0297 killed on bare 분산·KR mean 은폐), uniqabs(양시장 IC↑ conc5 수치없이 킬), H63(두 주지표 우위·8폴드 bear로 킬), winsor US-only. (연대기: ALPHA_CAMPAIGN 시점31)
+
+### 추가(2026-07-24, mn_cat 재정량화): 부분확인 — cat이 "더 나빠서" 기각 아니었음
+`mncat_requant.py`(478피처·2018-24·mn·norm·올바른 메트릭 top-decile excess+bear-CI): (1)원본 재현 불완전 — US IC 여기선 음수(incumbent lgbm도 −0.025; 원본 cat US IC +0.0297은 다른 창/reselect, US IC 창-민감), 그래서 0.0297 직접확인 불가(한계 명시). (2)**동일창서 cat은 lgbm에 안 밀림** — KR서 오히려 이김(exc +0.67 vs +0.42·bear +2.65[CI+1.05,+4.07] vs +1.36). (3)cat 죽인 "분산 ±14(0가로지름)"는 incumbent lgbm도 죽이는 무효 판별자(전부 mean±std 0포함). → 시점6 기각근거 부실 재확인(단 배포 무영향·원본재현 불완전).
+**편향감사 종합**: 사용자 비판 실증. 대부분 기각은 측정된 flaw로 유효, 편향은 초기 시점6-12 cross-market킬 + LIVE HLRANGE/US_LARGE에 집중. LIVE 영향(HLRANGE 오기각·US_LARGE 방어성·게이트CI화) 정정완료. 역사적 챌린저는 무영향·재현 창-drift로 불완전.
