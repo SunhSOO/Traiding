@@ -1708,3 +1708,10 @@ H1 구멍(채택 레시피가 정작 late-gate 적대배터리 미경유) 정면
 ### 추가(2026-07-24, mn_cat 재정량화): 부분확인 — cat이 "더 나빠서" 기각 아니었음
 `mncat_requant.py`(478피처·2018-24·mn·norm·올바른 메트릭 top-decile excess+bear-CI): (1)원본 재현 불완전 — US IC 여기선 음수(incumbent lgbm도 −0.025; 원본 cat US IC +0.0297은 다른 창/reselect, US IC 창-민감), 그래서 0.0297 직접확인 불가(한계 명시). (2)**동일창서 cat은 lgbm에 안 밀림** — KR서 오히려 이김(exc +0.67 vs +0.42·bear +2.65[CI+1.05,+4.07] vs +1.36). (3)cat 죽인 "분산 ±14(0가로지름)"는 incumbent lgbm도 죽이는 무효 판별자(전부 mean±std 0포함). → 시점6 기각근거 부실 재확인(단 배포 무영향·원본재현 불완전).
 **편향감사 종합**: 사용자 비판 실증. 대부분 기각은 측정된 flaw로 유효, 편향은 초기 시점6-12 cross-market킬 + LIVE HLRANGE/US_LARGE에 집중. LIVE 영향(HLRANGE 오기각·US_LARGE 방어성·게이트CI화) 정정완료. 역사적 챌린저는 무영향·재현 창-drift로 불완전.
+
+### 추가(2026-07-24, 역사적 진단 재정량화 완료): uniqabs/winsor/rank/H63 (시점 31 완결)
+`requant_recipes.py`·`requant_h63.py`(478피처·올바른 메트릭: top-decile excess net+conc5+bear-CI):
+- **uniqabs·winsor**: 시장분리(US 메리트·KR 나쁨). cross-market 규칙으로 US측 버린 반복패턴. **conc5 무효 판별자 확정**(base 자신 76-89%). **rank**: 진짜 나쁨(US net −0.64)=공정기각.
+- **H63**: 죽인 bear −0.83%는 부트스트랩 CI가 0 관통(노이즈, 8폴드). **단 내 하네스선 H21이 H63보다 나음**(net_ANN +41.7 vs +15.7, 원본과 반대) → 결론(H21) 옹호되나 근거(bear) 편향.
+- **종합**: 전 재정량화(HLRANGE·mn_cat·uniqabs·winsor·rank·H63) 일관 — (1)기각 판별자 대개 무효(conc5/분산/bear 전부 incumbent도 못 통과 or CI 0관통), (2)cross-market이 한쪽시장 메리트 버림, (3)그러나 결론 대부분은 올바른 메트릭으로도 옹호(rank 나쁨·H21≥H63·cat≈lgbm)=나쁜 모델 배포 아님, (4)한계=창-drift로 원본 절대치 재현불가·배포 무영향.
+- **최종**: 사용자 "높음=반사적 기각" 비판 실증. 편향은 *근거*에 실재, 대부분 *결론*은 옹호. LIVE false-negative(HLRANGE)+과채택(US_LARGE 방어성) 정정, 게이트 CI화, 규율 교정("높음은 기각사유 아님·flaw는 크기에 대해 측정"). (연대기: ALPHA_CAMPAIGN 시점31 완결)
