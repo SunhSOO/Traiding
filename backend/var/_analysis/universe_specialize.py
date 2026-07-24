@@ -19,6 +19,7 @@ warnings.filterwarnings("ignore")
 import numpy as np, pandas as pd, lightgbm as lgb
 from scipy.stats import spearmanr
 
+FXMAP = {"KR": 1350.0, "TW": 31.5, "US": 1.0}   # native→USD (BUGFIX: cap was native-currency mislabeled as USD)
 UNIS = [  # name, cache, source, cost_bps/side, currency-scale-note
     ("US_LARGE", "px_US_LARGE", "yf", 15), ("US_MID", "px_US_MID", "yf", 20),
     ("US_SMALL", "px_US_SMALL", "yf", 25), ("US_BROAD", "px_US_BROAD", "yf", 25),
@@ -125,12 +126,13 @@ for name, path, src, cost in UNIS:
     df = build(df); r = sweep(df, cost)
     if not r:
         print(f"\n### {name} [{src}] no folds"); continue
-    print(f"\n### {name}  [src={src} cost={cost}bps tickers={df['ticker'].nunique()}]", flush=True)
-    print(f"{'signal':10s} {'grossExc':>9s} {'netExc':>8s} {'rankIC':>8s} {'best-2':>8s} {'conc5':>6s} {'bear':>7s} {'H1':>7s} {'H2':>7s} {'turn':>5s} {'cap($M)':>8s}")
+    fx = FXMAP.get(name[:2], 1.0)   # native→USD for capacity
+    print(f"\n### {name}  [src={src} cost={cost}bps tickers={df['ticker'].nunique()} fx={fx:.0f}]", flush=True)
+    print(f"{'signal':10s} {'grossExc':>9s} {'netExc':>8s} {'rankIC':>8s} {'best-2':>8s} {'conc5':>6s} {'bear':>7s} {'H1':>7s} {'H2':>7s} {'turn':>5s} {'cap$M(USD)':>10s}")
     ranked = sorted(r.items(), key=lambda kv: -kv[1]["net"])
     for s, m in ranked:
         robust = "  <=" if (m["net"] > 0 and m["b2"] > 0 and m["bear"] > 0 and m["h1"] > 0 and m["h2"] > 0 and (m["conc5"] != m["conc5"] or m["conc5"] < 0.7)) else ""
         print(f"{s:10s} {m['gross']*100:+8.2f}% {m['net']*100:+7.2f}% {m['ic']:+8.4f} {m['b2']*100:+7.2f}% "
               f"{(m['conc5'] if m['conc5']==m['conc5'] else 0):5.0%} {m['bear']*100:+6.2f}% {m['h1']*100:+6.2f}% "
-              f"{m['h2']*100:+6.2f}% {m['turn']:4.0%} {m['cap']/1e6:7.1f}{robust}", flush=True)
+              f"{m['h2']*100:+6.2f}% {m['turn']:4.0%} {m['cap']/fx/1e6:9.1f}{robust}", flush=True)
 print("\n  <= = passes FULL gauntlet (net+ & best-2+ & bear+ & BOTH halves+ & conc5<70%). cap=median $ADV of selected decile.", flush=True)

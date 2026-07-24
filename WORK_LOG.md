@@ -1691,3 +1691,9 @@ H1 구멍(채택 레시피가 정작 late-gate 적대배터리 미경유) 정면
 - **데이터불가 확정**: sector중립(securities.sector=KRX board-tier 87%NaN)·survivorship보정(delisted_date 전NULL·deleted가격 pykrx게이트)·US/TW 2차소스(stooq fetch필요). universe_membership=현재스냅샷(PIT아님).
 - **미실행 저가치**: beta중립·US stooq·호라이즌 유니버스별.
 - **∴ 결론 불변**: KR_LARGE ILLIQ63 유일 sweet-spot, 최대 미해결=생존편향(데이터게이트). (연대기: ALPHA_CAMPAIGN 시점29 요약)
+
+### 추가(2026-07-24, 사용자 "US_LARGE가 KR_LARGE보다 너무 작은거 아냐?" → 통화버그 적발): **용량 정정 (시점 30)**
+사용자 지적으로 심각한 통화 버그 적발: 용량($ADV)이 **KR=KRW·US=USD로 계산되는데 둘 다 "$"로 라벨** → KR 용량이 ~1350× 부풀려짐. (공통USD 확인: US_LARGE median dv $344M vs KR_LARGE $21.7M = US가 16× 유동적.)
+- **정정된 배포용량(USD)**: US_LARGE **$382M** ≫ US_SMALL $18M > KR_LARGE **$3.8M**(~~$5.1B~~) > KR_MID $0.9M > KR_MICRO/SMALL <$0.5M. TW 알파 음수.
+- **핵심 결론 정정**: 시점27-28 "KR_LARGE $5.1B 용량 sweet-spot"은 **통화버그 아티팩트**. 알파(net%)는 currency-무관이라 불변(KR_LARGE +2.13%·Sharpe 1.70 유효)이나 **용량은 마이크로($3.8M)**. → 진짜는 **알파 vs 용량 트레이드오프**: KR=알파최고·용량마이크로(소액계좌만), **US_LARGE=알파낮음(+1.12%·Sharpe1.33)이나 용량 real($382M)+size아닌 진짜비유동(SN+1.49%)+MDD−5.1% = 기관급 유일**. sweet-spot은 AUM 의존.
+- **하네스 수정**: illiq_sleeve·universe_specialize·specialize_v2 cap을 FX(KR1350·TW31.5·US1)로 USD 환산. (연대기: ALPHA_CAMPAIGN 시점30)

@@ -392,6 +392,16 @@ user "미실행 업무 모두 수행+추가검토+전체 커밋". 잔여 전부 
 - **D 결합+deflated Sharpe**: 결합(ILLIQ63+126+SIZE rank-avg)<단일ILLIQ63(전유니버스, 상관신호라 희석) → **단일이 최적**. **deflated Sharpe(Bailey-LdP) N=400 trials서 DSR 97.9%>0.95** = 다중검정 위양성 아님(null-max-SR +1.00 vs 관측 +1.69).
 > **시점28 결론**: 특화탐색이 **KR_LARGE 단일 ILLIQ63**으로 수렴 — (A)size 아닌 진짜 비유동, (B)신규신호 불패, (C)$5B 배포·Sharpe 1.7, (D)단일최적·다중검정생존 = **캠페인 최강 실현가능 후보**. **최대 미해결 관문 = 생존편향**(DSR은 다중검정만 잡고 survivorship 못 잡음→크기 낙관; pykrx 상폐 OHLCV 미제공으로 무료 보정 불가). 다음 실진전=①KIS 페이퍼 forward(생존편향 원천제거) ②상폐포함 유니버스 확보.
 
+### 시점 30 — 🔴 **통화 버그 정정: KR 용량은 KRW 오표기, US_LARGE가 유일 기관급** · 2026-07-24
+사용자 지적("US_LARGE가 KR_LARGE보다 너무 작지 않냐")으로 시점27-28의 용량 수치에서 **통화 버그** 적발: 배포용량($ADV)이 **KR=KRW·US=USD로 계산됐는데 둘 다 "$"로 라벨** → KR 용량 ~1350× 과대. (공통USD: US_LARGE median dv $344M vs KR_LARGE $21.7M = **US가 16× 유동적**.)
+| 유니버스 | α-Sharpe | **용량(USD 정정)** | 이전(버그) |
+|---|---|---|---|
+| **US_LARGE** | 1.33 | **$382M** | $0.38B(올발랐음) |
+| US_SMALL | 2.02 | $18M | — |
+| KR_LARGE | 1.70 | **$3.8M** | ~~$5.1B~~ |
+| KR_MID/MICRO/SMALL | 0.95-1.65 | <$1M | ~~$0.4-1.2B~~ |
+> **정정**: 시점27-28 "KR_LARGE 용량 sweet-spot($5.1B)"은 통화버그 아티팩트. **알파(net%)는 currency-무관이라 불변**(KR_LARGE ILLIQ63 +2.13%·Sharpe 1.70·deflated Sharpe 생존 모두 유효)이나 **용량은 마이크로($3.8M)**. → 진짜는 **알파 vs 용량 트레이드오프**: KR=알파최고·용량마이크로(소액계좌만 실현), **US_LARGE=알파낮음(+1.12%·Sharpe1.33)이나 용량 real($382M)+size아닌 진짜비유동(SN +1.49%)+MDD −5.1% = 기관급 배포 유일 후보.** sweet-spot은 AUM에 의존(소액=KR_LARGE·기관=US_LARGE). 하네스 3종 cap을 FX환산 수정. **교훈: 크로스마켓 $ 비교 시 통화 통일 필수 — 사용자 sanity-check가 1350× 오류 적발.**
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +

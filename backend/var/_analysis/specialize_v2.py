@@ -95,8 +95,9 @@ for name, path, cost in UNIS:
     df = pd.read_parquet(f"var/_analysis/{path}.parquet")
     df["date"] = pd.to_datetime(df["date"]); df["ticker"] = df["ticker"].astype(str)
     df = build(df)
-    print(f"\n### {name} [cost={cost}bps]  (B=new signals, A=size-neutral ILLIQ vs raw/SIZE)", flush=True)
-    print(f"{'signal':13s} {'net':>7s} {'rankIC':>8s} {'best-2':>8s} {'conc5':>6s} {'bear':>7s} {'H1':>7s} {'H2':>7s} {'turn':>5s} {'cap($M)':>8s}")
+    fx = {"KR": 1350.0, "TW": 31.5}.get(name[:2], 1.0)   # native→USD (capacity)
+    print(f"\n### {name} [cost={cost}bps fx={fx:.0f}]  (B=new signals, A=size-neutral ILLIQ vs raw/SIZE)", flush=True)
+    print(f"{'signal':13s} {'net':>7s} {'rankIC':>8s} {'best-2':>8s} {'conc5':>6s} {'bear':>7s} {'H1':>7s} {'H2':>7s} {'turn':>5s} {'cap$M(USD)':>10s}")
     order = REF + SN + NEW
     rr = {}
     for sig in order:
@@ -107,5 +108,5 @@ for name, path, cost in UNIS:
         robust = "  <=" if (r["net"] > 0 and r["b2"] > 0 and r["bear"] > 0 and r["h1"] > 0 and r["h2"] > 0 and (r["conc5"] != r["conc5"] or r["conc5"] < 0.7)) else ""
         print(f"{sig:13s} {r['net']*100:+6.2f}% {r['ic']:+8.4f} {r['b2']*100:+7.2f}% "
               f"{(r['conc5'] if r['conc5']==r['conc5'] else 0):5.0%} {r['bear']*100:+6.2f}% {r['h1']*100:+6.2f}% "
-              f"{r['h2']*100:+6.2f}% {r['turn']:4.0%} {r['cap']/1e6:7.1f}{robust}", flush=True)
+              f"{r['h2']*100:+6.2f}% {r['turn']:4.0%} {r['cap']/fx/1e6:9.1f}{robust}", flush=True)
 print("\n  A: ILLIQ63_SN (size-neutral) vs ILLIQ63 raw & SIZE — SN still robust => distinct illiquidity premium. B: any NEW beating ILLIQ?", flush=True)

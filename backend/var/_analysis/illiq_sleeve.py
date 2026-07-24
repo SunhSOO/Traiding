@@ -12,6 +12,7 @@ warnings.filterwarnings("ignore")
 import numpy as np, pandas as pd
 
 UNI = sys.argv[1] if len(sys.argv) > 1 else "KR_LARGE"
+FX = 1350.0 if UNI.startswith("KR") else (31.5 if UNI.startswith("TW") else 1.0)  # native→USD (BUGFIX: capacity was KRW mislabeled as USD)
 PATH = {"KR_LARGE": "px_KR_LARGE_PYKRX", "KR_MID": "px_KR_MID_PYKRX", "KR_MICRO": "px_KR_MICRO_PYKRX",
         "KR_SMALL": "px_KR_SMALL", "US_LARGE": "px_US_LARGE", "US_MID": "px_US_MID",
         "US_SMALL": "px_US_SMALL", "US_BROAD": "px_US_BROAD", "TW_SMALL": "px_TW_SMALL"}[UNI]
@@ -57,7 +58,7 @@ for lab, r in [("absolute (with beta)", netport), ("benchmark (universe EW)", be
     a, v, s, m, tot, hit = stats(r)
     print(f"  {lab:28s}: ann {a*100:+6.2f}%  vol {v*100:5.1f}%  Sharpe {s:+.2f}  MDD {m*100:6.1f}%  cum {tot*100:+7.1f}%  hit {hit:.0%}")
 print(f"  turnover {turn:.0%}/reb  cost drag {cost_per*PPY*100:.1f}%/yr")
-admed = np.median(advs)
-print(f"\n  CAPACITY: selected names median $ADV = ${admed/1e6:.0f}M. at {PART:.0%} participation × 4-day build")
-print(f"    → ~${admed*PART*4/1e6:.1f}M per name × {np.mean(nsel):.0f} names = deployable ≈ ${admed*PART*4*np.mean(nsel)/1e9:.2f}B AUM")
+admed = np.median(advs) / FX   # USD
+print(f"\n  CAPACITY (USD, FX={FX:.0f}): selected names median $ADV = ${admed/1e6:.1f}M. at {PART:.0%} participation × 4-day build")
+print(f"    → ~${admed*PART*4/1e6:.2f}M per name × {np.mean(nsel):.0f} names = deployable ≈ ${admed*PART*4*np.mean(nsel)/1e6:.1f}M USD AUM")
 print("  (absolute = tradeable P&L incl. KOSPI beta; ALPHA = the illiquidity edge net of market & cost.)")
