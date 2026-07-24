@@ -402,6 +402,15 @@ user "미실행 업무 모두 수행+추가검토+전체 커밋". 잔여 전부 
 | KR_MID/MICRO/SMALL | 0.95-1.65 | <$1M | ~~$0.4-1.2B~~ |
 > **정정**: 시점27-28 "KR_LARGE 용량 sweet-spot($5.1B)"은 통화버그 아티팩트. **알파(net%)는 currency-무관이라 불변**(KR_LARGE ILLIQ63 +2.13%·Sharpe 1.70·deflated Sharpe 생존 모두 유효)이나 **용량은 마이크로($3.8M)**. → 진짜는 **알파 vs 용량 트레이드오프**: KR=알파최고·용량마이크로(소액계좌만 실현), **US_LARGE=알파낮음(+1.12%·Sharpe1.33)이나 용량 real($382M)+size아닌 진짜비유동(SN +1.49%)+MDD −5.1% = 기관급 배포 유일 후보.** sweet-spot은 AUM에 의존(소액=KR_LARGE·기관=US_LARGE). 하네스 3종 cap을 FX환산 수정. **교훈: 크로스마켓 $ 비교 시 통화 통일 필수 — 사용자 sanity-check가 1350× 오류 적발.**
 
+### 시점 31 — 🔴 **전캠페인 편향 감사: "높음=반사적 기각(flaw 미측정)" 실재 확인·정정** · 2026-07-24
+사용자 비판: "높은 알파를 '높으니 불가능'이라 배제 — 높음 자체는 배제사유 아냐. 딱 방금 것만 고치지 말고 전 프로젝트 재검증." **정당한 비판.** 독립 5에이전트 workflow로 시점0-30 전 결론(93개) fresh 감사 → **12개가 BIASED_UNQUANTIFIED**(양시장 IC로 이긴 챌린저를 수치없는 분산/conc5/cross-market 규칙으로 킬). 대부분 최종결론은 별도 정당화되나 **기각 근거 자체가 편향**.
+- **#1 LIVE 재정량화**(`bear_bootstrap.py`): HLRANGE(KR_LARGE +1.96%, 승자 ILLIQ63 +2.13%와 동률)를 죽인 근거 **bear −0.25%는 부트스트랩 90%CI [−1.87,+1.39]=0과 구별불가**(노이즈 기각). **게이트 역적용 적발**: 승격한 US_LARGE ILLIQ63_SN(bear −0.94%, CI[−1.90,−0.00]=**진짜 음수**)이 죽인 HLRANGE보다 방어 나쁨. → **정정**: HLRANGE bear-기각 무효(회전65%로 ILLIQ 선호는 유지, 단 이유=turnover). **US_LARGE ILLIQ "방어적" 철회**(bear~0/음수; KR_LARGE ILLIQ +2.33와 대조).
+- **생존편향 정량화**(`survivorship_quant.py`): KR_LARGE ILLIQ +25.5%→상시존재 **+21.3%(생존편향 17%만 설명)** — "생존편향이라 못믿음" 뭉갬 자가반증(탈락종목 편향은 여전히 미측정=data-gate).
+- **방법론 수정**: 게이트(bear/best-2/conc5)를 **점추정 아닌 부트스트랩 CI/유의성**으로 판정. 0과 구별안되는 점수로 킬한 게 과잉기각의 근원.
+- **균형(유효 기각은 유지)**: KR_MICRO(0.046→0.017 측정)·US_MID(best-2 +12→+0.35)·multi-horizon누수·통화버그·DSR N=400·REV/LOTTO회전(재실행확인) 등 대부분 기각은 **측정된 flaw**로 정당. 편향은 초기(시점6-12) cross-market 킬 + LIVE HLRANGE/US_LARGE 비일관에 집중.
+- 잔여 재정량화(진단): mn_cat(최고 US IC 0.0297 killed on 은폐된 KR mean)·uniqabs·H63·winsor US-only — 실행중/대기.
+> **시점31 결론**: 사용자 비판 실증. 나는 자기 발견(알파)엔 gauntlet을 깠으나 자기 숫자·게이트엔 안 깠다. **높음 자체는 기각사유 아니며, flaw는 크기에 대해 측정돼야 한다**로 규율 교정. LIVE 오기각 1건(HLRANGE)+과채택 1건(US_LARGE 방어성) 정정, 게이트를 CI화.
+
 ## 4. 한 줄 결론
 매 시점 **수익 1위는 전부 가짜**(ridge_raw 21→ridge 27→et 21.7→w3 시장모순). IC·bear·집중도·step·
 cross-market·**ablation**을 기준에 더할 때마다 랭킹이 뒤집혀, 화려한 숫자가 차례로 탈락하고 **mn 라벨 +
