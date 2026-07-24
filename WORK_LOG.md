@@ -1724,3 +1724,10 @@ H1 구멍(채택 레시피가 정작 late-gate 적대배터리 미경유) 정면
 - **★#4 size 교란(`size_confound.py`)**: 워크플로 지적대로 amihud≈1/거래대금이라 거래대금-중립 "distinct"는 기계교란. **marcap(발행주식) 깨끗 통제하니 "순수 비유동" 과장 적발** — KR_LARGE distinct 잔차 +0.96%나 H1 −0.08%(marginal·커버52%), **US_LARGE bear<0로 gauntlet 실패**. → **ILLIQ은 대부분 "소형·저유동 틸트"이지 순수 비유동 프리미엄 아님**(raw +2.13% 거래알파는 남음). "대형선 진짜 비유동" 주장 정정.
 - #5 KR 매도세 0.15%: ILLIQ 회전17%라 ~0.3%/yr minor(미모델링 명시). #6 FWER: 핵심 발견은 deflated Sharpe N=400로 이미 처리, 산발통과만 취약(기 flagged).
 - **∴ 시점32**: "모든 검증 했나"에 정직히 "아니오" 후 실행 → 재앙적 문제(숨은누출·US_LARGE오염)는 없으나 **"순수 비유동" 프레임은 과장(대부분 size틸트) 적발·정정.** 대시보드 정정(distinct ✓→~/✗). (연대기: ALPHA_CAMPAIGN 시점32)
+
+### 추가(2026-07-24, 사용자 "전체 검증 계획·진행, 빠트림 없이 모든 검증 리스트업"): 완전성 감사 + CRITICAL 실행 (시점 33)
+독립 5렌즈 완전성 감사 workflow(`VERIFICATION_CHECKLIST.md`, 140체크): **89 미실행·34 내가 통째 누락·8 상태오류.** **판정: 내 6영역 택소노미 불완전 — 체결타이밍 차원 통째 누락**(+HAC/진짜 block bootstrap·운영배포·경제 crowding 저평가).
+- **CRITICAL 실행**: ①체결지연 t+1(`execution_lag.py`): KR_LARGE +2.13→+2.02%·Sharpe 1.70→1.68 = **룩어헤드 아님**(ILLIQ 느린특성이라 지연 무관). ②CI/HAC(`ci_reversal.py`): net +1.94% block-CI[+1.20,+2.66]·**HAC t=4.94**(내 이전 "block bootstrap"이 실은 iid=D2 수정). ③reversal-중립: +1.94→+1.83% = **ILLIQ≠reversal**. ④FWER: t=4.94>Bonferroni N=135. ⑤임팩트/용량(`impact_deploy.py`): **내 모델 버그 자각**(part.clip이 infeasibility 은폐, "$1B서 생존"은 거짓)→진짜는 참여율제약 **저용량 \$M~수천만**.
+- **데이터품질**(`dq_check.py`): KR pykrx 스플릿조정 확인·KR_LARGE/US_LARGE 청정(stale<5%), US_MID/SMALL 스플릿오염·소형/TW stale 7-10%(ILLIQ 부분오염).
+- **8 상태오류(D1-D8)**: "realizable" 스크립트 전부 t0체결(D1), "block bootstrap"이 iid(D2), 시점28 "distinct"가 amihud내재 프록시라 자기충족(D3), **시점32 내 정정조차 52%커버 프록시라 의심(D4)**, DSR≠생존편향(D5), "market-neutral Sharpe"는 KR공매도금지라 비거래 paper구성(D6).
+- **∴ 시점33**: 헤드라인 엣지는 체결지연·유의성·reversal에 견고하나 **대부분 size틸트·저용량·시장중립 Sharpe는 비실현**. 근본 미해결(데이터게이트)=상폐포함데이터·PIT멤버십·**forward paper**(전 in-sample 검증은 forward 없이는 in-sample). 나머지 HIGH/MEDIUM ~70체크는 CHECKLIST에 추적. (연대기: VERIFICATION_CHECKLIST.md)
